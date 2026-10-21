@@ -1,0 +1,138 @@
+"""A throwaway project for the tests: a bare origin, a clone with a passing suite, and a
+factory/ folder with project.md. The suite is `python3 check.py`, which fails while a file named
+BROKEN exists, so a test can turn it red with one file."""
+
+import os
+import subprocess
+import sys
+import tempfile
+import shutil
+import unittest
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from fx import config, queue, workspace  # noqa: E402
+from fx.paths import Paths  # noqa: E402
+
+PROJECT = """# Project
+
+## Configuration
+
+```ini
+[factory]
+target_branch = main
+remote = origin
+merge_mode = {merge_mode}
+pr_tool = other
+max_rounds = 3
+max_diff = 400
+
+[commands]
+suite = python3 check.py
+test = python3 check.py {{target}}
+echo = echo
+
+[workspace]
+setup = echo setup >> setup.log
+lockfiles = deps.lock
+
+[reviewers]
+enabled = {enabled}
+
+[paths]
+ui = src/components/**, *.scss
+performance = re:SELECT
+
+[jira]
+enabled = false
+```
+"""
+
+CHECK = """import os, sys
+sys.exit(1 if os.path.exists("BROKEN") else 0)
+"""
+
+
+def git(cwd, *args, check=True):
+    env = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t", GIT_COMMITTER_NAME="t",
+               GIT_COMMITTER_EMAIL="t@t", GIT_EDITOR="true")
+    result = subprocess.run(["git", *args], cwd=str(cwd), capture_output=True, text=True, env=env)
+    if check and result.returncode != 0:
+        raise AssertionError(f"git {' '.join(args)}: {result.stderr}")
+    return result.stdout.strip()
+
+
+class Sandbox:
+    def __init__(self, merge_mode="pr", enabled=""):
+        self.tmp = Path(tempfile.mkdtemp(prefix="factory-test-")).resolve()
+        self.origin = self.tmp / "origin.git"
+        self.root = self.tmp / "repo"
+        git(self.tmp, "init", "--bare", "-b", "main", str(self.origin))
+        git(self.tmp, "init", "-b", "main", str(self.root))
+        for key, value in (("user.name", "t"), ("user.email", "t@t"), ("commit.gpgsign", "false")):
+            git(self.root, "config", key, value)
+        self.write("check.py", CHECK)
+        self.write("src/app.py", "def answer():\n    return 41\n")
+        self.write("deps.lock", "v1\n")
+        self.write(".gitignore", "/factory/\nsetup.log\n")
+        self.commit("Initial")
+        git(self.root, "remote", "add", "origin", str(self.origin))
+        git(self.root, "push", "-u", "origin", "main")
+        self.paths = Paths(self.root)
+        self.paths.factory.mkdir()
+        self.paths.project.write_text(PROJECT.format(merge_mode=merge_mode, enabled=enabled), encoding="utf-8")
+        self.cfg = config.load(self.paths)
+
+    def cleanup(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def write(self, rel, text, base=None):
+        target = Path(base or self.root, rel)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text, encoding="utf-8")
+        return target
+
+    def commit(self, message, cwd=None):
+        cwd = cwd or self.root
+        git(cwd, "add", "-A")
+        git(cwd, "commit", "-m", message)
+        return git(cwd, "rev-parse", "HEAD")
+
+    @property
+    def ws(self):
+        return self.paths.workspace
+
+    def create_workspace(self):
+        workspace.create(self.paths, self.cfg)
+        for key, value in (("user.name", "t"), ("user.email", "t@t")):
+            git(self.ws, "config", key, value)
+
+    def queue_job(self, job_id="001-answer", title="Answer 42"):
+        jd = self.paths.job(job_id)
+        self.write("spec.md", "# Spec\n\n## Summary\n\nThe answer is 42.\n", base=jd)
+        self.write("plan.md", "# Plan\n\n1. Change answer().\n", base=jd)
+        queue.add(self.paths, job_id, title)
+        return job_id
+
+    def push_target_change(self, rel, text, message="Upstream change"):
+        other = self.tmp / f"other-{len(list(self.tmp.iterdir()))}"
+        git(self.tmp, "clone", str(self.origin), str(other))
+        for key, value in (("user.name", "t"), ("user.email", "t@t")):
+            git(other, "config", key, value)
+        self.write(rel, text, base=other)
+        self.commit(message, cwd=other)
+        git(other, "push", "origin", "main")
+        git(self.root, "fetch", "origin")
+
+
+class SandboxTest(unittest.TestCase):
+    merge_mode = "pr"
+    enabled = ""
+
+    def setUp(self):
+        self.sb = Sandbox(self.merge_mode, self.enabled)
+        self.paths, self.cfg = self.sb.paths, self.sb.cfg
+
+    def tearDown(self):
+        self.sb.cleanup()

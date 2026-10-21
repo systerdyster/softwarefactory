@@ -1,0 +1,309 @@
+"""decide() is a pure function of the facts gather() collects, so each rule is tested by stating
+the facts of one moment in a job's life and asserting the next action."""
+
+import copy
+import unittest
+
+from support import SandboxTest
+
+from fx import state, workspace
+
+ENABLED = ["security", "code", "performance", "stability"]
+H1, H2, H3, T1, T2 = "a" * 40, "b" * 40, "c" * 40, "d" * 40, "e" * 40
+
+
+def base_facts(**over):
+    f = {
+        "id": "OPT-1", "meta": {"title": "T", "jira": "OPT-1"}, "has_spec": True, "backlog": "taken",
+        "branch_exists": True, "head": H1, "target_head": T1,
+        "workspace": {"exists": True, "on_branch": True, "dirty": [], "rebase": False, "unmerged": []},
+        "baseline": {"green": True}, "tests_md": True, "tests_status": "red-confirmed",
+        "test_files": ["tests/a_test.py"], "tests_recorded": True, "tests_ok": True, "test_mismatches": [],
+        "build": [], "rounds": {}, "reworks": [], "decision": None, "human_approval": None,
+        "rebase": {"history": []}, "pr": None, "merge": None, "merged_locally": False, "spawns": [],
+        "jira_log": [], "enabled": ENABLED, "max_rounds": 3, "merge_mode": "pr",
+        "jira_enabled": True, "jira_map": {"building": "In Progress", "needs-human": None, "pr-open": "In Review",
+                                           "merged": "Done", "cancelled": "To Do"},
+    }
+    f.update(over)
+    return f
+
+
+def rnd(reviews=None, scheduled=None, head=H1, verifies=None, replies=None, rulings=None):
+    names = list((reviews or {}).keys()) if scheduled is None else scheduled
+    return {"scheduled": {"reviewers": names, "head": head, "base": T1} if names or scheduled == [] else None,
+            "reviews": {n: {"verdict": v, "fallback": False} for n, v in (reviews or {}).items()},
+            "verifies": verifies if verifies is not None else {1: {"head": head, "green": True}},
+            "replies": replies or {}, "rulings": rulings or {}}
+
+
+def done(n, attempt=1):
+    return {"round": n, "attempt": attempt, "status": "done", "objection": None}
+
+
+def passing(n=1, head=H1):
+    return rnd({r: "PASS" for r in ENABLED}, head=head)
+
+
+def nxt(f):
+    return state.decide(f)["next"]["action"]
+
+
+class LifecycleTest(unittest.TestCase):
+    def test_queued_job_waits_for_take(self):
+        f = base_facts(backlog="queued", baseline=None, branch_exists=False, head=None)
+        self.assertEqual(nxt(f), "take")
+
+    def test_taken_job_starts_by_proving_the_target_green(self):
+        self.assertEqual(nxt(base_facts(baseline=None)), "start")
+
+    def test_red_target_suite_stops_for_a_human(self):
+        r = state.decide(base_facts(baseline={"green": False, "log": "x.log"}))
+        self.assertEqual(r["stage"], "needs-human")
+        self.assertIn("red on the target", r["reason"])
+
+    def test_a_red_target_is_retried_once_the_target_moves(self):
+        f = base_facts(baseline={"green": False, "target": T1, "log": "x"}, target_head=T2)
+        self.assertEqual(nxt(f), "start")
+
+    def test_a_job_without_its_spec_waits_for_a_human(self):
+        self.assertEqual(state.decide(base_facts(has_spec=False))["stage"], "needs-human")
+
+    def test_a_reviewer_that_never_writes_its_file_is_stopped(self):
+        spawns = [{"agent": "review-code", "round": 1, "head": H1, "conflicts": []}] * 3
+        f = base_facts(build=[done(1)], rounds={1: rnd({}, scheduled=["code"])}, spawns=spawns)
+        self.assertEqual(state.decide(f)["stage"], "needs-human")
+
+    def test_test_writer_runs_first_then_hashes_are_recorded(self):
+        f = base_facts(tests_md=False, tests_status=None, tests_recorded=False, tests_ok=None)
+        r = state.decide(f)
+        self.assertEqual((r["next"]["action"], r["next"]["mode"]), ("spawn-test-writer", "write"))
+        f.update(tests_md=True, tests_status="red-confirmed")
+        self.assertEqual(nxt(f), "tests-record")
+
+    def test_an_unfinished_tests_md_sends_test_writer_back(self):
+        f = base_facts(tests_status=None, tests_recorded=False)
+        self.assertEqual(nxt(f), "spawn-test-writer")
+
+    def test_agents_need_the_workspace_on_the_job_branch(self):
+        f = base_facts(workspace={"exists": True, "on_branch": False})
+        self.assertEqual(nxt(f), "switch")
+
+    def test_first_builder_round(self):
+        r = state.decide(base_facts())
+        self.assertEqual((r["next"]["action"], r["next"]["round"], r["next"]["attempt"]), ("spawn-builder", 1, 1))
+
+
+class BuildRoundTest(unittest.TestCase):
+    def test_changed_test_files_are_restored_before_anything_else(self):
+        f = base_facts(build=[done(1)], tests_ok=False, test_mismatches=["tests/a_test.py"])
+        self.assertEqual(nxt(f), "tests-restore")
+
+    def test_unfinished_builder_is_respawned_with_the_next_attempt(self):
+        f = base_facts(build=[{"round": 1, "attempt": 1, "status": None, "objection": None}])
+        self.assertEqual(state.decide(f)["next"]["attempt"], 2)
+
+    def test_three_failed_attempts_go_to_a_human(self):
+        f = base_facts(build=[{"round": 1, "attempt": 3, "status": None, "objection": None}])
+        self.assertEqual(state.decide(f)["stage"], "needs-human")
+
+    def test_uncommitted_builder_work_is_not_reviewed(self):
+        f = base_facts(build=[done(1)], workspace={"exists": True, "on_branch": True, "dirty": ["src/a.py"]})
+        self.assertEqual(nxt(f), "spawn-builder")
+
+    def test_suite_is_verified_after_the_builder(self):
+        f = base_facts(build=[done(1)], rounds={1: rnd(verifies={})})
+        self.assertEqual(nxt(f), "verify")
+
+    def test_red_verify_sends_the_builder_back_in_the_same_round(self):
+        f = base_facts(build=[done(1)], rounds={1: rnd(verifies={1: {"head": H1, "green": False, "log": "l"}})})
+        r = state.decide(f)
+        self.assertEqual((r["next"]["action"], r["next"]["round"], r["next"]["attempt"]), ("spawn-builder", 1, 2))
+
+    def test_verified_round_is_scheduled_then_reviewed(self):
+        f = base_facts(build=[done(1)], rounds={1: {**rnd(), "scheduled": None}})
+        self.assertEqual(nxt(f), "schedule")
+        f["rounds"][1] = rnd({}, scheduled=ENABLED)
+        r = state.decide(f)
+        self.assertEqual(r["next"]["action"], "spawn-reviewers")
+        self.assertEqual(r["next"]["reviewers"], ENABLED)
+
+    def test_only_missing_reviewers_are_spawned(self):
+        f = base_facts(build=[done(1)], rounds={1: rnd({"security": "PASS"}, scheduled=ENABLED)})
+        self.assertEqual(state.decide(f)["next"]["reviewers"], ["code", "performance", "stability"])
+
+    def test_a_workspace_changed_by_a_reviewer_discards_the_round(self):
+        f = base_facts(build=[done(1)], rounds={1: passing()},
+                       workspace={"exists": True, "on_branch": True, "dirty": [], "rebase": False})
+        f2 = copy.deepcopy(f)
+        f2["rounds"][1]["scheduled"]["head"] = H2
+        self.assertEqual(nxt(f2), "review-reset")
+
+    def test_changes_start_the_next_round(self):
+        reviews = {r: "PASS" for r in ENABLED} | {"code": "CHANGES"}
+        f = base_facts(build=[done(1)], rounds={1: rnd(reviews)})
+        r = state.decide(f)
+        self.assertEqual((r["next"]["action"], r["next"]["round"]), ("spawn-builder", 2))
+
+    def test_earlier_pass_verdicts_stand(self):
+        r1 = rnd({r: "PASS" for r in ENABLED} | {"code": "CHANGES"})
+        r2 = rnd({"code": "PASS", "security": "PASS"}, head=H2)
+        f = base_facts(head=H2, build=[done(1), done(2)], rounds={1: r1, 2: r2})
+        self.assertEqual(nxt(f), "spawn-approver")
+
+    def test_changes_at_max_rounds_go_to_a_human(self):
+        rounds = {n: rnd({r: "PASS" for r in ENABLED} | {"code": "CHANGES"}) for n in (1, 2, 3)}
+        f = base_facts(build=[done(1), done(2), done(3)], rounds=rounds)
+        r = state.decide(f)
+        self.assertEqual(r["stage"], "needs-human")
+        self.assertIn("after 3 rounds", r["reason"])
+
+
+class ObjectionTest(unittest.TestCase):
+    def objection(self, kind, **round_over):
+        return base_facts(build=[{"round": 1, "attempt": 1, "status": "objection", "objection": kind}],
+                          rounds={1: rnd(**round_over)})
+
+    def test_a_disputed_test_goes_to_test_writer_first(self):
+        r = state.decide(self.objection("test"))
+        self.assertEqual((r["next"]["action"], r["next"]["mode"]), ("spawn-test-writer", "objection"))
+
+    def test_amended_tests_are_re_recorded_then_the_builder_continues(self):
+        f = self.objection("test", replies={1: "AMENDED"})
+        f["tests_ok"] = False
+        self.assertEqual(nxt(f), "tests-record")
+        f["tests_ok"] = True
+        self.assertEqual(state.decide(f)["next"]["attempt"], 2)
+
+    def test_a_test_that_stands_is_judged_by_the_orchestrator(self):
+        self.assertEqual(nxt(self.objection("test", replies={1: "STANDS"})), "judge-objection")
+
+    def test_a_plan_departure_is_judged_directly(self):
+        self.assertEqual(nxt(self.objection("plan")), "judge-objection")
+
+    def test_ruling_continue_and_needs_human(self):
+        self.assertEqual(nxt(self.objection("plan", rulings={1: "CONTINUE"})), "spawn-builder")
+        self.assertEqual(state.decide(self.objection("plan", rulings={1: "NEEDS-HUMAN"}))["stage"], "needs-human")
+
+
+class ApprovalAndMergeTest(unittest.TestCase):
+    def approved_facts(self, **over):
+        f = base_facts(build=[done(1)], rounds={1: passing()},
+                       decision={"verdict": "APPROVE", "head": H1})
+        f.update(over)
+        return f
+
+    def test_escalation_waits_for_a_human(self):
+        f = base_facts(build=[done(1)], rounds={1: passing()}, decision={"verdict": "ESCALATE", "head": H1})
+        self.assertEqual(state.decide(f)["stage"], "needs-human")
+
+    def test_a_decision_for_an_older_head_is_stale(self):
+        f = base_facts(head=H2, build=[done(1)], rounds={1: passing(head=H2)}, decision={"verdict": "APPROVE", "head": H1})
+        self.assertEqual(nxt(f), "spawn-approver")
+
+    def test_approval_leads_to_a_rebase(self):
+        self.assertEqual(nxt(self.approved_facts()), "rebase")
+
+    def test_a_clean_green_rebase_keeps_the_approval_and_opens_the_pr(self):
+        f = self.approved_facts(head=H2, rebase={"history": [{"before": H1, "after": H2, "result": "green",
+                                                               "target": T1, "round": 2}]})
+        f["rounds"][1]["scheduled"]["head"] = H1
+        self.assertEqual(nxt(f), "pr")
+
+    def test_a_moved_target_means_rebasing_again(self):
+        f = self.approved_facts(head=H2, target_head=T2, rebase={"history": [
+            {"before": H1, "after": H2, "result": "green", "target": T1, "round": 2}]})
+        self.assertEqual(nxt(f), "rebase")
+
+    def test_a_red_rebase_starts_a_builder_round(self):
+        f = self.approved_facts(head=H2, rebase={"history": [
+            {"before": H1, "after": H2, "result": "red", "target": T1, "round": 2}]})
+        r = state.decide(f)
+        self.assertEqual((r["next"]["action"], r["next"]["round"]), ("spawn-builder", 2))
+
+    def test_rebase_conflicts_in_test_files_go_to_test_writer_others_to_builder(self):
+        ws = {"exists": True, "on_branch": True, "rebase": True, "dirty": [],
+              "unmerged": ["tests/a_test.py", "src/a.py"]}
+        f = self.approved_facts(workspace=ws, rebase={"history": [{"before": H1, "result": "conflict", "round": 2}]})
+        r = state.decide(f)
+        self.assertEqual((r["next"]["action"], r["next"]["mode"]), ("spawn-test-writer", "rebase-conflict"))
+        f["workspace"]["unmerged"] = ["src/a.py"]
+        self.assertEqual(nxt(f), "spawn-builder")
+        f["workspace"]["unmerged"] = []
+        self.assertEqual(nxt(f), "rebase-continue")
+
+    def test_open_pr_is_waiting_and_merged_pr_finishes(self):
+        f = self.approved_facts(rebase={"history": [{"before": H1, "after": H1, "result": "green", "target": T1}]},
+                                pr={"state": "OPEN", "head": H1, "url": "u"})
+        r = state.decide(f)
+        self.assertEqual((r["stage"], r["waiting"]), ("pr-open", True))
+        f["pr"]["state"] = "MERGED"
+        self.assertEqual(nxt(f), "finish")
+
+    def test_local_merge_mode(self):
+        f = self.approved_facts(merge_mode="local-merge",
+                                rebase={"history": [{"before": H1, "after": H1, "result": "green", "target": T1}]})
+        self.assertEqual(nxt(f), "merge-local")
+        f["merge"] = {"merged": False, "head": H1, "blocked": "main is checked out"}
+        self.assertEqual(state.decide(f)["stage"], "needs-human")
+
+
+class HumanTest(unittest.TestCase):
+    def test_human_approval_skips_the_open_verdicts(self):
+        rounds = {n: rnd({r: "PASS" for r in ENABLED} | {"code": "CHANGES"}) for n in (1, 2, 3)}
+        f = base_facts(build=[done(1), done(2), done(3)], rounds=rounds, human_approval={"head": H1})
+        self.assertEqual(nxt(f), "rebase")
+
+    def test_rework_starts_a_fresh_cycle_at_its_round(self):
+        f = base_facts(build=[done(1)], rounds={1: passing()}, decision={"verdict": "APPROVE", "head": H1},
+                       pr={"state": "OPEN", "head": H1}, reworks=[{"file": "rework-1.md", "number": 1, "start_round": 2}])
+        r = state.decide(f)
+        self.assertEqual((r["next"]["action"], r["next"]["round"]), ("spawn-builder", 2))
+
+    def test_rework_has_a_fresh_round_budget(self):
+        changes = {r: "PASS" for r in ENABLED} | {"code": "CHANGES"}
+        rounds = {n: rnd(changes) for n in (1, 2, 3, 4)}
+        f = base_facts(build=[done(n) for n in (1, 2, 3, 4)], rounds=rounds,
+                       reworks=[{"file": "rework-1.md", "number": 1, "start_round": 4}])
+        r = state.decide(f)
+        self.assertEqual((r["next"]["action"], r["next"]["round"]), ("spawn-builder", 5))
+
+    def test_cancelled_job_with_a_branch_is_cleaned_up(self):
+        f = base_facts(backlog="cancelled")
+        self.assertEqual(nxt(f), "cancel")
+        f["branch_exists"] = False
+        self.assertEqual(state.decide(f)["stage"], "cancelled")
+
+    def test_an_agent_that_never_moves_the_head_is_stopped(self):
+        spawns = [{"agent": "builder", "round": 1, "head": H1, "conflicts": []}] * 3
+        f = base_facts(spawns=spawns, build=[{"round": 1, "attempt": 2, "status": None, "objection": None}])
+        self.assertEqual(state.decide(f)["stage"], "needs-human")
+
+
+class JiraTest(unittest.TestCase):
+    def test_pr_open_transitions_and_asks_for_the_one_comment(self):
+        f = base_facts(jira_log=["claimed", "status:building"])
+        todo = state.jira_todo(f, {"stage": "pr-open"})
+        self.assertEqual([t["action"] for t in todo], ["transition", "comment"])
+        f["jira_log"] += ["status:pr-open", "comment"]
+        self.assertEqual(state.jira_todo(f, {"stage": "merged"}), [{"action": "transition", "event": "status:merged",
+                                                                     "to": "Done"}])
+
+    def test_unmapped_stage_needs_nothing(self):
+        self.assertEqual(state.jira_todo(base_facts(), {"stage": "needs-human"}), [])
+
+
+class GatherTest(SandboxTest):
+    def test_a_fresh_job_reads_as_starting_after_take(self):
+        self.sb.create_workspace()
+        job = self.sb.queue_job()
+        self.assertEqual(state.state(self.paths, self.cfg, job)["next"]["action"], "take")
+        from fx import queue
+        queue.take(self.paths)
+        self.assertEqual(state.state(self.paths, self.cfg, job)["next"]["action"], "start")
+        workspace.switch(self.paths, self.cfg, job)
+        self.assertEqual(state.state(self.paths, self.cfg, job)["next"]["action"], "start")
+
+
+if __name__ == "__main__":
+    unittest.main()
