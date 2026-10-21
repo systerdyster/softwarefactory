@@ -1,0 +1,6 @@
+{
+  "name": "factory",
+  "version": "0.1.0",
+  "description": "Software factory: frame a case into an approved spec and plan, then build it with test-writer, builder, reviewer and approver agents and hand it back as a PR.",
+  "author": { "name": "Fredrik Gardin" }
+}

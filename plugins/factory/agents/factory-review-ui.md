@@ -1,14 +1,8 @@
 ---
 name: factory-review-ui
-description: Software factory UI reviewer — visual consistency with the design system, tokens, responsive layout and CSS quality. Enabled per project in project.md. Spawned only by the /factory orchestrator with a brief from `factory.py brief`; writes one review file.
+description: Software factory UI reviewer — visual consistency with the design system, tokens, responsive layout and CSS quality. Enabled per project in project.md. Spawned only by the /factory orchestrator with a brief from `factory-cli brief`; writes one review file.
 tools: Read, Grep, Glob, Bash, Write
 model: sonnet
-hooks:
-  PreToolUse:
-    - matcher: "Bash|Edit|Write|MultiEdit|NotebookEdit|Agent|Task"
-      hooks:
-        - type: command
-          command: 'python3 "$CLAUDE_PROJECT_DIR/.claude/skills/factory/bin/factory.py" guard review-ui'
 metadata:
   type: reference
 ---

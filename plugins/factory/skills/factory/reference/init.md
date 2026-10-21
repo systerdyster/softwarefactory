@@ -9,7 +9,7 @@ metadata:
 
 **Goal:** a `factory/project.md` a human has reviewed, a permission allowlist so background agents
 never stall on a prompt, and a workspace proven to build and pass the full suite — before any job
-starts. `F` is `python3 .claude/skills/factory/bin/factory.py`.
+starts. `F` is `factory-cli`, which the plugin puts on PATH.
 
 Re-running init on a configured repo is safe: show what exists, and change only what the human asks.
 
@@ -59,8 +59,8 @@ agents use in the workspace. `git push` is deliberately absent; only the orchest
 the script. Show the list, and on the human's yes run `F allowlist --write`. It is a committed change.
 
 The per-command limits (no shell operators, no switching or pushing, the builder never touching
-test-writer's files, reviewers writing only their review) are enforced by the guard hook in each
-agent's frontmatter, not by the allowlist.
+test-writer's files, reviewers writing only their review) are enforced by the plugin's PreToolUse
+hook, which recognises each factory agent by name, not by the allowlist.
 
 ## 4. Create and prove the workspace
 

@@ -9,7 +9,7 @@ metadata:
 
 You and the developer frame **one case** into a spec and a plan they approve. The factory then builds
 it without them, so everything it needs to know must be in those two files. `F` is
-`python3 .claude/skills/factory/bin/factory.py`.
+`factory-cli` (on PATH through the plugin).
 
 **Never assume.** When anything is unclear — requirement, scope, approach, an acceptance criterion —
 ask, **one question at a time**, with concrete options and a recommendation. Ambiguity here becomes a

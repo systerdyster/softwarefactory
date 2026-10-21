@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The factory dashboard and inbox. Python standard library only.
 
-    python3 .claude/skills/factory/server.py [--port N]
+    factory-dashboard [--port N]        (the plugin puts factory-dashboard on PATH)
 
 Binds to 127.0.0.1 only and prints a URL with a random token; every request must carry that token
 (the page sends it as a header). Serves dashboard.html, factory/board.json and the markdown files in

@@ -1,14 +1,8 @@
 ---
 name: factory-codex-fallback
-description: Software factory fallback for the Codex second-opinion review, used when the Codex CLI is unavailable. Spawned only by the /factory orchestrator with a brief from `factory.py brief`; writes review-codex.md marked FALLBACK.
+description: Software factory fallback for the Codex second-opinion review, used when the Codex CLI is unavailable. Spawned only by the /factory orchestrator with a brief from `factory-cli brief`; writes review-codex.md marked FALLBACK.
 tools: Read, Grep, Glob, Bash, Write
 model: sonnet
-hooks:
-  PreToolUse:
-    - matcher: "Bash|Edit|Write|MultiEdit|NotebookEdit|Agent|Task"
-      hooks:
-        - type: command
-          command: 'python3 "$CLAUDE_PROJECT_DIR/.claude/skills/factory/bin/factory.py" guard review-codex'
 metadata:
   type: reference
 ---

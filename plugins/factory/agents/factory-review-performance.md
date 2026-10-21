@@ -1,14 +1,8 @@
 ---
 name: factory-review-performance
-description: Software factory performance reviewer. Spawned only by the /factory orchestrator with a brief from `factory.py brief`; reads the round's diff for unbounded or per-request work and writes one review file.
+description: Software factory performance reviewer. Spawned only by the /factory orchestrator with a brief from `factory-cli brief`; reads the round's diff for unbounded or per-request work and writes one review file.
 tools: Read, Grep, Glob, Bash, Write
 model: sonnet
-hooks:
-  PreToolUse:
-    - matcher: "Bash|Edit|Write|MultiEdit|NotebookEdit|Agent|Task"
-      hooks:
-        - type: command
-          command: 'python3 "$CLAUDE_PROJECT_DIR/.claude/skills/factory/bin/factory.py" guard review-performance'
 metadata:
   type: reference
 ---

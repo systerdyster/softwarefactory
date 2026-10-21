@@ -1,14 +1,8 @@
 ---
 name: factory-review-code
-description: Software factory code reviewer — correctness against the spec, design, readability, tests and project rules. Spawned only by the /factory orchestrator with a brief from `factory.py brief`; reads the round's diff and writes one review file.
+description: Software factory code reviewer — correctness against the spec, design, readability, tests and project rules. Spawned only by the /factory orchestrator with a brief from `factory-cli brief`; reads the round's diff and writes one review file.
 tools: Read, Grep, Glob, Bash, Write
 model: opus
-hooks:
-  PreToolUse:
-    - matcher: "Bash|Edit|Write|MultiEdit|NotebookEdit|Agent|Task"
-      hooks:
-        - type: command
-          command: 'python3 "$CLAUDE_PROJECT_DIR/.claude/skills/factory/bin/factory.py" guard review-code'
 metadata:
   type: reference
 ---

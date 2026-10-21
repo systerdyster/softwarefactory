@@ -2,7 +2,7 @@
 """The software factory's mechanical parts. Every subcommand prints JSON and exits non-zero on
 failure (1 refused or failed, 3 codex fallback). Python standard library only.
 
-    python3 .claude/skills/factory/bin/factory.py <command> [args]
+    factory-cli <command> [args]        (the plugin puts factory-cli on PATH)
 
 Run with `help` for the command list. The orchestrator calls these and trusts their output."""
 
@@ -299,8 +299,8 @@ def parser():
 
 def main(argv=None):
     args = parser().parse_args(argv)
-    paths = Paths()
     try:
+        paths = Paths()
         result = args.fn(args, paths)
     except Fallback as e:
         print(json.dumps({"fallback": True, "reason": str(e)}, indent=2))

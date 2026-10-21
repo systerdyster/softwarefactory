@@ -18,9 +18,10 @@ One skill, two kinds of session:
 - **Orchestrator** — `/factory run`: one session that builds queued jobs, one at a time, spawning every
   agent. It is the only writer of `factory/board.json` and the only session that pushes.
 
-The machinery is in `.claude/skills/factory/bin/factory.py` (Python standard library only; every
-command prints JSON and exits non-zero on failure). Below, `F` means
-`python3 .claude/skills/factory/bin/factory.py`. Run `F --help` for the full list.
+The factory is a plugin. Its machinery is `factory-cli`, which the plugin puts on PATH (Python
+standard library only; every command prints JSON and exits non-zero on failure). Below, `F` means
+`factory-cli`. Run `F --help` for the full list. Agents are scoped by the plugin: spawn them as
+`factory:factory-builder`, `factory:factory-review-security` and so on.
 
 ## Route the command
 
@@ -43,8 +44,9 @@ the dashboard does, and the orchestrator runs it on its next step (or on its nex
 
 - **The project's own rules win** — CLAUDE.md, AGENTS.md, PROJECT-RULES.md and committed skills — over
   the factory's defaults, for intake and for every agent.
-- **Nothing outside the repo.** Everything the factory needs is in `.claude/` (committed) and
-  `factory/` (gitignored runtime state). Never write a personal path into a committed file.
+- **Nothing personal in the repo.** The factory's code lives in the plugin; the repo holds only
+  `factory/` (gitignored runtime state) and the allowlist in `.claude/settings.json`. Never write a
+  personal path into a committed file.
 - **The developer's own checkout is never touched.** All code work happens in `factory/workspace/`, a
   persistent git worktree that switches branch only from a clean state.
 - **The suite is green on the target branch, or the factory stops.** It never works around red tests;
@@ -56,8 +58,8 @@ the dashboard does, and the orchestrator runs it on its next step (or on its nex
 ## Files
 
 ```
-.claude/skills/factory/   SKILL.md, reference/, bin/ (factory.py + fx/ + tests/), server.py, dashboard.html
-.claude/agents/factory-*  test-writer, builder, approver, review-{security,code,performance,stability,
+plugin skills/factory/    SKILL.md, reference/, bin/ (factory.py, hook.py, fx/, tests/), server.py, dashboard.html
+plugin agents/factory-*   test-writer, builder, approver, review-{security,code,performance,stability,
                           platform,ux,ui}, codex-fallback
 factory/                  project.md, backlog.md, board.json, inbox/, logs/, workspace/, jobs/<id>/
 factory/jobs/<id>/        job.json spec.md plan.md tests.md build.md decision.md baseline.json
@@ -66,4 +68,4 @@ factory/jobs/<id>/        job.json spec.md plan.md tests.md build.md decision.md
                                    objection-reply-A.md, ruling-A.md}
 ```
 
-The dashboard: `python3 .claude/skills/factory/server.py` (127.0.0.1, random token printed at start).
+The dashboard: `factory-dashboard` (127.0.0.1, random token printed at start).

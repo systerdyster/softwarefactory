@@ -1,14 +1,8 @@
 ---
 name: factory-approver
-description: Software factory approver — the last gate before merge or PR. Spawned only by the /factory orchestrator with a brief from `factory.py brief`, once every scheduled reviewer has passed. Checks the acceptance criteria itself and writes decision.md (APPROVE or ESCALATE).
+description: Software factory approver — the last gate before merge or PR. Spawned only by the /factory orchestrator with a brief from `factory-cli brief`, once every scheduled reviewer has passed. Checks the acceptance criteria itself and writes decision.md (APPROVE or ESCALATE).
 tools: Read, Grep, Glob, Bash, Write
 model: fable
-hooks:
-  PreToolUse:
-    - matcher: "Bash|Edit|Write|MultiEdit|NotebookEdit|Agent|Task"
-      hooks:
-        - type: command
-          command: 'python3 "$CLAUDE_PROJECT_DIR/.claude/skills/factory/bin/factory.py" guard approver'
 metadata:
   type: reference
 ---
@@ -20,7 +14,7 @@ whether a human must. You are the last gate, so **don't trust the PASS verdicts*
 that matter yourself, against the code, the tests and the approved spec.
 
 You only read, apart from decision.md. You may run the project's tests
-(`python3 .claude/skills/factory/bin/factory.py ws run <name>`) and read git
+(`factory-cli ws run <name>`) and read git
 (`git -C factory/workspace diff|log|show …`).
 
 ## ESCALATE when any of these hold

@@ -35,7 +35,7 @@ class GuardTest(SandboxTest):
         self.assertEqual(self.bash("review-security", "git -C factory/workspace log --oneline -5"), 0)
         self.assertEqual(self.bash("review-security", "git -C factory/workspace commit -m x"), 2)
         self.assertEqual(self.bash("review-security", "git -C factory/workspace diff --output=/tmp/x"), 2)
-        self.assertEqual(self.bash("review-security", "python3 .claude/skills/factory/bin/factory.py ws run suite"), 2)
+        self.assertEqual(self.bash("review-security", "factory-cli ws run suite"), 2)
 
     def test_reviewers_write_only_their_own_review_file(self):
         self.assertEqual(self.write("review-code", self.jd / "round-1" / "review-code.md"), 0)
@@ -56,7 +56,7 @@ class GuardTest(SandboxTest):
     def test_builder_commits_and_runs_project_commands(self):
         self.assertEqual(self.bash("builder", "git -C factory/workspace add src/app.py"), 0)
         self.assertEqual(self.bash("builder", "git -C factory/workspace commit -m 'Answer 42'"), 0)
-        self.assertEqual(self.bash("builder", "python3 .claude/skills/factory/bin/factory.py ws run test tests/x.py"), 0)
+        self.assertEqual(self.bash("builder", "factory-cli ws run test tests/x.py"), 0)
         self.assertEqual(self.bash("builder", "git -C factory/workspace commit --amend -m x"), 2)
         self.assertEqual(self.bash("builder", "git -C factory/workspace commit --no-verify -m x"), 2)
 
@@ -70,8 +70,8 @@ class GuardTest(SandboxTest):
         self.assertEqual(self.write("builder", self.jd / "spec.md"), 2)
 
     def test_no_job_edits_the_factory_itself(self):
-        self.assertEqual(self.write("builder", self.sb.ws / ".claude/skills/factory/bin/fx/guard.py"), 2)
-        self.assertEqual(self.write("test-writer", self.sb.ws / ".claude/agents/factory-builder.md"), 2)
+        self.assertEqual(self.write("builder", self.paths.plugin / "skills/factory/bin/fx/guard.py"), 2)
+        self.assertEqual(self.write("test-writer", self.paths.plugin / "agents/factory-builder.md"), 2)
         self.assertEqual(self.write("builder", self.sb.ws / ".claude/settings.json"), 0)
 
     def test_test_writer_owns_tests_and_its_job_files(self):

@@ -1,14 +1,8 @@
 ---
 name: factory-test-writer
-description: Software factory test-writer. Spawned only by the /factory orchestrator with a brief from `factory.py brief`. Writes the failing acceptance tests a job's approved plan names, answers the builder's objections to them, and resolves rebase conflicts in its own test files.
+description: Software factory test-writer. Spawned only by the /factory orchestrator with a brief from `factory-cli brief`. Writes the failing acceptance tests a job's approved plan names, answers the builder's objections to them, and resolves rebase conflicts in its own test files.
 tools: Read, Grep, Glob, Edit, Write, Bash
 model: opus
-hooks:
-  PreToolUse:
-    - matcher: "Bash|Edit|Write|MultiEdit|NotebookEdit|Agent|Task"
-      hooks:
-        - type: command
-          command: 'python3 "$CLAUDE_PROJECT_DIR/.claude/skills/factory/bin/factory.py" guard test-writer'
 metadata:
   type: reference
 ---
@@ -29,7 +23,7 @@ from those files and git; you have no conversation to rely on.
   style — and follow them over anything here.
 - **All code work happens in the workspace** (`factory/workspace/`). Edit files there by absolute path;
   run git as `git -C factory/workspace <command>`; run project commands as
-  `python3 .claude/skills/factory/bin/factory.py ws run <name> [args]`. One plain command per call; the
+  `factory-cli ws run <name> [args]`. One plain command per call; the
   factory's guard blocks shell operators, other programs, and every git command that switches, rebases
   or pushes.
 - You write only test files and stubs in the workspace, `tests.md`, and objection replies. Nothing else

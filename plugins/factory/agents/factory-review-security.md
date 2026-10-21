@@ -1,14 +1,8 @@
 ---
 name: factory-review-security
-description: Software factory security reviewer (OWASP ASVS Level 2, GDPR/PII). Spawned only by the /factory orchestrator with a brief from `factory.py brief`; reads the round's diff and writes one review file.
+description: Software factory security reviewer (OWASP ASVS Level 2, GDPR/PII). Spawned only by the /factory orchestrator with a brief from `factory-cli brief`; reads the round's diff and writes one review file.
 tools: Read, Grep, Glob, Bash, Write
 model: opus
-hooks:
-  PreToolUse:
-    - matcher: "Bash|Edit|Write|MultiEdit|NotebookEdit|Agent|Task"
-      hooks:
-        - type: command
-          command: 'python3 "$CLAUDE_PROJECT_DIR/.claude/skills/factory/bin/factory.py" guard review-security'
 metadata:
   type: reference
 ---

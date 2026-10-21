@@ -1,24 +1,43 @@
-"""Where everything lives. The repo root is derived from this file's location, or from
-FACTORY_ROOT (used by the tests). Runtime state is under <root>/factory/, which is gitignored."""
+"""Where everything lives. The factory runs as a plugin, so its code is not inside the project: the
+repo root comes from FACTORY_ROOT (used by the tests), else CLAUDE_PROJECT_DIR, else the git
+repository the command runs in. Runtime state is under <root>/factory/, which is gitignored."""
 
 import os
+import subprocess
 from pathlib import Path
+
+from .errors import FactoryError
+
+
+def _git_toplevel(cwd):
+    result = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=str(cwd), capture_output=True, text=True)
+    return Path(result.stdout.strip()) if result.returncode == 0 and result.stdout.strip() else None
+
+
+def _outside_workspace(root):
+    if root.name == "workspace" and root.parent.name == "factory":
+        return root.parent.parent
+    return root
 
 
 def _derive_root():
     override = os.environ.get("FACTORY_ROOT")
     if override:
         return Path(override).resolve()
-    root = Path(__file__).resolve().parents[5]
-    if root.name == "workspace" and root.parent.name == "factory":
-        return root.parent.parent
-    return root
+    project_dir = os.environ.get("CLAUDE_PROJECT_DIR")
+    if project_dir:
+        return _outside_workspace(Path(project_dir).resolve())
+    toplevel = _git_toplevel(Path.cwd())
+    if toplevel is None:
+        raise FactoryError("not inside a git repository; run the factory from the project repo")
+    return _outside_workspace(toplevel.resolve())
 
 
 class Paths:
     def __init__(self, root=None):
         self.root = Path(root).resolve() if root else _derive_root()
         self.skill = Path(__file__).resolve().parents[2]
+        self.plugin = self.skill.parents[1]
         self.factory = self.root / "factory"
         self.project = self.factory / "project.md"
         self.board = self.factory / "board.json"

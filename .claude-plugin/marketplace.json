@@ -1,0 +1,14 @@
+{
+  "name": "software-factory",
+  "description": "Fredrik's local marketplace for the software factory plugin.",
+  "owner": {
+    "name": "Fredrik Gardin"
+  },
+  "plugins": [
+    {
+      "name": "factory",
+      "source": "./plugins/factory",
+      "description": "Software factory: /factory init, add, run and friends."
+    }
+  ]
+}

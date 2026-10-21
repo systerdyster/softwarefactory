@@ -1,6 +1,6 @@
-"""`guard <role>`: the PreToolUse hook in every factory agent's frontmatter. Agent frontmatter can
-grant or withhold a whole tool, but not a single Bash command or a single path, so this enforces
-the per-role limits mechanically. Exit 0 allows the call; exit 2 blocks it with the reason on
+"""`guard <role>`: the per-role limits behind the plugin's PreToolUse hook (hook.py), which maps the
+calling agent to its role. Agent frontmatter can grant or withhold a whole tool, but not a single
+Bash command or a single path, so this enforces the per-role limits mechanically. Exit 0 allows the call; exit 2 blocks it with the reason on
 stderr, which the agent sees.
 
 Roles: builder, test-writer, approver, and review-<name> for reviewers (review-codex for the
@@ -19,7 +19,7 @@ READ_GIT = {"status", "diff", "log", "show", "merge-base", "rev-parse", "ls-file
 WRITE_GIT = {"add", "rm", "mv", "commit", "restore"}
 BANNED_FLAGS = {"--output", "--no-verify", "--amend", "-w", "--ext-diff", "--textconv"}
 METACHARS = re.compile(r"[;&|`<>\n]|\$\(")
-FACTORY_CLI = ".claude/skills/factory/bin/factory.py"
+FACTORY_CLI = "factory-cli"
 READ_FACTORY = {"state", "tests", "board"}
 
 
@@ -54,8 +54,8 @@ def _usage(role):
     if role in ("builder", "test-writer"):
         lines.append("  git -C factory/workspace " + "|".join(sorted(WRITE_GIT)) + " ...")
     if role in ("builder", "test-writer", "approver"):
-        lines.append(f"  python3 {FACTORY_CLI} ws run <command-name> [args]   (names are [commands] in project.md)")
-    lines.append(f"  python3 {FACTORY_CLI} state|tests check <job-id>")
+        lines.append(f"  {FACTORY_CLI} ws run <command-name> [args]   (names are [commands] in project.md)")
+    lines.append(f"  {FACTORY_CLI} state|tests check <job-id>")
     return "\n".join(lines)
 
 
@@ -70,13 +70,13 @@ def check_bash(paths, role, command, job_id, test_files):
         raise Blocked("empty command")
     if argv[0] == "git":
         return _check_git(paths, role, argv, test_files)
-    if argv[0] in ("python3", "python") and len(argv) >= 3 and _resolve(paths, argv[1]) == (paths.root / FACTORY_CLI).resolve():
-        sub = argv[2]
-        if sub in READ_FACTORY and not (sub == "tests" and len(argv) > 3 and argv[3] != "check"):
+    if argv[0] == FACTORY_CLI and len(argv) >= 2:
+        sub = argv[1]
+        if sub in READ_FACTORY and not (sub == "tests" and len(argv) > 2 and argv[2] != "check"):
             return
-        if sub == "ws" and len(argv) >= 4 and argv[3] == "run" and role in ("builder", "test-writer", "approver"):
+        if sub == "ws" and len(argv) >= 3 and argv[2] == "run" and role in ("builder", "test-writer", "approver"):
             return
-        raise Blocked(f"`factory.py {sub}` is for the orchestrator.\n" + _usage(role))
+        raise Blocked(f"`{FACTORY_CLI} {sub}` is for the orchestrator.\n" + _usage(role))
     if argv[0] in ("ls", "pwd", "wc"):
         return
     raise Blocked(f"`{argv[0]}` is not available to the {role}.\n" + _usage(role))
@@ -106,6 +106,8 @@ def check_write(paths, role, raw_path, job_id, test_files):
     if not raw_path:
         raise Blocked("no file path given")
     target = _resolve(paths, raw_path)
+    if _inside(target, paths.plugin.resolve()):
+        raise Blocked("the factory's own files are not changed by a factory job")
     ws = paths.workspace.resolve()
     jd = paths.job(job_id).resolve() if job_id else None
     if role.startswith("review-"):
@@ -120,8 +122,6 @@ def check_write(paths, role, raw_path, job_id, test_files):
         raise Blocked("the approver writes only factory/jobs/<id>/decision.md")
     if _inside(target, ws) and not _inside(target, ws / ".git"):
         rel = str(target.relative_to(ws))
-        if rel.startswith(".claude/skills/factory/") or re.match(r"\.claude/agents/factory-[^/]*$", rel):
-            raise Blocked("the factory's own files are not changed by a factory job")
         if role == "builder" and rel in test_files:
             raise Blocked(f"{rel} belongs to test-writer (tests.md); the builder never changes it. "
                           "If you believe the test is wrong, write an objection in build.md and stop.")

@@ -1,6 +1,6 @@
 ---
 name: factory-project-template
-description: Template for factory/project.md, copied by `factory.py init-files` and filled in by /factory init
+description: Template for factory/project.md, copied by `factory-cli init-files` and filled in by /factory init
 metadata:
   type: reference
 ---

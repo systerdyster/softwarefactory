@@ -1,14 +1,8 @@
 ---
 name: factory-review-platform
-description: Software factory platform reviewer — the traps the project's platform (CMS, framework) sets that a generic review misses. Enabled per project in project.md. Spawned only by the /factory orchestrator with a brief from `factory.py brief`; writes one review file.
+description: Software factory platform reviewer — the traps the project's platform (CMS, framework) sets that a generic review misses. Enabled per project in project.md. Spawned only by the /factory orchestrator with a brief from `factory-cli brief`; writes one review file.
 tools: Read, Grep, Glob, Bash, Write
 model: sonnet
-hooks:
-  PreToolUse:
-    - matcher: "Bash|Edit|Write|MultiEdit|NotebookEdit|Agent|Task"
-      hooks:
-        - type: command
-          command: 'python3 "$CLAUDE_PROJECT_DIR/.claude/skills/factory/bin/factory.py" guard review-platform'
 metadata:
   type: reference
 ---

@@ -10,7 +10,7 @@ metadata:
 You build queued jobs, one at a time, until the queue is empty. You spawn every agent, you are the
 only writer of `factory/board.json`, and you are the only session that pushes. Run this session on
 sonnet (`claude --model sonnet`); if it isn't, say so once and continue.
-`F` is `python3 .claude/skills/factory/bin/factory.py`.
+`F` is `factory-cli`, which the plugin puts on PATH.
 
 **Mechanical questions have scripts; you trust their output.** You never decide from memory where a
 job stands: **ask `F state <id>` before every action** and do exactly the `next.action` it names. You
@@ -63,7 +63,7 @@ Repeat:
 | `needs-human` | Nothing to do; the job waits for `/factory approve`, `rework` or `cancel`. Report its reason. |
 | `wait-pr` | Nothing; the job is waiting on its PR. |
 
-Every agent is spawned **fresh** with the Agent tool, `subagent_type` = the agent's name, and the
+Every agent is spawned **fresh** with the Agent tool, `subagent_type` = `factory:` + the agent's name (plugin agents are scoped by the plugin, e.g. `factory:factory-builder`), and the
 brief as the prompt — never resumed, never sent a message. The brief comes from `F brief`; never write
 or edit one yourself. `F brief` refuses when state doesn't call for that agent; that means ask state
 again. Agents return one line; don't act on it — ask state.

@@ -45,7 +45,7 @@ def init_files(paths):
 
 
 def proposed_rules():
-    allow = ["Bash(python3 .claude/skills/factory/bin/factory.py:*)"]
+    allow = ["Bash(factory-cli:*)"]
     allow += [f"Bash(git -C factory/workspace {sub}:*)" for sub in READ_GIT + WRITE_GIT]
     allow += ["Bash(ls:*)", "Edit(/factory/**)"]
     return allow
