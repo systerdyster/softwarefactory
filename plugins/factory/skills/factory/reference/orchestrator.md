@@ -56,7 +56,7 @@ Repeat:
 | `spawn-approver` | Spawn `factory-approver` with `F brief <id> approver`. |
 | `rebase` | `F rebase <id>` — fetch, rebase on the target, re-record test hashes, full suite. Conflicts leave the rebase in progress; state routes them. |
 | `rebase-continue` | `F rebase <id> --continue`. |
-| `pr` | `F pr open <id>` — pushes the branch and opens or updates the PR (enables auto-merge in `auto-merge` mode). |
+| `pr` | First write the description: `F pr body <id>` prints the facts (summary, verdicts, test exemptions, the approver's least-sure list). Write `factory/jobs/<id>/pr-body.md` from them in project.md's `[handoff] language`, following `pr_template` when it is set (fill its sections; leave none empty without saying why). Keep every fact; add none. Then `F pr open <id>` — pushes the branch and opens or updates the PR with that body, the title, draft state, reviewers and links from `[handoff]` (enables auto-merge in `auto-merge` mode). |
 | `merge-local` | `F merge <id>`. |
 | `finish` | `F finish <id>` — removes the branches, returns the workspace to the target, marks `[x]`. |
 | `cancel` | `F cancel <id> --reason "<reason>"` (a cancelled job whose branch still exists). |

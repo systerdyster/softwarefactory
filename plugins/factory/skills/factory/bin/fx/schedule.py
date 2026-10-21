@@ -89,7 +89,7 @@ def decide(enabled, first_round, changed_files, diff_text, verdicts, patterns):
 
 
 def schedule(paths, cfg, job_id, round_number, cycle_start):
-    branch = branch_name(job_id)
+    branch = branch_name(paths, job_id)
     head = gitutil.rev(branch, paths.root)
     if not head:
         raise FactoryError(f"branch {branch} does not exist")

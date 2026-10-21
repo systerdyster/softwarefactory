@@ -2,6 +2,7 @@
 repo root comes from FACTORY_ROOT (used by the tests), else CLAUDE_PROJECT_DIR, else the git
 repository the command runs in. Runtime state is under <root>/factory/, which is gitignored."""
 
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -64,5 +65,21 @@ class Paths:
             return str(path)
 
 
-def branch_name(job_id):
-    return f"factory/{job_id}"
+def branch_name(paths, job_id):
+    """The job's branch as recorded in job.json when it was queued; factory/<id> for jobs queued
+    before branch names became configurable."""
+    try:
+        meta = json.loads((paths.job(job_id) / "job.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        meta = {}
+    return meta.get("branch") or f"factory/{job_id}"
+
+
+def job_for_branch(paths, branch):
+    if not branch:
+        return None
+    if paths.jobs.exists():
+        for meta_file in paths.jobs.glob("*/job.json"):
+            if branch_name(paths, meta_file.parent.name) == branch:
+                return meta_file.parent.name
+    return branch.split("/", 1)[1] if branch.startswith("factory/") else None

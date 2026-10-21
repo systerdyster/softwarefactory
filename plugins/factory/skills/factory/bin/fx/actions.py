@@ -22,7 +22,7 @@ def _archive(paths, job_id, name):
 
 def _require_on_branch(paths, job_id, allow_rebase=False):
     ws = workspace.check(paths)
-    branch = branch_name(job_id)
+    branch = branch_name(paths, job_id)
     on = ws["branch"] == branch or (ws["rebase_in_progress"] and gitutil.rebasing_branch(paths.workspace) == branch)
     if not on:
         raise FactoryError(f"the workspace is on {ws['branch'] or 'a detached HEAD'}, not {branch}; switch first")
@@ -74,7 +74,7 @@ def review_reset(paths, job_id, round_number):
         moved.append(f.name)
     reverted = []
     ws = workspace.check(paths)
-    if ws["branch"] == branch_name(job_id) and ws["dirty"]:
+    if ws["branch"] == branch_name(paths, job_id) and ws["dirty"]:
         reverted = ws["dirty"]
         gitutil.run(["reset", "--hard", "HEAD"], paths.workspace)
         gitutil.run(["clean", "-fd"], paths.workspace)
@@ -160,7 +160,7 @@ def rebase(paths, cfg, job_id, continue_=False):
 
 
 def cleanup(paths, cfg, job_id, discard=False):
-    branch = branch_name(job_id)
+    branch = branch_name(paths, job_id)
     result = {"branch": branch, "local_deleted": False, "remote_deleted": False, "workspace": None}
     if gitutil.is_worktree(paths.workspace):
         ws = workspace.check(paths)
@@ -266,7 +266,7 @@ def next_job(paths, cfg):
     waiting = [{"id": s["id"], "stage": s["stage"], "reason": s["reason"]} for s in taken if s["waiting"]]
     if active:
         ws_branch = gitutil.current_branch(paths.workspace) if gitutil.is_worktree(paths.workspace) else None
-        active.sort(key=lambda s: 0 if branch_name(s["id"]) == ws_branch else 1)
+        active.sort(key=lambda s: 0 if branch_name(paths, s["id"]) == ws_branch else 1)
         return {"job": active[0]["id"], "state": active[0], "also_active": [s["id"] for s in active[1:]],
                 "waiting": waiting}
     if paths.stop_flag.exists():

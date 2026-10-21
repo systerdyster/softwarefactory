@@ -55,7 +55,7 @@ def recorded_head(paths, job_id):
 
 def _workspace_on(paths, job_id):
     ws = paths.workspace
-    return gitutil.is_worktree(ws) and gitutil.current_branch(ws) == branch_name(job_id)
+    return gitutil.is_worktree(ws) and gitutil.current_branch(ws) == branch_name(paths, job_id)
 
 
 def record(paths, job_id):
@@ -66,7 +66,7 @@ def record(paths, job_id):
     rows = parse(text)
     if not rows:
         raise FactoryError("tests.md lists no test files (expected a `| file | hash |` table)")
-    branch = branch_name(job_id)
+    branch = branch_name(paths, job_id)
     head = gitutil.rev(branch, paths.root)
     if not head:
         raise FactoryError(f"branch {branch} does not exist")
@@ -104,7 +104,7 @@ def record(paths, job_id):
 def check(paths, job_id):
     if not is_recorded(paths, job_id):
         raise FactoryError("test hashes are not recorded yet; run `tests record` after test-writer commits")
-    branch = branch_name(job_id)
+    branch = branch_name(paths, job_id)
     on_branch = _workspace_on(paths, job_id)
     mismatches = []
     for row in listed(paths, job_id):
@@ -118,7 +118,7 @@ def check(paths, job_id):
 
 def restore(paths, job_id):
     if not _workspace_on(paths, job_id):
-        raise FactoryError(f"the workspace is not on {branch_name(job_id)}; switch first")
+        raise FactoryError(f"the workspace is not on {branch_name(paths, job_id)}; switch first")
     if gitutil.rebase_in_progress(paths.workspace):
         raise FactoryError("a rebase is in progress in the workspace")
     result = check(paths, job_id)

@@ -48,8 +48,8 @@ def body(paths, cfg, job_id):
     verdicts = schedule.latest_verdicts(paths, job_id, max(rounds, default=0))
     fallback = any(r.get("fallback") for n in rounds for r in jobs.reviews(paths.round_dir(job_id, n)).values())
     lines = [f"## {meta.get('title', job_id)}", ""]
-    if meta.get("jira"):
-        lines += [f"Jira: {meta['jira']}", ""]
+    if meta.get("jira") and cfg.jira_link in ("body", "both"):
+        lines += [jira_line(cfg, meta["jira"]), ""]
     lines += ["### Summary", "", _summary(spec) or "_spec.md has no summary_", ""]
     lines += ["### Reviews", "", "| Reviewer | Verdict |", "|---|---|"]
     lines += [f"| {name} | {v} |" for name, v in sorted(verdicts.items())]
@@ -71,7 +71,7 @@ def body(paths, cfg, job_id):
 def _push(paths, cfg, job_id):
     if not cfg.remote:
         raise FactoryError("project.md has no remote; pr mode needs one")
-    branch = branch_name(job_id)
+    branch = branch_name(paths, job_id)
     gitutil.run(["push", "--force-with-lease", cfg.remote, f"{branch}:refs/heads/{branch}"], paths.root, timeout=600)
     return gitutil.rev(branch, paths.root)
 
@@ -90,14 +90,54 @@ def _az_url(data):
     return f"{web}/pullrequest/{data['pullRequestId']}" if web else None
 
 
+def jira_line(cfg, key):
+    return f"Jira: [{key}]({cfg.jira_url.rstrip('/')}/{key})" if cfg.jira_url else f"Jira: {key}"
+
+
+def final_body(paths, cfg, job_id):
+    """pr-body.md, written by the orchestrator in the project's language and PR template from the
+    facts in `pr body`, when it exists; otherwise the facts themselves."""
+    jd = paths.job(job_id)
+    written = jobs.read(jd / "pr-body.md")
+    if not written:
+        return body(paths, cfg, job_id)
+    meta = jobs.meta(jd)
+    if meta.get("jira") and cfg.jira_link in ("body", "both") and meta["jira"] not in written:
+        written = written.rstrip("\n") + "\n\n" + jira_line(cfg, meta["jira"]) + "\n"
+    return written
+
+
+def title_for(cfg, meta):
+    if meta.get("jira") and cfg.jira_link in ("title", "both"):
+        return f"{meta['jira']}: {meta['title']}"
+    return meta["title"]
+
+
+def create_flags(cfg, meta, tool):
+    reviewers = cfg.pr_reviewers
+    required = cfg.pr_required_reviewers
+    if tool == "gh":
+        flags = ["--draft"] if cfg.pr_draft else []
+        everyone = reviewers + required
+        return flags + (["--reviewer", ",".join(everyone)] if everyone else [])
+    flags = ["--draft", "true"] if cfg.pr_draft else []
+    if reviewers:
+        flags += ["--reviewers", *reviewers]
+    if required:
+        flags += ["--required-reviewers", *required]
+    if cfg.link_work_items and meta.get("work_item"):
+        flags += ["--work-items", str(meta["work_item"])]
+    return flags
+
+
 def open_or_update(paths, cfg, job_id):
     jd = paths.job(job_id)
     meta = jobs.meta(jd)
     existing = jobs.read_json(jd / "pr.json")
     head = _push(paths, cfg, job_id)
-    text = body(paths, cfg, job_id)
-    title = f"{meta['jira']}: {meta['title']}" if meta.get("jira") else meta["title"]
-    branch = branch_name(job_id)
+    text = final_body(paths, cfg, job_id)
+    title = title_for(cfg, meta)
+    branch = branch_name(paths, job_id)
     tool = cfg.pr_tool
     auto = cfg.merge_mode == "auto-merge"
     record = dict(existing or {}, tool=tool, head=head, branch=branch, auto=auto, updated_at=jobs.now())
@@ -113,7 +153,7 @@ def open_or_update(paths, cfg, job_id):
             _cli(["gh", "pr", "edit", str(existing["number"]), "--body-file", body_file], paths.root)
         else:
             _cli(["gh", "pr", "create", "--base", cfg.target_branch, "--head", branch,
-                  "--title", title, "--body-file", body_file], paths.root)
+                  "--title", title, "--body-file", body_file, *create_flags(cfg, meta, "gh")], paths.root)
         view = _gh_view(paths, branch)
         record.update(number=view["number"], url=view["url"], state=view["state"])
         if auto:
@@ -126,7 +166,8 @@ def open_or_update(paths, cfg, job_id):
         else:
             data = json.loads(_cli(["az", "repos", "pr", "create", "--source-branch", branch,
                                     "--target-branch", cfg.target_branch, "--title", title,
-                                    "--description", description, "--output", "json"], paths.root))
+                                    "--description", description, *create_flags(cfg, meta, "az"),
+                                    "--output", "json"], paths.root))
         record.update(number=data["pullRequestId"], url=_az_url(data), state=AZ_STATE.get(data.get("status"), "OPEN"))
         if auto:
             _cli(["az", "repos", "pr", "update", "--id", str(data["pullRequestId"]), "--auto-complete", "true",
@@ -206,7 +247,7 @@ def merge_local(paths, cfg, job_id):
     checkout is touched. Refuses when the target branch is checked out anywhere, because moving
     the ref under a checkout would leave that checkout looking reverted."""
     jd = paths.job(job_id)
-    branch = branch_name(job_id)
+    branch = branch_name(paths, job_id)
     target = cfg.target_branch
     holders = gitutil.worktrees_on_branch(target, paths.root)
     head = gitutil.rev(branch, paths.root)

@@ -11,6 +11,8 @@ OPTIONAL_REVIEWERS = ["platform", "ux", "ui", "codex"]
 ALWAYS_ON_CODE_CHANGE = ["security", "code", "codex"]
 MERGE_MODES = ["pr", "local-merge", "auto-merge"]
 PR_TOOLS = ["gh", "az", "other"]
+JIRA_LINKS = ["title", "body", "both", "none"]
+BRANCH_FIELDS = {"id", "key", "slug"}
 
 _BLOCK = re.compile(r"^```ini[^\n]*\n(.*?)^```", re.S | re.M)
 
@@ -33,6 +35,12 @@ class Config:
             return int(value)
         except ValueError:
             raise FactoryError(f"project.md: [{section}] {key} must be a number, got {value!r}")
+
+    def getbool(self, section, key, default=False):
+        value = self.get(section, key)
+        if value is None:
+            return default
+        return value.lower() in ("true", "yes", "on", "1")
 
     def getlist(self, section, key):
         value = self.get(section, key)
@@ -111,6 +119,51 @@ class Config:
 
     def path_patterns(self, reviewer):
         return self.getlist("paths", reviewer)
+
+    @property
+    def branch_pattern(self):
+        pattern = self.get("handoff", "branch", "factory/{id}")
+        fields = set(re.findall(r"\{(\w+)\}", pattern))
+        if fields - BRANCH_FIELDS:
+            raise FactoryError(f"project.md: [handoff] branch may use {sorted(BRANCH_FIELDS)}, got {sorted(fields)}")
+        if not fields & {"id", "key"}:
+            raise FactoryError("project.md: [handoff] branch must contain {id} or {key} so every job gets its own branch")
+        return pattern
+
+    @property
+    def pr_draft(self):
+        return self.getbool("handoff", "draft")
+
+    @property
+    def pr_reviewers(self):
+        return self.getlist("handoff", "reviewers")
+
+    @property
+    def pr_required_reviewers(self):
+        return self.getlist("handoff", "required_reviewers")
+
+    @property
+    def jira_link(self):
+        mode = self.get("handoff", "jira_link", "title")
+        if mode not in JIRA_LINKS:
+            raise FactoryError(f"project.md: [handoff] jira_link must be one of {JIRA_LINKS}, got {mode!r}")
+        return mode
+
+    @property
+    def jira_url(self):
+        return self.get("handoff", "jira_url")
+
+    @property
+    def link_work_items(self):
+        return self.getbool("handoff", "work_items")
+
+    @property
+    def pr_language(self):
+        return self.get("handoff", "language", "en")
+
+    @property
+    def pr_template(self):
+        return self.get("handoff", "pr_template")
 
     @property
     def jira_enabled(self):

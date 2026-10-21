@@ -31,7 +31,7 @@ def _round_facts(paths, job_id, n):
 
 def gather(paths, cfg, job_id):
     jd = paths.job(job_id)
-    branch = branch_name(job_id)
+    branch = branch_name(paths, job_id)
     head = gitutil.rev(branch, paths.root)
     ws = {"exists": gitutil.is_worktree(paths.workspace), "on_branch": False}
     if ws["exists"]:

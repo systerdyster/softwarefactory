@@ -80,8 +80,11 @@ between presenting and the answer. Changes requested → revise and present agai
 3. **Claim the Jira issue** (Jira jobs): assign it to the developer and transition it to the claim
    status in project.md. Then `F jira-log <id> claimed` and `F jira-log <id> status:claimed`. No
    comment.
-4. **Queue it**: `F queue add <id> --title "<title>" [--jira <KEY>] --developer "<name>"`. The script
-   takes the file lock, so this is safe while other sessions and the orchestrator run.
+4. **Queue it**: `F queue add <id> --title "<title>" [--jira <KEY>] [--work-item <ID>] --developer
+   "<name>"`. Pass `--work-item` when project.md has `work_items = true`; ask the developer for the
+   Azure Boards id if the issue doesn't name it. The script computes the branch from project.md's
+   `[handoff] branch` pattern and records it, and takes the file lock, so this is safe while other
+   sessions and the orchestrator run. Tell the developer the branch name it returns.
 
 Tell the developer the job is queued, its id, and that `/factory run` (in its own session, on sonnet:
 `claude --model sonnet`) builds it — or that the running orchestrator will pick it up.

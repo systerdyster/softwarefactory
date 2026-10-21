@@ -61,7 +61,9 @@ def cmd_tests(a, p):
 
 def cmd_queue(a, p):
     if a.action == "add":
-        return queue.add(p, a.job, a.title, jira=a.jira, developer=a.developer)
+        branch = queue.branch_for(_cfg(p).branch_pattern, a.job, a.title, a.jira)
+        return queue.add(p, a.job, a.title, jira=a.jira, developer=a.developer, branch=branch,
+                         work_item=a.work_item)
     if a.action == "take":
         return {"taken": queue.take(p)}
     if a.action == "mark":
@@ -232,6 +234,7 @@ def parser():
     q.add_argument("--title", required=True)
     q.add_argument("--jira")
     q.add_argument("--developer")
+    q.add_argument("--work-item", dest="work_item", help="Azure Boards work item id to link to the PR")
     qs.add_parser("take")
     q = qs.add_parser("mark")
     q.add_argument("job")

@@ -6,10 +6,13 @@ backlog.md lines: `- [ ] <id> — <title>`. Marks: [ ] queued, [~] taken, [x] do
 import contextlib
 import fcntl
 import re
+import subprocess
 import time
+import unicodedata
 
 from . import jobs
 from .errors import FactoryError
+from .paths import branch_name
 
 MARKS = {"queued": " ", "taken": "~", "done": "x", "cancelled": "-"}
 _LINE = re.compile(r"^- \[([ ~x-])\] (\S+)(?: — (.*))?$")
@@ -66,7 +69,23 @@ def _set_mark(text, job_id, mark):
     return "\n".join(lines) + "\n"
 
 
-def add(paths, job_id, title, jira=None, developer=None):
+def _slug(text, words=6):
+    ascii_text = unicodedata.normalize("NFKD", text or "").encode("ascii", "ignore").decode()
+    slug = re.sub(r"[^a-z0-9]+", "-", ascii_text.lower()).strip("-")
+    return "-".join(slug.split("-")[:words])
+
+
+def branch_for(pattern, job_id, title, jira=None):
+    """The job's branch from project.md's [handoff] branch pattern: {id} the job id, {key} the Jira
+    key (else the id), {slug} the title in a few lower-case words."""
+    branch = pattern.format(id=job_id, key=jira or job_id, slug=_slug(title, 5) or _slug(job_id))
+    check = subprocess.run(["git", "check-ref-format", "--branch", branch], capture_output=True, text=True)
+    if check.returncode != 0:
+        raise FactoryError(f"{branch!r} is not a valid branch name; check [handoff] branch in project.md")
+    return branch
+
+
+def add(paths, job_id, title, jira=None, developer=None, branch=None, work_item=None):
     jobs.check_id(job_id)
     job_dir = paths.job(job_id)
     for name in ("spec.md", "plan.md"):
@@ -78,7 +97,13 @@ def add(paths, job_id, title, jira=None, developer=None):
     with locked(paths):
         if entry(paths, job_id):
             raise FactoryError(f"{job_id} is already in backlog.md")
-        meta = {"id": job_id, "title": title, "jira": jira, "developer": developer, "queued_at": jobs.now()}
+        branch = branch or f"factory/{job_id}"
+        clash = [e["id"] for e in entries(paths) if e["status"] in ("queued", "taken")
+                 and branch_name(paths, e["id"]) == branch]
+        if clash:
+            raise FactoryError(f"branch {branch} is already used by {clash[0]}")
+        meta = {"id": job_id, "title": title, "jira": jira, "developer": developer, "branch": branch,
+                "work_item": work_item, "queued_at": jobs.now()}
         jobs.write_json(job_dir / "job.json", meta)
         text = _read(paths).rstrip("\n") + "\n"
         if text.strip() == _HEADER.strip():
@@ -105,8 +130,7 @@ def mark(paths, job_id, status):
 
 
 def next_id(paths, slug):
-    slug = re.sub(r"[^a-z0-9]+", "-", (slug or "").lower()).strip("-")
-    slug = "-".join(slug.split("-")[:6])
+    slug = _slug(slug)
     if not slug:
         raise FactoryError("a slug needs at least one letter or digit")
     with locked(paths):

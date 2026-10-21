@@ -109,7 +109,7 @@ def _after_switch(paths, cfg):
 
 def switch(paths, cfg, job_id):
     _require(paths)
-    branch = branch_name(job_id)
+    branch = branch_name(paths, job_id)
     s = check(paths)
     if s["branch"] == branch and s["clean"]:
         return {"branch": branch, "created": False, "setup_rerun": _after_switch(paths, cfg)}

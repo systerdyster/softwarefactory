@@ -12,6 +12,8 @@ never stall on a prompt, and a workspace proven to build and pass the full suite
 starts. `F` is `factory-cli`, which the plugin puts on PATH.
 
 Re-running init on a configured repo is safe: show what exists, and change only what the human asks.
+When project.md lacks a section the template has (an older init), go through that section's questions
+and add it.
 
 ## 1. Create the runtime folder
 
@@ -42,9 +44,25 @@ section of `factory/project.md`:
   against the diff text (`re:\bIMemoryCache\b`), so later rounds pull a reviewer back in when its area
   changes.
 - **Platform** — for the platform reviewer: the platform, version, and any project-specific traps.
-- `max_rounds` (default 3), `max_diff` (changed lines that force escalation; default 800),
-  `merge_mode` (`pr` by default), target branch, remote, PR tool (`gh`, `az` or `other`, from the
-  remote URL).
+- `max_rounds` (default 3), `max_diff` (changed lines that force escalation; default 800), remote,
+  PR tool (`gh`, `az` or `other`, from the remote URL).
+- **Hand-off** — how a finished job reaches the team. These are the team's choices, not facts in the
+  repo, so **ask about each one** even when you have a good guess; propose the guess as the
+  recommendation:
+  - **Target branch** — always confirm, even when only one branch exists (`main`, or `develop` in a
+    gitflow project). Never a silent default.
+  - **merge_mode** — `pr` (recommended), `local-merge` or `auto-merge`.
+  - **Branch name** — the `[handoff] branch` pattern. Propose one from the existing branches and merge
+    history (`feature/{key}-{slug}`, `bugfix/{key}`…); `factory/{id}` only if the team has no
+    convention.
+  - **Draft and reviewers** — open the PR as a draft or ready for review; which people or groups to
+    add as reviewers, and which are required.
+  - **Linking** — where the Jira key goes (`jira_link`: title, body, both, none) and the issue URL
+    prefix (`jira_url`); for `az`, whether to link the Azure Boards work item.
+  - **Language and template** — the language the team writes PR descriptions in, and the project's
+    PR template if there is one (look for `.azuredevops/pull_request_template.md`,
+    `.github/pull_request_template.md`, `docs/pull_request_template.md`) — confirm it rather than
+    assume.
 - **Jira** — on or off, and the factory-stage → Jira-status mapping, including where a cancelled
   issue goes. Read the project's workflow statuses from Jira rather than guessing names.
 

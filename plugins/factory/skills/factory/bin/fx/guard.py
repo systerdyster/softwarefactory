@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 from . import gitutil, testfiles
-from .paths import Paths
+from .paths import Paths, job_for_branch
 
 READ_GIT = {"status", "diff", "log", "show", "merge-base", "rev-parse", "ls-files", "blame", "grep", "cat-file"}
 WRITE_GIT = {"add", "rm", "mv", "commit", "restore"}
@@ -32,7 +32,7 @@ def _current_job(paths):
         return None
     branch = gitutil.rebasing_branch(paths.workspace) if gitutil.rebase_in_progress(paths.workspace) \
         else gitutil.current_branch(paths.workspace)
-    return branch.split("/", 1)[1] if branch and branch.startswith("factory/") else None
+    return job_for_branch(paths, branch)
 
 
 def _inside(path, folder):

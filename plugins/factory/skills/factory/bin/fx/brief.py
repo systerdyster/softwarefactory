@@ -39,7 +39,7 @@ def _header(paths, cfg, job_id, agent, s):
         f"- Repo root (your working directory): {paths.root}",
         f"- Workspace (all code work happens here): {paths.workspace}",
         f"- Job folder: {jd}",
-        f"- Branch: {branch_name(job_id)} · target {cfg.base_ref} · merge base {base or '-'} · head {head or '-'}",
+        f"- Branch: {branch_name(paths, job_id)} · target {cfg.base_ref} · merge base {base or '-'} · head {head or '-'}",
         f"- Project configuration and test conventions: {paths.project}",
         f"- Project rules, which win over the factory's defaults: "
         + (", ".join(str(paths.workspace / r) for r in rules) if rules else "none found in the workspace"),

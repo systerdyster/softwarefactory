@@ -66,6 +66,23 @@ performance =
 stability =
 platform =
 
+[handoff]
+; the job's branch: {id} job id, {key} Jira key (else the id), {slug} title in a few words
+branch = factory/{id}
+; open the PR as a draft
+draft = false
+; space- or comma-separated users or groups (az: optional reviewers; gh: handles or org/team)
+reviewers =
+required_reviewers =
+; where the Jira key goes: title | body | both | none; jira_url makes it a link
+jira_link = title
+jira_url =
+; az only: link the job's Azure Boards work item (given at /factory add)
+work_items = false
+; language of the PR description, and the project's PR template if it has one (repo-relative path)
+language = en
+pr_template =
+
 [jira]
 enabled = false
 ; factory stage → Jira status name; leave empty to skip a transition
