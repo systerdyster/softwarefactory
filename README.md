@@ -13,6 +13,8 @@ only. It was first built from a blueprint prompt; this repo is now the source.
    fix. tests.md maps each acceptance criterion to its test. No commit order is imposed.
 2. **verify** — the project's tests, build and lint (`[factory] verify`, default lint, build, suite);
    red sends the builder back within the round. A result counts only for the same head and commands.
+   The builder runs targeted checks while it works; this is the one full run. A rebase that leaves
+   HEAD unchanged reuses a green result; one that moves the code is checked again.
 3. **Review**: the main reviewer (`code`) always; a specialist (security, performance, stability, ui,
    ux, platform, codex) when plan.md's `Specialists:` line names it or its `[paths]` pattern matches.
    The factory reads each verdict from the findings — CHANGES only for a BLOCKING one — and merges all

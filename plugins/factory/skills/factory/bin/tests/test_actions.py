@@ -49,6 +49,21 @@ class ActionsTest(SandboxTest):
         self.assertEqual(actions.rebase(self.paths, self.cfg, self.job)["result"], "conflict")
         self.assertEqual(state.state(self.paths, self.cfg, self.job)["next"]["action"], "spawn-builder")
 
+    def test_a_rebase_that_moves_nothing_reuses_the_verified_result(self):
+        self.started_with_tests()
+        self.sb.write("build.md", "## Round 1\nStatus: done\n", base=self.paths.job(self.job))
+        verified = actions.verify(self.paths, self.cfg, self.job, 1, 1)
+        logs_before = set(self.paths.logs.iterdir())
+        entry = actions.rebase(self.paths, self.cfg, self.job)
+        self.assertEqual((entry["result"], entry["after"]), ("green", verified["head"]))
+        self.assertIn("round-1/verify-1.json", entry["reused"])
+        self.assertEqual(set(self.paths.logs.iterdir()), logs_before)
+
+    def test_a_rebase_that_moves_nothing_still_checks_when_nothing_was_verified(self):
+        self.started_with_tests()
+        entry = actions.rebase(self.paths, self.cfg, self.job)
+        self.assertEqual((entry["result"], entry.get("reused")), ("green", None))
+
     def test_rebase_onto_an_unrelated_change_is_green(self):
         self.started_with_tests()
         before = git(self.sb.ws, "rev-parse", "HEAD")

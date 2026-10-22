@@ -99,10 +99,28 @@ def _rebase_cmd(args, cwd):
     return subprocess.run(["git", *args], cwd=str(cwd), env=_git_env(), capture_output=True, text=True)
 
 
+def _green_verify(paths, cfg, job_id, head):
+    """A green verify of exactly this head with the same commands, from a round or an earlier rebase."""
+    fp = workspace.fingerprint(cfg)
+    jd = paths.job(job_id)
+    for n in reversed(jobs.rounds_on_disk(jd)):
+        for f in sorted(paths.round_dir(job_id, n).glob("verify-*.json"), reverse=True):
+            v = jobs.read_json(f)
+            if v and v.get("green") and v.get("head") == head and v.get("fingerprint") == fp:
+                return paths.relative(f)
+    for e in reversed(_rebase_state(paths, job_id).get("history", [])):
+        if e.get("result") == "green" and e.get("after") == head and e.get("fingerprint") == fp:
+            return f"rebase.json ({e.get('finished_at')})"
+    return None
+
+
 def _finish_rebase(paths, cfg, job_id, data, entry, resolved):
     entry["after"] = gitutil.rev("HEAD", paths.workspace)
+    reused = None if resolved or entry["after"] != entry["before"] else _green_verify(paths, cfg, job_id, entry["after"])
     if resolved:
         entry["result"] = "resolved"
+    elif reused:
+        entry.update(result="green", reused=reused, fingerprint=workspace.fingerprint(cfg))
     else:
         checks = workspace.verify(paths, cfg)
         entry["result"] = "green" if checks["green"] else "red"

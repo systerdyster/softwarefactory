@@ -50,7 +50,7 @@ Repeat:
 | `spawn-reviewers` | See **Reviewers**. |
 | `review-reset` | `F review-reset <id>` — discards the round's reviews (and any workspace change a reviewer made), so the round reruns. |
 | `judge-objection` | See **Objections**. |
-| `rebase` | `F rebase <id>` — fetch, rebase on the target, the project's checks. Conflicts leave the rebase in progress; state sends the builder to resolve them. |
+| `rebase` | `F rebase <id>` — fetch, rebase on the target, then the project's checks — unless the rebase left HEAD unchanged and that head already has a green verify with the same commands, which is reused. Conflicts leave the rebase in progress; state sends the builder to resolve them. |
 | `rebase-continue` | `F rebase <id> --continue`. |
 | `pr` | First write the description: `F pr body <id>` prints the facts (summary, verdicts, test exemptions, the main review's least-sure list, who approved). Write `factory/jobs/<id>/pr-body.md` from them in project.md's `[handoff] language`, following `pr_template` when it is set (fill its sections; leave none empty without saying why). Keep every fact; add none. Then `F pr open <id>` — pushes the branch and opens or updates the PR with that body, the title, draft state, reviewers and links from `[handoff]` (enables auto-merge in `auto-merge` mode). |
 | `merge-local` | `F merge <id>`. |
