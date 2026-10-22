@@ -98,17 +98,26 @@ architecture and component pages) are rules every brief lists.
 
 | What you see | What you decide | How you answer |
 |---|---|---|
-| **Ready for your approval** — summary, diff size, what the reviewer is least sure of, what to check by hand | Is this what you want in the PR? | Approve, or Rework with a note |
+| **Ready for your approval** — summary, diff size, what the reviewer is least sure of and its confidence (1–10), what to check by hand | Is this what you want in the PR? | Approve, or Rework with a note |
 | **Your decision** — a question with options, one recommended | Which way, when the plan can't be followed as approved | Pick an option or write your own; it goes into spec.md's `## Decided` |
 | **Stopped** — the reason (red target, too many attempts, blocking findings after the last round) | What to do next | Rework with a note, or Cancel |
 
 ### The dashboard
 
 `/factory run` starts it and gives its URL (127.0.0.1, with a token); one runs per project, and a
-second start links to it. Each job is a row of steps — start, build, verify, tidy, review with each
-reviewer, approve, PR — with the running agent's time. Opening a job shows a few lines of what has
-happened, round by round, then what to decide and only the buttons that answer it. The header says
-when no orchestrator is running, since your commands then wait for the next run.
+second start links to it. Each job is a card in one of three columns — needs you, in progress,
+waiting for merge — with its status, the running agent's time, and the agents working on it drawn as
+pixel-art figures with their state: hammering, reading, cheering a pass, stamping at a blocking
+finding, or a herald holding up what waits for you. The queue and the finished jobs sit in a column
+of their own. Opening a job shows a few lines of what has happened, round by round, then what to
+decide and only the buttons that answer it. The header says when no orchestrator is running, since
+your commands then wait for the next run.
+
+Above the cards is a village, as a backdrop: the same figures walk to the smithy, the yard, the
+chapel, the village hall and the stable as their jobs move, under a sky that follows the local
+clock and the season. A wider screen shows more countryside, not a bigger village. Everything is
+drawn in code in `dashboard.html`; there are no image files. The main reviewer ends its review with
+`Confidence: n/10`, and the herald's face shows it: happy from 8, worried below 5.
 
 ## Several jobs at once
 

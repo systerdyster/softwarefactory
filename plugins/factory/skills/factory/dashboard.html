@@ -3,138 +3,147 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Factory board</title>
+<title>Factory Quest</title>
 <style>
   :root {
-    --bg: #f6f6f4; --surface: #ffffff; --ink: #1c1c1a; --muted: #6b6b66; --line: #e3e2dd;
-    --accent: #2f5fd0; --pass: #1f7a4d; --pass-bg: #e3f3ea; --changes: #a33b1f; --changes-bg: #fbe7e1;
-    --pending: #8a8a83; --pending-bg: #efefeb; --human: #b45309; --human-bg: #fff4e5;
-    --radius: 10px; --shadow: 0 1px 2px rgb(0 0 0 / .06);
-    color-scheme: light;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #141413; --surface: #1d1d1b; --ink: #ecebe6; --muted: #9b9a93; --line: #2f2f2c;
-      --accent: #7ea2ff; --pass: #6fd3a0; --pass-bg: #173326; --changes: #ff9a7a; --changes-bg: #3a1d15;
-      --pending: #8f8e87; --pending-bg: #262624; --human: #ffb45c; --human-bg: #3a2810;
-      --shadow: none; color-scheme: dark;
-    }
+    --bg: #2e2019; --ink: #5b2a12; --muted: #8a5a35; --line: #5b2a12; --page-ink: #fbe2b0;
+    --paper: #fbe2b0; --paper-2: #f3cc8a; --wood: #b5652a; --wood-light: #e3a058; --wood-dark: #5b2a12;
+    --you: #c4471f; --bad: #b02a2a; --good: #3f7a2c; --focus: #ffd75e;
+    --font: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color-scheme: dark;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink);
-         font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
-  header { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; padding: 16px; }
-  header h1 { font-size: 17px; margin: 0; font-weight: 600; }
-  header .meta { color: var(--muted); font-size: 12.5px; }
-  .stopping { color: var(--human); font-weight: 600; }
-  main { padding: 0 16px 32px; }
-  .group { margin-bottom: 20px; }
-  .group h2, .group summary { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
-                              margin: 0 0 8px; font-weight: 600; }
-  .group summary { cursor: pointer; }
-  .card { width: 100%; text-align: left; background: var(--surface); color: inherit; border: 1px solid var(--line);
-          border-radius: var(--radius); box-shadow: var(--shadow); padding: 12px 14px; margin: 0 0 8px;
-          cursor: pointer; font: inherit; display: block; }
-  .card:hover { border-color: var(--accent); }
-  .card.human { border-color: var(--human); }
-  .card.compact { padding: 8px 14px; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
-  .card .head { display: flex; flex-wrap: wrap; gap: 2px 10px; align-items: baseline; }
-  .card .id { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
-  .card .title { font: inherit; font-weight: 600; overflow-wrap: anywhere; color: inherit; background: none; border: 0;
-                 padding: 0; text-align: left; cursor: pointer; }
-  .card .title:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
-  .card .reason { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; margin-top: 8px; }
-  .card.human .reason { color: var(--human); }
-  .card .waits { font-size: 12px; color: var(--human); overflow-wrap: anywhere; }
-  .pipe { list-style: none; margin: 10px 0 0; padding: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
-  @media (max-width: 640px) { .pipe { grid-template-columns: repeat(4, minmax(0, 1fr)); row-gap: 10px; } }
-  .step { min-width: 0; font-size: 12px; }
-  .step .bar { display: block; height: 6px; border-radius: 3px; background: var(--line); margin-bottom: 5px; }
-  .step .label { display: block; font-weight: 600; color: var(--muted); }
-  .step .detail { display: block; font-size: 11.5px; color: var(--muted); overflow-wrap: anywhere; }
-  .step.done .bar { background: var(--pass); }
-  .step.active .bar { background: var(--accent); }
-  .step.active .label { color: var(--accent); }
-  .step.waiting .bar { background: var(--human); }
-  .step.waiting .label, .step.waiting .detail { color: var(--human); }
-  .step.blocked .bar { background: var(--changes); }
-  .step.blocked .label { color: var(--changes); }
-  .step.skipped .bar { background: repeating-linear-gradient(90deg, var(--line) 0 6px, transparent 6px 10px); }
-  .step.pending .label { font-weight: 400; }
-  .revs { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
-  .chip { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--pending-bg); color: var(--pending);
-          white-space: nowrap; }
-  .chip.PASS { background: var(--pass-bg); color: var(--pass); }
-  .chip.CHANGES { background: var(--changes-bg); color: var(--changes); }
-  .chip.running { background: var(--accent); color: var(--surface); }
+  body { margin: 0; background: var(--bg); color: var(--page-ink); font: 13px/1.5 var(--font); }
+  img.ptxt, canvas, img.face { image-rendering: pixelated; image-rendering: crisp-edges; }
+  img.ptxt { display: block; }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  .empty { color: var(--muted); font-size: 12.5px; padding: 6px 0; }
-  @media (prefers-reduced-motion: no-preference) {
-    .step.active .bar { animation: pulse 1.6s ease-in-out infinite; }
-    @keyframes pulse { 50% { opacity: .45; } }
-  }
-  dialog { width: min(880px, calc(100vw - 32px)); max-height: calc(100vh - 48px); border: 1px solid var(--line);
-           border-radius: 14px; padding: 0; background: var(--surface); color: var(--ink); }
-  dialog::backdrop { background: rgb(0 0 0 / .35); }
-  .dlg-head { display: flex; justify-content: space-between; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
-  .dlg-head h2 { margin: 0; font-size: 16px; overflow-wrap: anywhere; }
-  .dlg-body { display: grid; grid-template-columns: 180px 1fr; min-height: 300px; }
+  button { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+  header.top { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 14px 16px; }
+  header.top h1 { margin: 0; }
+  header.top .meta { color: #d9b98a; font-size: 12px; overflow-wrap: anywhere; flex: 1 1 260px; }
+  header.top .warn { color: var(--focus); }
+  .warn { color: var(--you); }
+  main { padding: 0 16px 32px; display: grid; gap: 14px; }
+  .stage { position: relative; border: 4px solid var(--wood); outline: 3px solid var(--wood-dark); border-radius: 6px;
+           box-shadow: inset 0 0 0 2px var(--wood-light); overflow: hidden; background: #000; }
+  #map { display: block; margin: 0 auto; touch-action: pan-y; cursor: grab; }
+  #map.dragging { cursor: grabbing; }
+  #map.pointing { cursor: pointer; }
+  #tip { position: absolute; pointer-events: none; z-index: 2; max-width: 280px; }
+  #tip[hidden] { display: none; }
+
+  .win { color: var(--ink); border: 4px solid var(--wood); border-radius: 6px; outline: 3px solid var(--wood-dark);
+         background: var(--paper); box-shadow: inset 0 0 0 2px var(--wood-light), inset 0 0 0 5px var(--paper-2);
+         padding: 12px 14px; min-width: 0; }
+  :root { --win-shade: #d9a868; }
+  .board-area { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 12px; align-items: start; }
+  @media (max-width: 900px) { .board-area { grid-template-columns: minmax(0, 1fr); } }
+  .windows { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: start; }
+  @media (max-width: 1200px) { .windows { grid-template-columns: minmax(0, 1fr); } }
+  .lane { display: grid; gap: 12px; align-content: start; min-width: 0; }
+  .lane h2 { margin: 0; }
+  .lane-empty { margin: 0; padding: 10px 12px; border: 2px dashed #6a4a32; border-radius: 6px; color: #b08a62; font-size: 12px; }
+  .side { display: grid; gap: 12px; align-content: start; padding-top: 28px; }
+  @media (max-width: 900px) { .side { padding-top: 0; } }
+  .win h2 { margin: 0 0 8px; }
+  .job { display: grid; gap: 4px; cursor: pointer; position: relative; padding-left: 16px; }
+  .job + .job { margin-top: 10px; padding-top: 10px; border-top: 2px solid var(--win-shade); }
+  .job:hover::before, .job:focus-within::before { content: "▶"; position: absolute; left: 0; color: var(--you); }
+  .win.job { padding-left: 26px; }
+  .win.job:hover::before, .win.job:focus-within::before { left: 8px; top: 10px; }
+  .win.job.you { border-color: #e2a62a; box-shadow: inset 0 0 0 2px #ffd75e, inset 0 0 0 5px var(--paper-2); }
+  .win.job.bad { border-color: #b02a2a; box-shadow: inset 0 0 0 2px #e9786a, inset 0 0 0 5px var(--paper-2); }
+  .job-head { display: flex; gap: 8px; align-items: center; min-width: 0; }
+  .swatch { width: 12px; height: 12px; flex: none; border: 2px solid var(--wood-dark); }
+  .job .title { background: none; border: 0; padding: 0; text-align: left; cursor: pointer; font-weight: 700;
+                overflow-wrap: anywhere; min-width: 0; }
+  .job .line { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
+  .job .time { color: var(--muted); font-size: 12px; }
+  .job .crew { display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: 12px; color: var(--muted); }
+  .job .crew .PASS { color: var(--good); } .job .crew .CHANGES { color: var(--bad); } .job .crew .running { color: var(--ink); }
+  .job .reason { margin: 0; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+  .job.you .reason { color: var(--you); } .job.bad .reason { color: var(--bad); }
+  .mood { display: flex; gap: 6px; align-items: center; font-size: 12px; }
+  .crew-art { display: block; max-width: 100%; margin: 2px 0; }
+  img.face { width: 36px; height: 36px; }
+  .empty { color: var(--muted); margin: 0; }
+  details.win summary { cursor: pointer; list-style: none; }
+  details.win summary::-webkit-details-marker { display: none; }
+  details.win[open] summary { margin-bottom: 8px; }
+
+  dialog { width: min(880px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 0; color: var(--ink);
+           border: 4px solid var(--wood); border-radius: 6px; outline: 3px solid var(--wood-dark);
+           background: var(--paper); box-shadow: inset 0 0 0 2px var(--wood-light); }
+  dialog::backdrop { background: rgb(0 0 0 / .6); }
+  .dlg-head { display: flex; justify-content: space-between; gap: 12px; padding: 14px 16px; border-bottom: 2px solid var(--win-shade); }
+  .dlg-head h2 { margin: 0; font-size: 15px; overflow-wrap: anywhere; }
+  .dlg-body { display: grid; grid-template-columns: 190px 1fr; min-height: 300px; }
   @media (max-width: 640px) { .dlg-body { grid-template-columns: 1fr; } }
-  .files { border-right: 1px solid var(--line); padding: 8px; overflow: auto; max-height: 65vh; }
-  .files button { display: block; width: 100%; text-align: left; border: 0; background: none; color: inherit;
-                  font: inherit; font-size: 12.5px; padding: 4px 6px; border-radius: 6px; cursor: pointer; overflow-wrap: anywhere; }
-  .files button[aria-current="true"] { background: var(--pending-bg); font-weight: 600; }
+  .files { border-right: 2px solid var(--win-shade); padding: 8px; overflow: auto; max-height: 65vh; }
+  .files button { display: block; width: 100%; text-align: left; border: 0; background: none; font-size: 12px;
+                  padding: 4px 6px 4px 16px; cursor: pointer; overflow-wrap: anywhere; position: relative; }
+  .files button[aria-current="true"]::before, .files button:hover::before { content: "▶"; position: absolute; left: 2px; color: var(--you); }
+  .files button[aria-current="true"] { font-weight: 700; }
   .doc { padding: 12px 18px; overflow: auto; max-height: 65vh; min-width: 0; }
-  .doc pre { background: var(--pending-bg); padding: 10px; border-radius: 8px; overflow: auto; }
-  .doc code { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace; }
-  .doc table { border-collapse: collapse; } .doc td, .doc th { border: 1px solid var(--line); padding: 3px 8px; }
+  .doc pre { background: var(--paper-2); padding: 10px; overflow: auto; }
+  .doc code { font: 12px var(--font); }
+  .doc table { border-collapse: collapse; } .doc td, .doc th { border: 1px solid var(--win-shade); padding: 3px 8px; }
   .story-wrap:empty { display: none; }
-  .story { margin: 0; padding: 10px 16px 10px 34px; border-bottom: 1px solid var(--line); font-size: 12.5px;
+  .story { margin: 0; padding: 10px 16px 10px 34px; border-bottom: 2px solid var(--win-shade); font-size: 12px;
            color: var(--muted); display: grid; gap: 2px; }
   .story li { overflow-wrap: anywhere; }
-  .acts { padding: 12px 16px; border-bottom: 1px solid var(--line); max-height: 55vh; overflow: auto; }
+  .acts { padding: 12px 16px; border-bottom: 2px solid var(--win-shade); max-height: 55vh; overflow: auto; }
   .acts:empty { display: none; }
-  .acts h3 { margin: 0 0 6px; font-size: 14px; }
-  .acts .q { margin: 0 0 6px; font-weight: 600; overflow-wrap: anywhere; }
-  .acts .ctx { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+  .acts h3 { margin: 0 0 6px; font-size: 14px; color: var(--you); }
+  .acts .q { margin: 0 0 6px; font-weight: 700; overflow-wrap: anywhere; }
+  .acts .ctx { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
   .acts .ctx p { margin: 0 0 6px; }
-  .acts .lead { margin: 10px 0 4px; font-weight: 600; font-size: 13px; }
-  .acts .least { margin: 0; padding-left: 20px; font-size: 13px; display: grid; gap: 4px; }
-  .acts .warn { color: var(--changes); }
+  .acts .lead { margin: 10px 0 4px; font-weight: 700; }
+  .acts .least { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
+  .acts .warn { color: var(--bad); }
   .opts { border: 0; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
-  .opt { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--line);
-         border-radius: 8px; cursor: pointer; overflow-wrap: anywhere; }
-  .opt:has(input:checked) { border-color: var(--accent); }
-  .opt input { margin-top: 3px; }
-  .rec { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--pass-bg); color: var(--pass); }
+  .opt { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border: 2px solid var(--win-shade);
+         cursor: pointer; overflow-wrap: anywhere; }
+  .opt:has(input:checked) { border-color: var(--you); }
+  .opt input { margin-top: 3px; accent-color: var(--you); }
+  .rec { font-size: 11px; padding: 0 6px; background: var(--good); color: var(--paper); }
   .acts textarea { display: block; width: 100%; min-height: 38px; margin-top: 8px; font: inherit; padding: 6px 8px;
-                   border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: inherit; }
+                   border: 2px solid var(--wood); background: #fff3d6; color: inherit; }
   .btns { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
-  .btn { font: inherit; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg);
-         color: inherit; cursor: pointer; }
-  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .btn.danger { color: var(--changes); }
-  .btn:focus-visible, .files button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .btn { padding: 6px 12px; border: 3px solid var(--wood-dark); border-radius: 4px; background: var(--wood-light);
+         box-shadow: inset 0 -3px 0 var(--wood); color: var(--wood-dark); font-weight: 700; cursor: pointer; }
+  .btn:hover:not(:disabled) { background: #f0b46a; }
+  .btn.primary { background: #7cc34a; box-shadow: inset 0 -3px 0 #4f8a2c; }
+  .btn.primary:hover:not(:disabled) { background: #8ed45a; }
+  .btn.danger { color: var(--bad); }
   .btn:disabled { opacity: .5; cursor: not-allowed; }
-  .cmds { display: grid; gap: 4px; padding: 8px 16px; font-size: 12.5px; border-bottom: 1px solid var(--line); }
+  .cmds { display: grid; gap: 4px; padding: 8px 16px; font-size: 12px; border-bottom: 2px solid var(--win-shade); }
   .cmds:empty { display: none; }
   .cmd { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; overflow-wrap: anywhere; }
-  .cmd .state { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; }
-  .cmd .state.queued { background: var(--pending-bg); color: var(--ink); }
-  .cmd .state.applied { background: var(--pass-bg); color: var(--pass); }
-  .cmd .state.refused { background: var(--changes-bg); color: var(--changes); }
-  .note { font-size: 12.5px; color: var(--muted); }
-  .error { color: var(--changes); padding: 16px; }
-  @media (prefers-reduced-motion: no-preference) { .card { transition: border-color .15s; } }
+  .cmd .state { font-size: 11px; font-weight: 700; padding: 0 6px; }
+  .cmd .state.queued { background: var(--win-shade); }
+  .cmd .state.applied { background: var(--good); color: var(--paper); }
+  .cmd .state.refused { background: var(--bad); color: var(--paper); }
+  .note { font-size: 12px; color: var(--muted); }
+  .error { color: var(--bad); padding: 16px; }
 </style>
 </head>
 <body>
-<header>
-  <h1>Factory board</h1>
+<header class="top">
+  <h1 id="title"></h1>
   <span class="meta" id="meta">Loading…</span>
 </header>
 <main>
-  <div id="groups"></div>
+  <div class="stage">
+    <canvas id="map" role="img" aria-label="The factory as a medieval street; every job is listed below it"></canvas>
+    <div id="tip" class="win" hidden></div>
+  </div>
+  <div class="board-area">
+    <div class="windows" id="cards" aria-label="Jobs by state"></div>
+    <aside class="side" id="side" aria-label="Queue and finished jobs"></aside>
+  </div>
 </main>
 
 <dialog id="dlg" aria-labelledby="dlg-title">
@@ -152,6 +161,1184 @@
 </dialog>
 
 <script>
+// One warm palette for everything, and for each colour the darker one that shades it. Sprites are flat
+// colour, shaded only along their right and bottom silhouette, with a dark brown outline ("black").
+const Gfx = (() => {
+  const C = {
+    black: "#3a2125", navy: "#2f3d6b", plum: "#8a3a5b", green: "#3f8a3c", brown: "#b06a35", grey: "#7a6a5a",
+    silver: "#d8cbb4", white: "#fff6e0", red: "#d9453b", orange: "#f2a23a", yellow: "#ffd75e", lime: "#8bd24a",
+    blue: "#5aa9e6", lavender: "#9c8aa8", pink: "#f08aa0", peach: "#f7c79b", umber: "#4a2a1c", ink: "#262a40",
+    wine: "#5a2a3f", teal: "#2e6a5a", rust: "#7d3f22", ash: "#5a4a40", tan: "#c4a27a", cream: "#f6e6a6",
+    crimson: "#a8323a", amber: "#e07a2e", leaf: "#a6d655", jade: "#5cae45", cobalt: "#3a6fb5", mauve: "#7a5a78",
+    salmon: "#e9786a", apricot: "#f0a77a",
+  };
+  const SHADE = {
+    navy: "ink", plum: "wine", green: "teal", brown: "rust", grey: "ash", silver: "lavender", white: "silver",
+    red: "crimson", orange: "amber", yellow: "orange", lime: "jade", blue: "cobalt", lavender: "mauve", pink: "mauve",
+    peach: "apricot", umber: "black", ink: "black", wine: "umber", teal: "ink", rust: "umber", ash: "umber", tan: "grey",
+    cream: "tan", crimson: "plum", amber: "rust", leaf: "jade", jade: "green", cobalt: "navy", mauve: "wine",
+    salmon: "crimson", apricot: "salmon", black: "black",
+  };
+  const darker = (name) => SHADE[name] || name;
+
+  function grid(w, h, ox = 0, oy = 0) {
+    const a = new Array(w * h).fill(null);
+    const g = {
+      w, h,
+      get: (x, y) => (x >= 0 && y >= 0 && x < w && y < h ? a[y * w + x] : null),
+      set(x, y, m) { x = Math.round(x + ox); y = Math.round(y + oy); if (x >= 0 && y >= 0 && x < w && y < h) a[y * w + x] = m; return g; },
+      rect(x, y, rw, rh, m) { for (let j = 0; j < rh; j++) for (let i = 0; i < rw; i++) g.set(x + i, y + j, m); return g; },
+    };
+    return g;
+  }
+
+  // Materials name a palette colour through `pal`; FLAT ones are never shaded.
+  const FLAT = new Set(["pupil", "mouth", "blush", "gem", "line", "lens", "sweat", "white", "gold", "red", "metalL"]);
+  function paint(ctx, g, pal, ox = 0, oy = 0, mirror = false) {
+    const side = mirror ? -1 : 1;
+    for (let y = 0; y < g.h; y++) {
+      for (let x = 0; x < g.w; x++) {
+        const m = g.get(x, y);
+        let c;
+        if (!m) {
+          if (!(g.get(x, y + 1) || g.get(x, y - 1) || g.get(x - 1, y) || g.get(x + 1, y))) continue;
+          c = C.black;
+        } else {
+          const name = pal[m] || "red";
+          const rim = !FLAT.has(m) && (!g.get(x + side, y) || !g.get(x, y + 1));
+          c = C[rim ? darker(name) : name] || name;
+        }
+        ctx.fillStyle = c;
+        ctx.fillRect(ox + (mirror ? g.w - 1 - x : x), oy + y, 1, 1);
+      }
+    }
+  }
+
+  function canvas(w, h) {
+    const c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    return c;
+  }
+
+  function rnd(seed) {
+    return () => {
+      seed = (seed + 0x6D2B79F5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  return { C, darker, grid, paint, canvas, rnd };
+})();
+
+// 5×7 capitals for headings as <img>; the alt carries the text.
+const Font = (() => {
+  const GLYPHS = {
+    A: "01110 10001 10001 11111 10001 10001 10001", B: "11110 10001 10001 11110 10001 10001 11110",
+    C: "01110 10001 10000 10000 10000 10001 01110", D: "11110 10001 10001 10001 10001 10001 11110",
+    E: "11111 10000 10000 11110 10000 10000 11111", F: "11111 10000 10000 11110 10000 10000 10000",
+    G: "01110 10001 10000 10111 10001 10001 01111", H: "10001 10001 10001 11111 10001 10001 10001",
+    I: "01110 00100 00100 00100 00100 00100 01110", J: "00111 00010 00010 00010 00010 10010 01100",
+    K: "10001 10010 10100 11000 10100 10010 10001", L: "10000 10000 10000 10000 10000 10000 11111",
+    M: "10001 11011 10101 10101 10001 10001 10001", N: "10001 10001 11001 10101 10011 10001 10001",
+    O: "01110 10001 10001 10001 10001 10001 01110", P: "11110 10001 10001 11110 10000 10000 10000",
+    Q: "01110 10001 10001 10001 10101 10010 01101", R: "11110 10001 10001 11110 10100 10010 10001",
+    S: "01111 10000 10000 01110 00001 00001 11110", T: "11111 00100 00100 00100 00100 00100 00100",
+    U: "10001 10001 10001 10001 10001 10001 01110", V: "10001 10001 10001 10001 10001 01010 00100",
+    W: "10001 10001 10001 10101 10101 10101 01010", X: "10001 10001 01010 00100 01010 10001 10001",
+    Y: "10001 10001 01010 00100 00100 00100 00100", Z: "11111 00001 00010 00100 01000 10000 11111",
+    0: "01110 10001 10011 10101 11001 10001 01110", 1: "00100 01100 00100 00100 00100 00100 01110",
+    2: "01110 10001 00001 00010 00100 01000 11111", 3: "11111 00010 00100 00010 00001 10001 01110",
+    4: "00010 00110 01010 10010 11111 00010 00010", 5: "11111 10000 11110 00001 00001 10001 01110",
+    6: "00110 01000 10000 11110 10001 10001 01110", 7: "11111 00001 00010 00100 01000 01000 01000",
+    8: "01110 10001 10001 01110 10001 10001 01110", 9: "01110 10001 10001 01111 00001 00010 01100",
+    ".": "00000 00000 00000 00000 00000 01100 01100", ",": "00000 00000 00000 00000 01100 00100 01000",
+    ":": "00000 01100 01100 00000 01100 01100 00000", "-": "00000 00000 00000 11111 00000 00000 00000",
+    "!": "00100 00100 00100 00100 00100 00000 00100", "?": "01110 10001 00001 00010 00100 00000 00100",
+    "/": "00001 00010 00010 00100 01000 01000 10000", "#": "01010 01010 11111 01010 11111 01010 01010",
+    "(": "00010 00100 01000 01000 01000 00100 00010", ")": "01000 00100 00010 00010 00010 00100 01000",
+    "'": "00100 00100 01000 00000 00000 00000 00000", "+": "00000 00100 00100 11111 00100 00100 00000",
+    "·": "00000 00000 00000 01100 01100 00000 00000",
+  };
+  const images = new Map();
+
+  function text(str, colour = "#5b2a12", scale = 2, shadow = "#f3cc8a") {
+    const s = String(str).toUpperCase();
+    const key = `${s}|${colour}|${scale}|${shadow}`;
+    if (!images.has(key)) {
+      const chars = [...s];
+      const c = Gfx.canvas(chars.reduce((w, ch) => w + (ch === " " ? 4 : 6), 0) + 1, 8);
+      const ctx = c.getContext("2d");
+      let x = 0;
+      for (const ch of chars) {
+        if (ch === " ") { x += 4; continue; }
+        const rows = (GLYPHS[ch] || GLYPHS["?"]).split(" ");
+        for (const [fill, d] of [[shadow, 1], [colour, 0]]) {
+          ctx.fillStyle = fill;
+          rows.forEach((row, j) => [...row].forEach((bit, i) => { if (bit === "1") ctx.fillRect(x + i + d, j + d, 1, 1); }));
+        }
+        x += 6;
+      }
+      images.set(key, { url: c.toDataURL(), w: c.width, h: c.height });
+    }
+    const t = images.get(key);
+    return `<img class="ptxt" src="${t.url}" width="${t.w * scale}" height="${t.h * scale}" alt="${s.replace(/"/g, "&quot;")}">`;
+  }
+
+  return { text };
+})();
+
+// The cast: small figures in half profile, facing right (left is mirrored), each with the tool of
+// its trade. A sprite is 26×26; the body's own coordinates start at (7, 6) so hats and tools fit.
+const Chars = (() => {
+  const W = 26, H = 26, OX = 7, OY = 6;
+  const BASE = { skin: "peach", pupil: "ink", mouth: "crimson", sweat: "blue", hair: "rust", tunic: "blue", belt: "umber",
+                 pants: "navy", boots: "umber", metal: "silver", metalL: "white", wood: "brown", gold: "yellow", paper: "white",
+                 cover: "crimson", line: "ash", straw: "cream", red: "red", gem: "blue", lens: "blue", white: "white" };
+  const CAST = {
+    builder: { name: "Smith", tool: "hammer", pal: { hair: "rust", tunic: "amber", band: "red", apron: "brown", pants: "ash" } },
+    tidy: { name: "Sweeper", tool: "broom", pal: { hair: "cream", tunic: "blue", cap: "cobalt", apron: "white" } },
+    code: { name: "Scholar", tool: "tome", robe: true, pal: { hair: "rust", tunic: "lavender", hood: "mauve" } },
+    security: { name: "Knight", tool: "sword", pal: { hair: "orange", tunic: "cobalt", plume: "red", shield: "cobalt", trim: "yellow", pants: "grey" } },
+    performance: { name: "Ranger", tool: "bow", pal: { hair: "orange", tunic: "jade", hood: "green", feather: "white", pants: "rust" } },
+    stability: { name: "Dwarf", tool: "pick", pal: { hair: "amber", tunic: "brown", beard: "amber", horn: "white", pants: "grey" } },
+    ui: { name: "Painter", tool: "palette", pal: { hair: "cream", tunic: "white", beret: "red", pants: "navy" } },
+    ux: { name: "Bard", tool: "lute", pal: { hair: "rust", tunic: "pink", hat: "orange", feather: "white", pants: "plum" } },
+    platform: { name: "Artificer", tool: "wrench", pal: { hair: "ash", tunic: "orange", apron: "brown", pants: "ash" } },
+    codex: { name: "Sage", tool: "staff", robe: true, pal: { hair: "silver", tunic: "cobalt", hat: "cobalt", band: "yellow", beard: "white" } },
+    herald: { name: "Herald", tool: "trumpet", pal: { hair: "yellow", tunic: "red", hat: "jade", feather: "white", tabard: "yellow" } },
+  };
+  const cast = (role) => CAST[role] || CAST.code;
+
+  function pose(name, f) {
+    switch (name) {
+      case "walk": return { arm: "down", step: [1, 0, -1, 0][f], bob: f % 2 ? -1 : 0, swing: [1, 0, -1, 0][f] };
+      case "hammer": return f ? { arm: "strike", item: "hammerDown" } : { arm: "raise", item: "hammerUp", bob: -1 };
+      case "sweep": return { arm: "forward", item: f ? "broom1" : "broom0" };
+      case "read": return { arm: "book", item: f ? "book1" : "book0" };
+      case "cheer": return { arm: "up", back: "up", bob: f ? -2 : 0, mouth: "open" };
+      case "angry": return { arm: "hips", bob: f ? 1 : 0, vein: true };
+      case "sit": return { arm: "down", legs: "sit", low: 3 };
+      case "call": return { arm: "present", item: "scroll", bob: f ? -1 : 0 };
+      default: return { arm: "down", bob: f ? 1 : 0, hold: true };
+    }
+  }
+
+  function head(g, o, mood, u) {
+    g.rect(1, 0 + u, 8, 2, "hair"); g.rect(2, 2 + u, 8, 6, "skin"); g.rect(3, 8 + u, 6, 1, "skin"); g.set(10, 5 + u, "skin");
+    g.rect(0, 1 + u, 3, 6, "hair"); g.rect(4, 2 + u, 2, 1, "hair"); g.set(3, 4 + u, "skin");
+    g.rect(6, 4 + u, 1, 2, "pupil"); g.rect(8, 4 + u, 1, 2, "pupil");
+    if (o.mouth === "open" || mood === "happy") g.rect(7, 7 + u, 2, 1, "mouth");
+    else if (mood === "worried") { g.set(7, 8 + u, "mouth"); g.set(8, 7 + u, "mouth"); g.rect(0, -2 + u, 1, 2, "sweat"); }
+    else g.set(8, 7 + u, "mouth");
+  }
+
+  function body(g, c, o, u) {
+    if (o.back === "up") { g.rect(0, 4 + u, 2, 5, "tunic"); g.set(0, 3 + u, "skin"); }
+    else g.rect(1, 9 + u, 2, 4, "tunic"), g.set(1, 13 + u, "skin");
+    if (c.robe) { g.rect(2, 9 + u, 7, 9 - (o.low || 0) - (u - (o.low || 0)), "tunic"); g.rect(1, 15, 9, 3 - (o.low ? 1 : 0), "tunic"); }
+    else { g.rect(2, 9 + u, 7, 5, "tunic"); g.rect(2, 12 + u, 7, 1, "belt"); }
+  }
+
+  function legs(g, c, o) {
+    const low = o.low || 0;
+    if (o.legs === "sit") { g.rect(3, 14 + low - 1, 7, 2, c.robe ? "tunic" : "pants"); g.rect(9, 15, 2, 3, c.robe ? "tunic" : "pants"); g.rect(9, 17, 3, 1, "boots"); return; }
+    const s = o.step || 0;
+    const back = 4 - 2 * s, front = 5 + 2 * s;
+    if (!c.robe) { g.rect(back, 14, 2, 3, "pants"); g.rect(front, 14, 2, 3, "pants"); }
+    g.rect(back - 1, 17, 3, 1, "boots"); g.rect(front, 17, 3, 1, "boots");
+  }
+
+  function arm(g, o, u) {
+    const sw = o.swing || 0;
+    switch (o.arm) {
+      case "raise": g.rect(6, 4 + u, 2, 6, "tunic"); g.rect(6, 3 + u, 2, 1, "skin"); return [6, 3 + u];
+      case "strike": g.rect(6, 10 + u, 4, 2, "tunic"); g.rect(10, 10 + u, 1, 2, "skin"); return [10, 10 + u];
+      case "forward": g.rect(6, 10 + u, 3, 2, "tunic"); g.rect(9, 11 + u, 2, 1, "skin"); return [9, 11 + u];
+      case "book": g.rect(6, 10 + u, 2, 2, "tunic"); return [8, 10 + u];
+      case "up": g.rect(6, 4 + u, 2, 5, "tunic"); g.rect(6, 3 + u, 2, 1, "skin"); return [6, 3 + u];
+      case "hips": g.rect(6, 10 + u, 2, 2, "tunic"); g.set(5, 12 + u, "skin"); return null;
+      case "present": g.rect(7, 8 + u, 3, 2, "tunic"); g.rect(10, 7 + u, 1, 2, "skin"); return [10, 7 + u];
+      default: g.rect(6 + sw, 10 + u, 2, 3, "tunic"); g.rect(6 + sw, 13 + u, 2, 1, "skin"); return [6 + sw, 13 + u];
+    }
+  }
+
+  function item(g, name, u) {
+    switch (name) {
+      case "hammerUp": g.rect(7, -1 + u, 1, 4, "wood"); g.rect(5, -3 + u, 5, 2, "metal"); return;
+      case "hammerDown": g.rect(11, 10 + u, 3, 1, "wood"); g.rect(14, 8 + u, 2, 5, "metal"); return;
+      case "broom0": for (let k = 0; k < 8; k++) g.set(6 + k, 10 + k, "wood"); g.rect(12, 17, 5, 1, "straw"); g.rect(13, 16, 3, 1, "straw"); return;
+      case "broom1": for (let k = 0; k < 8; k++) g.set(7 + k * .6, 10 + k, "wood"); g.rect(9, 17, 5, 1, "straw"); g.rect(10, 16, 3, 1, "straw"); return;
+      case "book0": case "book1": g.rect(7, 9 + u, 5, 4, "cover"); g.rect(8, 9 + u, 3, 3, "paper"); g.set(9, 10 + u, "line"); if (name === "book1") g.rect(9, 7 + u, 2, 3, "paper"); g.set(7, 11 + u, "skin"); return;
+      case "scroll": g.rect(10, 2 + u, 3, 6, "paper"); g.rect(9, 2 + u, 5, 1, "wood"); g.rect(9, 7 + u, 5, 1, "wood"); g.set(11, 4 + u, "red"); return;
+    }
+  }
+
+  // What tells one role from another: headgear, beards, cloaks, and the tool carried when not working.
+  function gear(g, role, layer, o, u, hand) {
+    const carry = layer === "tool" && hand && o.hold;
+    const [hx, hy] = hand || [0, 0];
+    switch (role) {
+      case "builder":
+        if (layer === "head") { g.rect(1, 1 + u, 9, 1, "band"); g.rect(-1, 2 + u, 2, 1, "band"); g.set(-1, 3 + u, "band"); }
+        if (layer === "body") g.rect(5, 10 + u, 3, 4, "apron");
+        if (carry) { g.rect(hx + 1, hy - 3, 1, 5, "wood"); g.rect(hx, hy + 2, 3, 2, "metal"); }
+        return;
+      case "tidy":
+        if (layer === "head") { g.rect(1, -1 + u, 8, 2, "cap"); g.rect(7, 1 + u, 4, 1, "cap"); }
+        if (layer === "body") g.rect(4, 10 + u, 4, 4, "apron");
+        if (carry) { g.rect(hx + 2, hy - 8, 1, 10, "wood"); g.rect(hx + 1, hy + 2, 3, 2, "straw"); }
+        return;
+      case "code": case "performance":
+        if (layer === "head") {
+          g.rect(1, -1 + u, 8, 1, "hood"); g.rect(0, 0 + u, 10, 2, "hood"); g.rect(-1, 1 + u, 4, 8, "hood"); g.rect(3, 2 + u, 1, 1, "hood");
+          if (role === "performance") { g.rect(2, -4 + u, 1, 3, "feather"); g.set(1, -4 + u, "feather"); }
+        }
+        if (layer === "back" && role === "performance") { for (let k = 0; k < 10; k++) g.set(-2 + Math.abs(k - 5) * .4, 6 + k + u, "wood"); g.rect(0, 7 + u, 1, 8, "line"); }
+        if (carry && role === "code") { g.rect(hx - 1, hy - 3, 3, 4, "cover"); g.rect(hx, hy - 3, 1, 3, "paper"); }
+        return;
+      case "security":
+        if (layer === "head") {
+          g.rect(1, -1 + u, 9, 3, "metal"); g.rect(0, 1 + u, 3, 6, "metal"); g.set(9, 2 + u, "metal"); g.set(9, 3 + u, "metal");
+          g.rect(2, -1 + u, 4, 1, "metalL"); g.rect(3, -4 + u, 2, 3, "plume"); g.rect(1, -3 + u, 2, 1, "plume");
+        }
+        if (layer === "body") { g.rect(4, 9 + u, 1, 4, "trim"); g.rect(3, 10 + u, 3, 1, "trim"); }
+        if (layer === "back") { g.rect(-2, 8 + u, 4, 6, "shield"); g.rect(-1, 10 + u, 2, 1, "trim"); g.rect(-1, 9 + u, 1, 3, "trim"); }
+        if (carry) { g.rect(hx + 1, hy - 9, 1, 8, "metal"); g.set(hx + 1, hy - 10, "metalL"); g.rect(hx, hy - 1, 3, 1, "gold"); }
+        return;
+      case "stability":
+        if (layer === "head") {
+          g.rect(1, -1 + u, 8, 3, "metal"); g.rect(1, 1 + u, 9, 1, "gold");
+          g.rect(-1, -2 + u, 1, 2, "horn"); g.set(-2, -3 + u, "horn"); g.rect(9, -2 + u, 1, 2, "horn"); g.set(10, -3 + u, "horn");
+          g.rect(5, 6 + u, 6, 4, "beard"); g.rect(6, 10 + u, 4, 1, "beard"); g.rect(6, 5 + u, 4, 1, "beard");
+        }
+        if (carry) { for (let k = 0; k < 9; k++) g.set(hx + 1 - k * .5, hy - k, "wood"); g.rect(hx - 6, hy - 10, 6, 1, "metal"); g.set(hx - 7, hy - 9, "metal"); g.set(hx, hy - 9, "metal"); }
+        return;
+      case "ui":
+        if (layer === "head") { g.rect(0, -1 + u, 9, 2, "beret"); g.set(8, -2 + u, "beret"); }
+        if (layer === "body") { g.set(3, 10 + u, "red"); g.set(6, 11 + u, "gem"); }
+        if (layer === "back") { g.rect(-3, 10 + u, 4, 3, "wood"); g.set(-2, 10 + u, "red"); g.set(0, 11 + u, "gem"); g.set(-2, 12 + u, "gold"); }
+        if (carry) { g.rect(hx + 1, hy - 4, 1, 5, "wood"); g.set(hx + 1, hy - 5, "red"); }
+        return;
+      case "ux": case "herald":
+        if (layer === "head") { g.rect(1, -2 + u, 8, 2, "hat"); g.rect(0, 0 + u, 11, 1, "hat"); g.rect(2, -5 + u, 1, 3, "feather"); g.set(1, -5 + u, "feather"); }
+        if (layer === "body" && role === "herald") { g.rect(3, 9 + u, 5, 5, "tabard"); g.rect(4, 10 + u, 2, 2, "red"); }
+        if (carry && role === "ux") { g.rect(hx - 1, hy - 2, 4, 4, "wood"); g.set(hx, hy - 1, "line"); g.rect(hx + 3, hy - 6, 1, 5, "wood"); }
+        if (carry && role === "herald") { g.rect(hx + 1, hy - 1, 5, 1, "gold"); g.rect(hx + 5, hy - 2, 2, 3, "gold"); }
+        return;
+      case "platform":
+        if (layer === "head") { g.rect(0, 1 + u, 10, 1, "line"); g.rect(5, 0 + u, 3, 3, "metal"); g.set(6, 1 + u, "lens"); }
+        if (layer === "body") g.rect(5, 10 + u, 3, 4, "apron");
+        if (carry) { g.rect(hx + 1, hy - 1, 1, 4, "metal"); g.rect(hx, hy + 3, 3, 1, "metal"); g.set(hx, hy - 2, "metal"); g.set(hx + 2, hy - 2, "metal"); }
+        return;
+      case "codex":
+        if (layer === "head") {
+          g.rect(-2, 1 + u, 13, 1, "hat"); g.rect(1, 0 + u, 8, 1, "band"); g.rect(1, -1 + u, 7, 1, "hat"); g.rect(2, -2 + u, 5, 1, "hat");
+          g.rect(2, -3 + u, 4, 1, "hat"); g.rect(1, -4 + u, 3, 1, "hat"); g.rect(-1, -5 + u, 3, 1, "hat");
+          g.rect(6, 6 + u, 5, 5, "beard"); g.rect(7, 11 + u, 3, 1, "beard");
+        }
+        if (carry) { g.rect(hx + 1, hy - 14, 1, 18, "wood"); g.rect(hx, hy - 16, 3, 2, "gem"); }
+        return;
+    }
+  }
+
+  function draw(role, poseName, f, mood) {
+    const c = cast(role), o = pose(poseName, f), g = Gfx.grid(W, H, OX, OY);
+    const u = (o.low || 0) + (o.bob || 0);
+    gear(g, role, "back", o, u);
+    legs(g, c, o);
+    body(g, c, o, u);
+    gear(g, role, "body", o, u);
+    head(g, o, role === "herald" ? mood : null, u);
+    gear(g, role, "head", o, u);
+    if (o.vein) { g.set(9, -1 + u, "red"); g.set(11, -1 + u, "red"); g.set(10, 0 + u, "red"); }
+    const hand = arm(g, o, u);
+    if (o.item) item(g, o.item, u);
+    gear(g, role, "tool", o, u, hand);
+    return { g, pal: { ...BASE, ...c.pal } };
+  }
+
+  const FRAMES = { walk: 4, idle: 2, hammer: 2, sweep: 2, read: 2, cheer: 2, angry: 2, sit: 1, call: 2 };
+  const frames = new Map();
+  function frame(role, dir, poseName, f, mood) {
+    const n = FRAMES[poseName] || 1;
+    const key = `${role}|${dir}|${poseName}|${f % n}|${mood || ""}`;
+    if (!frames.has(key)) {
+      const { g, pal } = draw(role, poseName, f % n, mood);
+      const c = Gfx.canvas(W, H);
+      Gfx.paint(c.getContext("2d"), g, pal, 0, 0, dir === "left");
+      frames.set(key, c);
+    }
+    return frames.get(key);
+  }
+
+  function face(role, mood) {
+    const c = Gfx.canvas(18, 18);
+    c.getContext("2d").drawImage(frame(role, "right", "stand", 0, mood), -OX + 4, -OY + 6);
+    return c.toDataURL();
+  }
+
+  return { frame, face, FOOT: { x: OX + 5, y: OY + 18 }, name: (role) => cast(role).name };
+})();
+
+// The season by the calendar: it colours the trees, decides what falls from the sky, and lays snow.
+const Season = ["winter", "winter", "spring", "spring", "spring", "summer", "summer", "summer", "autumn", "autumn", "autumn", "winter"][new Date().getMonth()];
+
+// The street: a row of facades in one long canvas, a sidewalk where everyone stands and a cobbled
+// road below it, the coaching inn and its carts at the far end. Windows are remembered so they can
+// light up at night.
+const World = (() => {
+  const C = Gfx.C, K = C.black;
+  const W = 960, H = 180, GROUND = 150, BASE = 144, TOP = -8, VH = 164;
+  const STATIONS = {
+    tavern: { spots: [26, 36, 46, 56, 66, 76, 86, 96, 106, 116].map((x) => ({ x, face: x < 70 ? "right" : "left" })) },
+    forge: { spots: [{ x: 172, face: "right" }, { x: 208, face: "right" }, { x: 232, face: "left" }, { x: 240, face: "left" }] },
+    yard: { spots: [{ x: 152, face: "right" }, { x: 300, face: "left" }] },
+    verify: { spots: [{ x: 258, face: "right" }, { x: 280, face: "right" }] },
+    library: { spots: [368, 380, 392, 404, 416, 428, 440, 452, 464].map((x) => ({ x, face: x < 415 ? "right" : "left" })) },
+    hall: { spots: [{ x: 590, face: "right" }, { x: 626, face: "left" }, { x: 578, face: "right" }, { x: 638, face: "left" }, { x: 566, face: "right" }] },
+    carts: { spots: [{ x: 774, face: "right" }, { x: 822, face: "right" }, { x: 870, face: "left" }] },
+  };
+  const ANVILS = [186, 222], DUMMIES = [268, 290], CARTS = [798, 846], BOARD = 126, HALL = 608, DOOR = 70;
+  const FORGE_GLOW = [155, BASE - 30, 14, 12], FORGE_SMOKE = [162, BASE - 74];
+  const WINDOWS = [], CHIMNEYS = [], LAMPS = [[144, 128], [358, 128], [564, 128], [762, 128]];
+  const LEAVES = { spring: ["green", "jade", "leaf"], summer: ["green", "jade", "leaf"], autumn: ["rust", "amber", "orange"] }[Season];
+
+  const px = (ctx, c, x, y, w, h) => { ctx.fillStyle = C[c] || c; ctx.fillRect(x, y, w, h); };
+  const box = (ctx, c, x, y, w, h) => { px(ctx, K, x - 1, y - 1, w + 2, h + 2); px(ctx, c, x, y, w, h); px(ctx, Gfx.darker(c), x + w - 1, y, 1, h); px(ctx, Gfx.darker(c), x, y + h - 1, w, 1); };
+
+  function wall(ctx, kind, x, y, w, h, r) {
+    const base = { brick: "brown", redbrick: "crimson", stone: "silver", plaster: "cream", pink: "apricot", grey: "tan" }[kind];
+    box(ctx, base, x, y, w, h);
+    const d = Gfx.darker(base);
+    if (kind === "brick" || kind === "redbrick") {
+      for (let j = 2; j < h - 1; j += 3) for (let i = (j % 6 ? 1 : 4); i < w - 3; i += 6) px(ctx, d, x + i, y + j, 3, 1);
+    } else if (kind === "stone" || kind === "grey") {
+      for (let j = 4; j < h - 1; j += 5) { px(ctx, d, x + 1, y + j, w - 2, 1); for (let i = (j % 10 ? 3 : 8); i < w - 2; i += 10) px(ctx, d, x + i, y + j - 4, 1, 4); }
+    } else {
+      for (let i = 0; i < w * h / 60; i++) px(ctx, d, x + 1 + Math.floor(r() * (w - 3)), y + 1 + Math.floor(r() * (h - 3)), 1, 1);
+    }
+  }
+
+  function timber(ctx, x, y, w, h, floors) {
+    const fh = h / floors;
+    for (let f = 0; f <= floors; f++) px(ctx, "rust", x, Math.round(y + f * fh) - 1, w, 2);
+    for (const bx of [x, x + w - 2, x + Math.round(w / 2) - 1]) px(ctx, "rust", bx, y, 2, h);
+    for (let f = 0; f < floors; f++) {
+      const top = Math.round(y + f * fh), bot = Math.round(y + (f + 1) * fh);
+      for (let k = 0; k < bot - top; k++) { px(ctx, "rust", x + 2 + Math.round(k * 6 / (bot - top)), top + k, 1, 1); px(ctx, "rust", x + w - 3 - Math.round(k * 6 / (bot - top)), top + k, 1, 1); }
+    }
+  }
+
+  function windowAt(ctx, x, y, w, h, { arch = false, shutter = null, frame = "white" } = {}) {
+    if (shutter) { box(ctx, shutter, x - 4, y, 3, h); box(ctx, shutter, x + w + 1, y, 3, h); for (let j = 2; j < h; j += 2) { px(ctx, Gfx.darker(shutter), x - 4, y + j, 3, 1); px(ctx, Gfx.darker(shutter), x + w + 1, y + j, 3, 1); } }
+    px(ctx, K, x - 1, y - 1, w + 2, h + 2);
+    px(ctx, frame, x, y, w, h);
+    px(ctx, "cobalt", x + 1, y + 1, w - 2, h - 2);
+    px(ctx, "blue", x + 1, y + 1, w - 2, Math.floor((h - 2) / 2));
+    px(ctx, frame, x + Math.floor(w / 2), y + 1, 1, h - 2); px(ctx, frame, x + 1, y + Math.floor(h / 2), w - 2, 1);
+    px(ctx, "white", x + 2, y + 2, 1, 1);
+    if (arch) { px(ctx, K, x, y - 3, w, 2); px(ctx, frame, x + 1, y - 2, w - 2, 2); px(ctx, "blue", x + 2, y - 1, w - 4, 1); px(ctx, K, x - 1, y - 2, 1, 1); px(ctx, K, x + w, y - 2, 1, 1); }
+    px(ctx, K, x - 2, y + h + 1, w + 4, 2); px(ctx, frame, x - 1, y + h + 1, w + 2, 1);
+    WINDOWS.push([x + 1, y + 1, w - 2, h - 2]);
+  }
+
+  function roof(ctx, x, y, w, h, c, chimney) {
+    if (chimney != null) {
+      box(ctx, "crimson", x + chimney, y - h - 8, 5, 12); px(ctx, K, x + chimney - 1, y - h - 9, 7, 2);
+      CHIMNEYS.push([x + chimney + 2, y - h - 10]);
+    }
+    for (let j = 0; j < h; j++) {
+      const inset = Math.round((h - j) * 0.7);
+      px(ctx, K, x - 3 + inset - 1, y - h + j, w + 6 - 2 * inset + 2, 1);
+      px(ctx, Season === "winter" && j < 3 ? (j < 2 ? "white" : "silver") : j % 3 === 2 ? Gfx.darker(c) : c, x - 3 + inset, y - h + j, w + 6 - 2 * inset, 1);
+    }
+    px(ctx, K, x - 4, y, w + 8, 1); px(ctx, Gfx.darker(c), x - 3, y - 1, w + 6, 1);
+  }
+
+  function awning(ctx, x, y, w, c1, c2) {
+    px(ctx, K, x - 1, y - 1, w + 2, 8);
+    for (let i = 0; i < w; i += 4) px(ctx, (i / 4) % 2 ? c2 : c1, x + i, y, Math.min(4, w - i), 6);
+    for (let i = 0; i < w; i += 4) { px(ctx, (i / 4) % 2 ? c2 : c1, x + i + 1, y + 6, 2, 1); px(ctx, K, x + i + 1, y + 7, 2, 1); }
+  }
+
+  function door(ctx, x, w = 10, h = 16, c = "brown") {
+    px(ctx, K, x - 1, BASE - h - 3, w + 2, h + 3);
+    px(ctx, c, x, BASE - h - 1, w, h + 1); px(ctx, c, x + 1, BASE - h - 2, w - 2, 1);
+    for (let i = 2; i < w; i += 3) px(ctx, Gfx.darker(c), x + i, BASE - h, 1, h);
+    px(ctx, "gold", x + w - 3, BASE - Math.round(h / 2), 1, 1);
+  }
+
+  function sign(ctx, x, y, icon) {
+    px(ctx, K, x - 1, y - 1, 10, 1); px(ctx, "ash", x, y - 1, 8, 1);
+    box(ctx, "brown", x + 1, y + 2, 10, 9);
+    px(ctx, K, x + 2, y, 1, 2); px(ctx, K, x + 9, y, 1, 2);
+    const ico = { mug: [["cream", 4, 4, 3, 5], ["white", 4, 3, 3, 1], ["cream", 7, 5, 1, 2]], anvil: [["silver", 3, 5, 6, 2], ["grey", 5, 7, 2, 2], ["silver", 2, 4, 2, 1]],
+                  book: [["crimson", 3, 4, 6, 5], ["white", 4, 5, 4, 3]], letter: [["white", 2, 4, 8, 5], ["tan", 3, 5, 1, 1], ["tan", 4, 6, 4, 1], ["tan", 8, 5, 1, 1], ["red", 5, 7, 2, 1]], scroll: [["white", 4, 4, 4, 5], ["brown", 3, 3, 6, 1], ["brown", 3, 9, 6, 1], ["red", 5, 6, 2, 1]] }[icon];
+    ico.forEach(([c, a, b, w, h]) => px(ctx, c, x + a, y + b, w, h));
+  }
+
+  // A street tree in the season's colours; bare branches with snow on them in winter.
+  function tree(ctx, x, r) {
+    box(ctx, "rust", x - 2, BASE - 30, 4, 32);
+    if (Season === "winter") {
+      for (const [dx, dy, len, dir] of [[0, -30, 14, -1], [0, -38, 12, 1], [0, -46, 10, -1], [0, -50, 8, 1], [0, -28, 10, 1]]) {
+        for (let k = 0; k < len; k++) { px(ctx, K, x + dx + dir * k - 1, BASE + dy - Math.floor(k / 2) - 1, 3, 3); }
+        for (let k = 0; k < len; k++) { px(ctx, "rust", x + dx + dir * k, BASE + dy - Math.floor(k / 2), 1, 1); if (k % 2) px(ctx, "white", x + dx + dir * k, BASE + dy - Math.floor(k / 2) - 1, 1, 1); }
+      }
+      px(ctx, K, x - 3, BASE - 60, 6, 31); px(ctx, "rust", x - 2, BASE - 59, 4, 30); px(ctx, "white", x - 2, BASE - 60, 4, 1);
+      return;
+    }
+    const blobs = [[0, -48, 13], [-10, -40, 10], [10, -40, 10], [-6, -56, 9], [7, -55, 9], [0, -34, 11]];
+    for (const [pass, colour] of [["edge", "black"], ["base", LEAVES[0]], ["mid", LEAVES[1]], ["top", LEAVES[2]]]) {
+      blobs.forEach(([dx, dy, rad]) => {
+        const rr = { edge: rad + 1, base: rad, mid: rad - 3, top: rad - 7 }[pass];
+        if (rr <= 0) return;
+        const o = { mid: -1, top: -3 }[pass] || 0;
+        for (let j = -rr; j <= rr; j++) { const half = Math.round(Math.sqrt(rr * rr - j * j)); px(ctx, colour, x + dx + o - half, BASE + dy + o + j, half * 2, 1); }
+      });
+    }
+    for (let i = 0; i < 18; i++) px(ctx, LEAVES[0], x - 14 + Math.floor(r() * 28), BASE - 58 + Math.floor(r() * 30), 2, 1);
+    if (Season === "spring") for (let i = 0; i < 16; i++) px(ctx, i % 3 ? "pink" : "white", x - 13 + Math.floor(r() * 26), BASE - 62 + Math.floor(r() * 32), 2, 2);
+    if (Season === "autumn") for (let i = 0; i < 12; i++) px(ctx, "yellow", x - 13 + Math.floor(r() * 26), BASE - 60 + Math.floor(r() * 30), 1, 1);
+  }
+
+  function lamp(ctx, x, y) { px(ctx, K, x, y, 2, BASE + 6 - y); px(ctx, K, x - 2, y - 6, 6, 6); px(ctx, "yellow", x - 1, y - 5, 4, 4); px(ctx, K, x - 1, y - 7, 4, 1); }
+
+  // A thatched roof: straw that curves in towards a rounded ridge, with a thick lip at the eaves.
+  const STRAW = ["#d9b25e", "#b48a3e"];
+  function thatch(ctx, x, y, w, h, chimney) {
+    if (chimney != null) { box(ctx, "crimson", x + chimney, y - h - 2, 5, 10); px(ctx, K, x + chimney - 1, y - h - 3, 7, 2); CHIMNEYS.push([x + chimney + 2, y - h - 4]); }
+    const insetAt = (j) => { const k = (h - j) / h; return Math.round(k * k * w * .36); };
+    for (let j = 0; j < h; j++) {
+      const inset = insetAt(j), x0 = x - 4 + inset, width = w + 8 - 2 * inset;
+      px(ctx, K, x0 - 1, y - h + j, width + 2, 1);
+      px(ctx, Season === "winter" && j < 4 ? (j < 3 ? "white" : "silver") : STRAW[0], x0, y - h + j, width, 1);
+      if (j > 3 && j % 3 === 0) for (let i = x0 + (j % 6 ? 1 : 3); i < x0 + width - 1; i += 4) px(ctx, STRAW[1], i, y - h + j, 1, 2);
+    }
+    px(ctx, K, x - 5, y - 1, w + 10, 3); px(ctx, STRAW[1], x - 4, y - 1, w + 8, 1);
+  }
+
+  function inn(ctx, r) {
+    const x = 16, w = 108, y = BASE - 50;
+    wall(ctx, "plaster", x, y, w, 50, r); timber(ctx, x, y, w, 50, 2);
+    thatch(ctx, x, y, w, 24, 80);
+    [[26, 100], [52, 100], [76, 100], [102, 100], [26, 122], [102, 122]].forEach(([wx, wy]) => windowAt(ctx, wx, wy, 9, 9, { shutter: "jade" }));
+    [26, 102].forEach((wx) => { for (let i = 0; i < 9; i++) px(ctx, ["red", "pink", "jade"][i % 3], wx + i, 133, 1, 1); });
+    awning(ctx, 46, 116, 46, "jade", "white");
+    door(ctx, 64, 12, 18);
+    sign(ctx, 38, 106, "mug");
+    [[30, 136], [108, 136]].forEach(([bx]) => { box(ctx, "brown", bx, BASE - 9, 8, 9); px(ctx, "ash", bx, BASE - 7, 8, 1); px(ctx, "ash", bx, BASE - 3, 8, 1); });
+  }
+
+  function yard(ctx) {
+    wall(ctx, "grey", 246, 120, 52, BASE - 120, () => .5);
+    px(ctx, "green", 246, 114, 52, 6); px(ctx, K, 246, 113, 52, 1);
+    for (let i = 0; i < 52; i += 3) px(ctx, "jade", 246 + i, 114, 2, 2);
+    for (let i = 250; i < 298; i += 8) { px(ctx, K, i - 1, 132, 4, 14); px(ctx, "brown", i, 133, 2, 12); }
+    px(ctx, K, 246, 135, 52, 4); px(ctx, "brown", 246, 136, 52, 2);
+    DUMMIES.forEach((d) => {
+      px(ctx, K, d - 1, 122, 3, 24); px(ctx, "brown", d, 123, 1, 22);
+      px(ctx, K, d - 5, 127, 11, 3); px(ctx, "brown", d - 4, 128, 9, 1);
+      px(ctx, K, d - 4, 126, 9, 12); px(ctx, "cream", d - 3, 127, 7, 10);
+      px(ctx, "red", d - 2, 130, 5, 4); px(ctx, "white", d - 1, 131, 3, 2);
+      px(ctx, K, d - 3, 117, 7, 7); px(ctx, "tan", d - 2, 118, 5, 5); px(ctx, K, d - 1, 120, 1, 1); px(ctx, K, d + 1, 120, 1, 1);
+    });
+  }
+
+  function house(ctx, x, w, floors, kind, roofC, r, extra = {}) {
+    const fh = 22, h = floors * fh + 6, y = BASE - h;
+    wall(ctx, kind, x, y, w, h, r);
+    if (extra.timber) timber(ctx, x, y, w, h, floors);
+    if (roofC === "thatch") thatch(ctx, x, y, w, 18, extra.chimney ?? Math.round(w * .7));
+    else roof(ctx, x, y, w, 14, roofC, extra.chimney ?? Math.round(w * .7));
+    for (let f = 0; f < floors; f++) {
+      const wy = y + 6 + f * fh;
+      if (f === floors - 1) continue;
+      for (let i = 0; i < Math.floor((w - 6) / 16); i++) windowAt(ctx, x + 7 + i * 16, wy, 8, 10, { shutter: extra.shutter, frame: "white", arch: extra.arch });
+    }
+    if (extra.awning) awning(ctx, x + 4, BASE - 26, w - 8, extra.awning[0], extra.awning[1]);
+    door(ctx, x + Math.round(w / 2) - 5, 10, 16, extra.door || "brown");
+  }
+
+  // The chapel school, where the reviewers read: a stone nave with tall windows and a bell tower.
+  function chapel(ctx, r) {
+    const x = 384, w = 84, y = BASE - 50;
+    wall(ctx, "stone", x, y, w, 50, r);
+    roof(ctx, x, y, w, 22, "lavender", null);
+    for (const wx of [396, 416, 436, 454]) windowAt(ctx, wx, BASE - 40, 7, 16, { arch: true, frame: "silver" });
+    sign(ctx, 440, BASE - 22, "book");
+    const tx = 362;
+    wall(ctx, "stone", tx, BASE - 88, 24, 88, r);
+    for (let j = 0; j < 18; j++) { const half = Math.round(j * .75) + 1; px(ctx, K, tx + 12 - half - 1, BASE - 106 + j, half * 2 + 2, 1); px(ctx, Season === "winter" && j < 6 ? "white" : j % 3 === 2 ? "mauve" : "lavender", tx + 12 - half, BASE - 106 + j, half * 2, 1); }
+    px(ctx, K, tx + 11, BASE - 112, 2, 6); px(ctx, K, tx + 9, BASE - 110, 6, 1);
+    px(ctx, K, tx + 6, BASE - 82, 12, 16); px(ctx, "ink", tx + 7, BASE - 81, 10, 15); px(ctx, "yellow", tx + 9, BASE - 78, 6, 6); px(ctx, "orange", tx + 9, BASE - 73, 6, 1);
+    door(ctx, tx + 6, 12, 20, "rust");
+  }
+
+  // The village hall, where heralds wait with whatever needs you: a bell cupola on a timbered hall.
+  function hall(ctx, r) {
+    house(ctx, HALL - 40, 80, 2, "plaster", "red", r, { timber: true, awning: ["crimson", "white"], door: "rust", chimney: 10 });
+    box(ctx, "white", HALL - 6, BASE - 70, 12, 10); px(ctx, K, HALL - 3, BASE - 68, 6, 6); px(ctx, "yellow", HALL - 2, BASE - 67, 4, 4);
+    for (let j = 0; j < 8; j++) { const half = j + 1; px(ctx, K, HALL - half - 1, BASE - 78 + j, half * 2 + 2, 1); px(ctx, "red", HALL - half, BASE - 78 + j, half * 2, 1); }
+    sign(ctx, HALL - 30, 110, "scroll");
+    for (const bx of [HALL - 36, HALL + 26]) { box(ctx, "crimson", bx, 98, 8, 12); box(ctx, "yellow", bx + 2, 101, 4, 4); }
+    cottage(ctx, HALL + 46, 40, "pink", { door: "teal", chimney: 6 });
+  }
+
+  // The dirt road everyone walks on, a grass bank behind it and the verge in front; the countryside
+  // uses the same road, so the village runs into the fields without a seam.
+  const GRASS = { spring: ["#7cc35a", "#5ca545"], summer: ["#5ca545", "#4a8a3c"], autumn: ["#a8a24a", "#8a7e3a"], winter: ["#eef3f6", "#d4dee6"] }[Season];
+  function road(ctx, r, x0, w) {
+    px(ctx, GRASS[0], x0, BASE - 4, w, 4); px(ctx, K, x0, BASE - 5, w, 1);
+    for (let i = 0; i < w / 6; i++) px(ctx, GRASS[1], x0 + Math.floor(r() * w), BASE - 4 + Math.floor(r() * 3), 2, 1);
+    px(ctx, K, x0, BASE, w, 1);
+    px(ctx, Season === "winter" ? "#e4e8ec" : "#c9a46a", x0, BASE + 1, w, 11);
+    for (let i = 0; i < w / 5; i++) px(ctx, Season === "winter" ? "silver" : i % 2 ? "#b08a50" : "#dcbc84", x0 + Math.floor(r() * w), BASE + 2 + Math.floor(r() * 9), 2, 1);
+    if (Season === "autumn") for (let i = 0; i < w / 14; i++) px(ctx, ["amber", "orange", "rust"][i % 3], x0 + Math.floor(r() * w), BASE + 1 + Math.floor(r() * 11), 2, 1);
+    px(ctx, K, x0, BASE + 12, w, 1);
+    px(ctx, GRASS[0], x0, BASE + 13, w, H - BASE - 13);
+    for (let i = 0; i < w / 3; i++) px(ctx, GRASS[1], x0 + Math.floor(r() * w), BASE + 14 + Math.floor(r() * (H - BASE - 15)), 2, 1);
+  }
+
+  // A one-storey cottage: thatch or tiles, a window either side of the door with shutters and a
+  // flower box.
+  function cottage(ctx, x, w, kind, { roof: roofC = "thatch", shutter = null, door: doorC = "brown", chimney = Math.round(w * .7), timbered = false } = {}) {
+    const h = 30, y = BASE - h, dx = x + Math.round(w / 2) - 5;
+    wall(ctx, kind, x, y, w, h, () => .5);
+    if (timbered) timber(ctx, x, y, w, h, 1);
+    if (roofC === "thatch") thatch(ctx, x, y, w, 18, chimney); else roof(ctx, x, y, w, 14, roofC, chimney);
+    door(ctx, dx, 10, 16, doorC);
+    for (const wx of [x + 5, x + w - 13]) {
+      if (Math.abs(wx - dx) < 12) continue;
+      windowAt(ctx, wx, y + 8, 8, 8, { shutter });
+      for (let i = 0; i < 8; i++) px(ctx, Season === "winter" ? "white" : ["red", "pink", "yellow"][i % 3], wx + i, y + 18, 1, 1);
+    }
+  }
+
+  function picket(ctx, x0, x1) {
+    px(ctx, K, x0 - 1, BASE - 6, x1 - x0 + 2, 3); px(ctx, "white", x0, BASE - 5, x1 - x0, 1);
+    for (let x = x0; x <= x1; x += 4) { px(ctx, K, x - 1, BASE - 9, 3, 9); px(ctx, "white", x, BASE - 8, 1, 8); }
+  }
+
+  function garden(ctx, x0, x1) {
+    px(ctx, Season === "winter" ? "silver" : "#8a5a34", x0, BASE - 4, x1 - x0, 3);
+    for (let x = x0 + 2; x < x1 - 3; x += 6) {
+      if (Season === "winter") { box(ctx, "white", x, BASE - 6, 4, 3); continue; }
+      const c = Season === "autumn" ? ["orange", "amber"] : ["green", "lime"];
+      px(ctx, K, x - 1, BASE - 8, 6, 5); px(ctx, c[0], x, BASE - 7, 4, 3); px(ctx, c[1], x + 1, BASE - 7, 2, 1);
+    }
+    picket(ctx, x0, x1);
+  }
+
+  function well(ctx, x) {
+    for (const px0 of [x - 7, x + 6]) { px(ctx, K, px0 - 1, BASE - 26, 3, 20); px(ctx, "brown", px0, BASE - 25, 1, 18); }
+    for (let j = 0; j < 7; j++) { px(ctx, K, x - 3 - j - 1, BASE - 32 + j, 8 + 2 * j, 1); px(ctx, Season === "winter" && j < 2 ? "white" : "rust", x - 3 - j, BASE - 32 + j, 6 + 2 * j, 1); }
+    px(ctx, K, x - 1, BASE - 25, 1, 8); box(ctx, "brown", x - 2, BASE - 18, 4, 4);
+    box(ctx, "grey", x - 9, BASE - 9, 19, 9); for (let i = x - 8; i < x + 10; i += 4) px(ctx, "ash", i, BASE - 8, 1, 7);
+  }
+
+  // The smithy: an open shed with a stone forge and its chimney, tools on the back wall.
+  function smithy(ctx, r) {
+    const x = 150, w = 92, y = BASE - 36;
+    wall(ctx, "stone", x, y, w, 36, r);
+    roof(ctx, x, y, w, 14, "brown", null);
+    px(ctx, K, x + 24, y + 6, w - 28, 30); px(ctx, "umber", x + 25, y + 7, w - 30, 29);
+    [[200, y + 10], [206, y + 12], [212, y + 9]].forEach(([tx, ty]) => px(ctx, "silver", tx, ty, 1, 7));
+    box(ctx, "grey", x + 2, y + 6, 20, 30);
+    px(ctx, K, x + 5, y + 12, 14, 12);
+    box(ctx, "grey", x + 6, y - 34, 12, 40); for (let j = y - 30; j < y; j += 5) px(ctx, "ash", x + 6, j, 12, 1);
+    px(ctx, K, x + 5, y - 36, 14, 2);
+    for (const postX of [x + 22, x + w - 3]) { px(ctx, K, postX - 1, y, 4, 36); px(ctx, "brown", postX, y, 2, 36); }
+    sign(ctx, 196, y + 8, "anvil");
+    ANVILS.forEach((ax) => { px(ctx, K, ax - 7, BASE - 9, 15, 4); px(ctx, "silver", ax - 6, BASE - 8, 13, 2); px(ctx, K, ax - 3, BASE - 5, 7, 5); px(ctx, "grey", ax - 2, BASE - 5, 5, 4); });
+  }
+
+  // The stable at the end of the road, where the carts wait to carry finished work off.
+  function stable(ctx, r) {
+    const x = 772, w = 112, y = BASE - 40;
+    box(ctx, "brown", x, y, w, 40);
+    for (let i = x + 4; i < x + w - 2; i += 5) px(ctx, "rust", i, y + 1, 1, 38);
+    thatch(ctx, x, y, w, 20, null);
+    px(ctx, K, x + w / 2 - 9, y - 12, 18, 11); px(ctx, "umber", x + w / 2 - 8, y - 11, 16, 9); px(ctx, STRAW[0], x + w / 2 - 7, y - 6, 14, 4);
+    for (const dx of [x + 8, x + w - 34]) {
+      px(ctx, K, dx - 1, BASE - 25, 28, 25); px(ctx, "brown", dx, BASE - 24, 26, 24);
+      for (let k = 0; k < 24; k++) { px(ctx, "rust", dx + Math.round(k * 26 / 24), BASE - 24 + k, 1, 1); px(ctx, "rust", dx + 25 - Math.round(k * 26 / 24), BASE - 24 + k, 1, 1); }
+    }
+    sign(ctx, x + 50, BASE - 34, "letter");
+  }
+
+  function staticLayer() {
+    WINDOWS.length = 0; CHIMNEYS.length = 0;
+    const c = Gfx.canvas(W, H - TOP), ctx = c.getContext("2d"), r = Gfx.rnd(9);
+    ctx.translate(0, -TOP);
+    road(ctx, r, 0, W);
+    inn(ctx, r);
+    smithy(ctx, r);
+    yard(ctx);
+    cottage(ctx, 308, 46, "pink", { shutter: "teal" });
+    chapel(ctx, r);
+    garden(ctx, 472, 498);
+    well(ctx, 510);
+    cottage(ctx, 524, 38, "plaster", { timbered: true, door: "teal" });
+    hall(ctx, r);
+    cottage(ctx, 698, 44, "plaster", { shutter: "jade", timbered: true });
+    garden(ctx, 746, 768);
+    stable(ctx, r);
+    cottage(ctx, 904, 44, "pink", { roof: "red", shutter: "jade" });
+    [140, 690, 892, 956].forEach((x) => tree(ctx, x, r));
+    LAMPS.forEach(([x, y]) => lamp(ctx, x, y));
+    box(ctx, "brown", BOARD - 1, BASE - 26, 24, 16); px(ctx, K, BOARD + 1, BASE - 10, 2, 11); px(ctx, K, BOARD + 19, BASE - 10, 2, 11);
+    px(ctx, "rust", BOARD + 2, BASE - 10, 1, 10); px(ctx, "rust", BOARD + 20, BASE - 10, 1, 10);
+    return c;
+  }
+
+  return { W, H, TOP, VH, GROUND, BASE, STATIONS, ANVILS, DUMMIES, CARTS, BOARD, HALL, DOOR, FORGE_GLOW, FORGE_SMOKE, WINDOWS, CHIMNEYS, LAMPS, staticLayer,
+           draw: { px, box, tree, road, GRASS } };
+})();
+
+// The countryside on both sides of the village, as far as the screen reaches: 200-wide pieces of
+// fields, woods, pasture, meadow, a pond and a farm, each drawn once from its own seed. Chunk 0 is
+// the first piece right of the village, chunk -1 the first to its left.
+const Land = (() => {
+  const { BASE, H, TOP, W } = World, { px, box, tree, road, GRASS } = World.draw, C = Gfx.C, K = C.black, CH = 200;
+  const CROP = { spring: ["#5ca545", "#8a5a34"], summer: ["#4a8a3c", "#7cc35a"], autumn: ["#e8c04a", "#c49a32"], winter: ["#eef3f6", "#c4cfd8"] }[Season];
+  const chunks = new Map();
+
+  const kindOf = (i) => i === 0 ? "farm" : i === -1 ? "field" : i === 1 ? "pasture" : i === -2 ? "pond"
+    : ["woods", "field", "meadow", "pasture", "woods", "pond", "meadow"][Math.floor(Gfx.rnd(97 + i * 31)() * 7)];
+  const left = (i) => (i < 0 ? i * CH : W + i * CH);
+
+  function fence(ctx, x0, x1) {
+    for (let x = x0; x < x1; x += 10) { px(ctx, K, x - 1, BASE - 12, 4, 12); px(ctx, "brown", x, BASE - 11, 2, 11); }
+    for (const y of [BASE - 10, BASE - 5]) { px(ctx, K, x0 - 1, y - 1, x1 - x0, 3); px(ctx, "tan", x0, y, x1 - x0 - 2, 1); }
+  }
+  function bush(ctx, x, w) {
+    px(ctx, K, x - 1, BASE - 8, w + 2, 8); px(ctx, K, x + 1, BASE - 10, w - 2, 2);
+    px(ctx, Season === "winter" ? "silver" : LEAF[0], x, BASE - 7, w, 7); px(ctx, Season === "winter" ? "white" : LEAF[1], x + 2, BASE - 9, w - 4, 4);
+  }
+  const LEAF = { spring: ["green", "jade"], summer: ["green", "jade"], autumn: ["rust", "amber"], winter: ["silver", "white"] }[Season];
+
+  function field(ctx, r, anims) {
+    px(ctx, Season === "winter" ? "#d4dee6" : "#8a5a34", 6, BASE - 6, CH - 12, 2);
+    for (let x = 8; x < CH - 8; x += 3) {
+      const h = Season === "spring" ? 3 + Math.floor(r() * 2) : 10 + Math.floor(r() * 4);
+      px(ctx, CROP[0], x, BASE - 5 - h, 1, h);
+      if (Season === "autumn" || Season === "summer") px(ctx, CROP[1], x, BASE - 5 - h, 2, 3);
+    }
+    const sx = 60 + Math.floor(r() * 80);
+    px(ctx, K, sx - 1, BASE - 34, 3, 30); px(ctx, "brown", sx, BASE - 33, 1, 28);
+    px(ctx, K, sx - 8, BASE - 26, 17, 3); px(ctx, "brown", sx - 7, BASE - 25, 15, 1);
+    box(ctx, "tan", sx - 3, BASE - 40, 7, 7); px(ctx, K, sx - 1, BASE - 37, 1, 1); px(ctx, K, sx + 1, BASE - 37, 1, 1);
+    px(ctx, K, sx - 5, BASE - 42, 11, 2); px(ctx, "rust", sx - 3, BASE - 44, 7, 2);
+    box(ctx, "blue", sx - 3, BASE - 30, 7, 8);
+    fence(ctx, 4, CH - 4);
+  }
+
+  function woods(ctx, r) {
+    const xs = [20, 60, 100, 140, 180].map((x) => x + Math.floor(r() * 14) - 7);
+    xs.forEach((x, k) => { if (k % 2) bush(ctx, x - 10, 14); });
+    xs.forEach((x) => tree(ctx, x, r));
+    bush(ctx, 34, 12); bush(ctx, 150, 16);
+  }
+
+  function meadow(ctx, r) {
+    tree(ctx, 50 + Math.floor(r() * 100), r);
+    for (let i = 0; i < 36; i++) { const x = Math.floor(r() * CH), c = ["pink", "white", "yellow", "lavender"][i % 4]; px(ctx, K, x - 1, BASE - 7, 3, 3); px(ctx, Season === "winter" ? "white" : c, x, BASE - 6, 1, 1); px(ctx, GRASS[1], x, BASE - 4, 1, 3); }
+    box(ctx, "grey", 150, BASE - 6, 10, 6); box(ctx, "grey", 158, BASE - 4, 6, 4);
+    bush(ctx, 20, 18);
+  }
+
+  function pasture(ctx, r, anims) {
+    tree(ctx, 170, r);
+    bush(ctx, 10, 14);
+    anims.push({ kind: "cow", x: 50, range: 30, seed: r() * 6 }, { kind: "sheep", x: 110, range: 26, seed: r() * 6 }, { kind: "sheep", x: 136, range: 20, seed: r() * 6 });
+    fence(ctx, 4, CH - 4);
+  }
+
+  function pond(ctx, r, anims) {
+    const c = Season === "winter" ? ["#cfe2ee", "#eef6fb"] : [C.cobalt, C.blue];
+    for (let j = 0; j < 6; j++) { const half = Math.round(Math.sqrt(36 - j * j) * 12); px(ctx, K, 100 - half - 1, BASE - 1 - j, half * 2 + 2, 1); px(ctx, j < 2 ? c[0] : c[1], 100 - half, BASE - 1 - j, half * 2, 1); }
+    for (const rx of [28, 34, 162, 168, 172]) { px(ctx, K, rx - 1, BASE - 16, 3, 12); px(ctx, "green", rx, BASE - 15, 1, 11); px(ctx, "brown", rx, BASE - 17, 1, 3); }
+    if (Season !== "winter") anims.push({ kind: "duck", x: 80, range: 24, seed: 1 }, { kind: "duck", x: 120, range: 18, seed: 3 });
+    tree(ctx, 186, r);
+  }
+
+  function farm(ctx, r, anims) {
+    // A post mill as on Öland: a falu-red box resting on a low stone base, its tail pole to the ground.
+    const mx = 46, falu = "#8e2f22", tar = "#5e2016";
+    box(ctx, "grey", mx - 15, BASE - 10, 30, 10); for (let i = mx - 13; i < mx + 14; i += 5) px(ctx, "ash", i, BASE - 9, 1, 8);
+    for (let k = 0; k < 26; k++) { px(ctx, K, mx + 10 + Math.round(k * .8), BASE - 28 + k, 3, 2); px(ctx, "brown", mx + 11 + Math.round(k * .8), BASE - 28 + k, 1, 1); }
+    box(ctx, falu, mx - 12, BASE - 48, 24, 37);
+    for (let i = mx - 9; i < mx + 11; i += 4) px(ctx, tar, i, BASE - 47, 1, 35);
+    for (let j = 0; j < 10; j++) { const half = 2 + Math.round(j * 1.25); px(ctx, K, mx - half - 1, BASE - 58 + j, half * 2 + 2, 1); px(ctx, Season === "winter" && j < 3 ? "white" : tar, mx - half, BASE - 58 + j, half * 2, 1); }
+    px(ctx, K, mx + 2, BASE - 26, 6, 15); px(ctx, "umber", mx + 3, BASE - 25, 4, 14);
+    px(ctx, K, mx - 6, BASE - 44, 5, 5); px(ctx, "yellow", mx - 5, BASE - 43, 3, 3);
+    anims.push({ kind: "mill", x: mx - 13, y: BASE - 38 });
+    const bx = 104, bw = 70, by = BASE - 40;
+    box(ctx, "red", bx, by, bw, 40);
+    for (let i = bx + 4; i < bx + bw - 2; i += 6) px(ctx, "crimson", i, by + 1, 1, 38);
+    for (let j = 0; j < 20; j++) {
+      const inset = 20 - j, x0 = bx - 4 + inset, width = bw + 8 - 2 * inset;
+      px(ctx, K, x0 - 1, by - 20 + j, width + 2, 1);
+      px(ctx, Season === "winter" && j < 4 ? "white" : j % 3 === 2 ? "plum" : "crimson", x0, by - 20 + j, width, 1);
+    }
+    box(ctx, "white", bx + 23, BASE - 26, 24, 26); px(ctx, "red", bx + 25, BASE - 24, 20, 24);
+    for (let k = 0; k < 20; k++) { px(ctx, "white", bx + 25 + k, BASE - 24 + k, 1, 1); px(ctx, "white", bx + 44 - k, BASE - 24 + k, 1, 1); }
+    px(ctx, K, bx + 30, by - 12, 10, 8); px(ctx, "umber", bx + 31, by - 11, 8, 6);
+    for (const hx of [184, 192]) { box(ctx, STRAW_C, hx - 4, BASE - 8, 8, 8); px(ctx, "tan", hx - 3, BASE - 5, 6, 1); }
+    fence(ctx, 66, 100);
+  }
+  const STRAW_C = "#d9b25e";
+
+  const BUILD = { field, woods, meadow, pasture, pond, farm };
+  function chunk(i) {
+    if (!chunks.has(i)) {
+      const c = Gfx.canvas(CH, H - TOP), ctx = c.getContext("2d"), r = Gfx.rnd(500 + i * 13), anims = [];
+      ctx.translate(0, -TOP);
+      road(ctx, r, 0, CH);
+      BUILD[kindOf(i)](ctx, r, anims);
+      const x = left(i);
+      chunks.set(i, { x, canvas: c, anims: anims.map((a) => ({ ...a, x: a.x + x })) });
+    }
+    return chunks.get(i);
+  }
+
+  // The pieces a view from x0 to x1 needs, left side and right side of the village.
+  function visible(x0, x1) {
+    const out = [];
+    for (let i = Math.floor(x0 / CH); i < 0 && i * CH < x1; i++) out.push(chunk(i));
+    for (let i = Math.max(0, Math.floor((x0 - W) / CH)); W + i * CH < x1; i++) out.push(chunk(i));
+    return out;
+  }
+
+  return { visible, CH };
+})();
+
+// Who stands where: the board's jobs as a cast of actors with a station, a pose and a mark, and the
+// walking along the street that gets each actor there.
+const Village = (() => {
+  const { STATIONS } = World;
+  const SPEED = 26;
+  let actors = [], seq = 0;
+
+  const moodOf = (confidence) => confidence == null ? null : confidence >= 8 ? "happy" : confidence >= 5 ? null : "worried";
+
+  // One wanted actor per job and role from the job's step; the rest of the roster idles at the tavern.
+  function wanted(jobs, roster) {
+    const want = [];
+    const add = (job, role, station, poseName, mark) => want.push({ job: job.id, role, station, pose: poseName, mark,
+                                                                     mood: role === "herald" ? moodOf(job.confidence) : null });
+    for (const job of jobs) {
+      const steps = job.pipeline || [];
+      const cur = steps.find((s) => ["active", "waiting", "blocked"].includes(s.status)) || {};
+      const running = (role) => (job.runs || []).some((r) => r.role === role && r.status === "running");
+      const reviewers = (steps.find((s) => s.key === "review") || {}).reviewers || [];
+      const d = job.decision || {};
+      if (job.stage === "unknown") continue;
+      if (d.kind === "question" || d.kind === "stopped" || cur.key === "approve") {
+        add(job, "herald", "hall", "call", d.kind === "question" ? "ask" : d.kind === "stopped" ? "stop" : "bang");
+        if (d.kind === "question" || d.kind === "stopped") add(job, "builder", "forge", "sit", "ask");
+        if (cur.key === "review") reviewers.filter((r) => r.status === "CHANGES").forEach((r) => add(job, r.name, "library", "angry", "no"));
+        continue;
+      }
+      switch (cur.key) {
+        case "start": add(job, "builder", "forge", "idle", "wait"); break;
+        case "build": add(job, "builder", "forge", running("builder") ? "hammer" : "idle", running("builder") ? null : "wait"); break;
+        case "verify": add(job, "builder", "verify", "hammer", null); break;
+        case "tidy": add(job, "tidy", "yard", running("tidy") ? "sweep" : "idle", running("tidy") ? null : "wait"); break;
+        case "review":
+          reviewers.forEach((r) => add(job, r.name, "library",
+            r.status === "running" ? "read" : r.status === "PASS" ? "cheer" : r.status === "CHANGES" ? "angry" : "idle",
+            r.status === "PASS" ? "ok" : r.status === "CHANGES" ? "no" : r.status === "running" ? null : "wait"));
+          break;
+        case "pr": add(job, "herald", "carts", job.confidence >= 8 ? "cheer" : "idle", null); break;
+      }
+    }
+    const busy = new Set(want.map((w) => w.role));
+    roster.filter((role) => !busy.has(role)).forEach((role) => want.push({ job: null, role, station: "tavern", pose: "idle" }));
+    const used = {};
+    for (const w of want) {
+      const st = STATIONS[w.station], i = used[w.station] = (used[w.station] ?? -1) + 1;
+      const spot = st.spots[i % st.spots.length];
+      Object.assign(w, { x: spot.x + (i >= st.spots.length ? 5 : 0), face: spot.face });
+    }
+    return want;
+  }
+
+  function update(jobs, roster, snap) {
+    const want = wanted(jobs, roster);
+    const free = new Set(actors);
+    const pick = (w) => actors.find((a) => free.has(a) && a.role === w.role && a.job === w.job)
+                     || actors.find((a) => free.has(a) && a.role === w.role && !a.job)
+                     || actors.find((a) => free.has(a) && a.role === w.role);
+    const next = [], arrivals = [];
+    for (const w of want) {
+      let a = pick(w);
+      if (a) free.delete(a);
+      else a = { id: ++seq, role: w.role, x: World.DOOR, dir: "right" };
+      if (snap) a.x = w.x;
+      else if (a.tx !== w.x && w.job) arrivals.push(w);
+      Object.assign(a, { job: w.job, station: w.station, pose: w.pose, mark: w.mark, mood: w.mood, face: w.face, tx: w.x, leaving: false });
+      next.push(a);
+    }
+    for (const a of free) {
+      if (snap) continue;
+      Object.assign(a, { leaving: true, job: null, mark: null, pose: "idle", tx: World.DOOR });
+      next.push(a);
+    }
+    actors = next;
+    return arrivals;
+  }
+
+  function step(dt) {
+    for (const a of actors) {
+      const dx = a.tx - a.x;
+      if (Math.abs(dx) < .5) { a.x = a.tx; continue; }
+      a.dir = dx > 0 ? "right" : "left";
+      a.x += Math.sign(dx) * Math.min(Math.abs(dx), SPEED * dt);
+    }
+    actors = actors.filter((a) => !(a.leaving && a.x === a.tx));
+  }
+
+  const walking = (a) => a.x !== a.tx;
+  return { update, step, walking, all: () => actors };
+})();
+
+// The sky by the local clock: day, dusk or night, each a few flat bands of the palette.
+const Sky = (() => {
+  const C = Gfx.C;
+  // `far` is the mountains (face, shaded slope, snow) and the hills in front of them (top, shade).
+  const HILLS = { spring: ["#5c9e4a", "#4a8a3c"], summer: ["#5c9e4a", "#4a8a3c"], autumn: ["#b08a42", "#8f6a2e"], winter: ["#dfe8ef", "#c2d0dc"] }[Season];
+  function at(h) {
+    if (h >= 8 && h < 17) {
+      return Season === "winter"
+        ? { bands: ["#7fa6c8", "#93b6d4", "#a8c6de", "#bed6ea"], cloud: [C.white, "#d6e2ee"], far: ["#9cb4cc", "#8098b4", "#f4f8fb", ...HILLS], dark: 0, h }
+        : { bands: ["#4f9fe0", "#62b0ea", "#78c0f0", "#92d0f4"], cloud: [C.white, "#cfe4f4"], far: ["#8fb0cf", "#7393b8", "#f4f8fb", ...HILLS], dark: 0, h };
+    }
+    if ((h >= 6 && h < 8) || (h >= 17 && h < 19.5)) return { bands: [C.navy, C.lavender, C.pink, C.apricot], cloud: [C.peach, C.pink], far: [C.mauve, C.wine, "#f0c4c8", "#6a5a7a", "#55486a"], dark: .2, h };
+    return { bands: [C.ink, C.ink, C.navy, C.navy], cloud: [C.lavender, C.mauve], far: ["#2f3d6b", "#262a40", "#9aa8c8", "#26364a", "#1e2a3a"], dark: .45, h };
+  }
+  return { at };
+})();
+
+// Drawing one frame through the camera, and finding what is under the pointer.
+const Scene = (() => {
+  const C = Gfx.C;
+  const BUBBLES = {
+    bang: ["..r..", "..r..", "..r..", ".....", "..r.."],
+    stop: ["..r..", "..r..", "..r..", ".....", "..r.."],
+    ask: [".kkk.", "...k.", "..k..", ".....", "..k.."],
+    ok: ["....g", "...g.", "g.g..", ".g...", "....."],
+    no: ["r...r", ".r.r.", "..r..", ".r.r.", "r...r"],
+    wait: [".....", ".....", ".....", ".....", "k.k.k"],
+  };
+  const SYM = { r: C.red, k: C.black, g: C.jade };
+  const bubbles = new Map();
+  function bubble(kind) {
+    if (!bubbles.has(kind)) {
+      const c = Gfx.canvas(11, 11), ctx = c.getContext("2d");
+      ctx.fillStyle = C.black; ctx.fillRect(1, 0, 9, 9); ctx.fillRect(0, 1, 11, 7); ctx.fillRect(3, 9, 2, 2);
+      ctx.fillStyle = kind === "stop" ? C.pink : C.white; ctx.fillRect(1, 1, 9, 7); ctx.fillRect(3, 8, 1, 1);
+      BUBBLES[kind].forEach((row, j) => [...row].forEach((ch, i) => { if (SYM[ch]) { ctx.fillStyle = SYM[ch]; ctx.fillRect(3 + i, 2 + j - (j > 3 ? 1 : 0), 1, 1); } }));
+      bubbles.set(kind, c);
+    }
+    return bubbles.get(kind);
+  }
+
+  // Cumulus clouds, generated once per palette and scrolled slower than the street.
+  const layers = new Map();
+  function cloudLayer(top, under) {
+    const key = "c" + top;
+    if (!layers.has(key)) {
+      const c = Gfx.canvas(700, 90), ctx = c.getContext("2d"), r = Gfx.rnd(21);
+      for (let n = 0; n < 6; n++) {
+        const cx = 40 + n * 115 + Math.floor(r() * 30), cy = 30 + Math.floor(r() * 40);
+        const puffs = Array.from({ length: 6 }, (_, i) => [cx + (i - 2.5) * 9 + Math.floor(r() * 6), cy - Math.floor(r() * 12) - (i % 2) * 6, 8 + Math.floor(r() * 7)]);
+        for (const [colour, dy] of [[under, 2], [top, 0]]) {
+          ctx.fillStyle = colour;
+          puffs.forEach(([px, py, rr]) => { for (let j = -rr; j <= Math.min(rr, cy - py + 4); j++) { const half = Math.round(Math.sqrt(rr * rr - j * j)); ctx.fillRect(px - half, py + j + dy, half * 2, 1); } });
+        }
+        ctx.fillStyle = under; ctx.fillRect(cx - 30, cy + 4, 62, 2);
+      }
+      layers.set(key, c);
+    }
+    return layers.get(key);
+  }
+  // Three snow-capped mountains with valleys between, right slopes in shade, and wooded hills in
+  // front; seamless at 960 wide.
+  function mountains([face, slope, snow]) {
+    const key = "m" + face;
+    if (!layers.has(key)) {
+      const w = 960, c = Gfx.canvas(w, World.H), ctx = c.getContext("2d"), r = Gfx.rnd(8);
+      const peaks = [130, 470, 790].map((x) => ({ x: x + Math.floor(r() * 60) - 30, h: 54 + Math.floor(r() * 26) }));
+      for (let x = 0; x < w; x++) {
+        let best = null, top = -Infinity;
+        for (const p of peaks) for (const px of [p.x - w, p.x, p.x + w]) {
+          const hh = p.h - Math.abs(x - px) * .7;
+          if (hh > top) { top = hh; best = { px, h: p.h }; }
+        }
+        const y = Math.round(118 - Math.max(0, top));
+        ctx.fillStyle = x > best.px ? slope : face; ctx.fillRect(x, y, 1, World.H);
+        const cap = Math.round(best.h * .28 + (x * 7 % 3));
+        if (best.h - top < cap) { ctx.fillStyle = x > best.px ? Gfx.C.silver : snow; ctx.fillRect(x, y, 1, Math.max(1, cap - (best.h - top))); }
+      }
+      layers.set(key, c);
+    }
+    return layers.get(key);
+  }
+  function hills([, , , top, shade]) {
+    const key = "h" + top;
+    if (!layers.has(key)) {
+      const w = 600, c = Gfx.canvas(w, World.H), ctx = c.getContext("2d"), r = Gfx.rnd(4);
+      const yAt = (x) => Math.round(122 - 8 * Math.sin((x / w) * Math.PI * 4) - 5 * Math.sin((x / w) * Math.PI * 10 + 1));
+      for (let x = 0; x < w; x++) { const y = yAt(x); ctx.fillStyle = top; ctx.fillRect(x, y, 1, World.H); ctx.fillStyle = shade; ctx.fillRect(x, y + 6, 1, World.H); }
+      for (let x = 4; x < w; x += 7 + Math.floor(r() * 6)) {
+        const y = yAt(x) - 3 + Math.floor(r() * 4);
+        ctx.fillStyle = shade; ctx.fillRect(x - 2, y - 3, 5, 4); ctx.fillRect(x - 1, y - 5, 3, 2); ctx.fillRect(x, y + 1, 1, 2);
+      }
+      layers.set(key, c);
+    }
+    return layers.get(key);
+  }
+
+  // A soft round puff of smoke: a light disc over a darker one shifted down and right.
+  function puff(ctx, x, y, rad, alpha) {
+    ctx.globalAlpha = alpha;
+    for (const [colour, d] of [[C.silver, 1], [C.white, 0]]) {
+      ctx.fillStyle = colour;
+      for (let j = -rad; j <= rad; j++) { const half = Math.round(Math.sqrt(rad * rad - j * j)); ctx.fillRect(x + d - half, y + d + j, half * 2, 1); }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function sky(ctx, vw, camX, s, t) {
+    const band = (World.BASE - World.TOP) / s.bands.length;
+    s.bands.forEach((c, i) => { ctx.fillStyle = c; ctx.fillRect(0, Math.floor(World.TOP + i * band), vw, Math.ceil(band) + 1); });
+    if (s.dark > .3) {
+      const r = Gfx.rnd(17);
+      for (let i = 0; i < 60; i++) {
+        const x = Math.floor(((r() * 1600 - camX * .05) % vw + vw) % vw), y = Math.floor(r() * 80);
+        ctx.fillStyle = (Math.floor(t / 600) + i) % 7 ? C.white : C.lavender; ctx.fillRect(x, y, 1, 1);
+      }
+    }
+    const day = s.h >= 6 && s.h < 19.5;
+    const k = day ? (s.h - 6) / 13.5 : ((s.h + 4.5) % 24) / 10.5;
+    const bx = Math.round(vw * (.12 + .76 * k)), by = Math.round(80 - Math.sin(k * Math.PI) * 42);
+    const clouds = cloudLayer(s.cloud[0], s.cloud[1]);
+    const cx = -(((camX * .15 + t / 400) % clouds.width + clouds.width) % clouds.width);
+    for (let x = cx; x < vw; x += clouds.width) ctx.drawImage(clouds, Math.round(x), 0);
+    ctx.fillStyle = day ? C.yellow : C.white;
+    ctx.fillRect(bx - 4, by - 6, 8, 12); ctx.fillRect(bx - 6, by - 4, 12, 8);
+    if (!day) { ctx.fillStyle = s.bands[0]; ctx.fillRect(bx - 1, by - 6, 7, 8); }
+    for (const [layer, f] of [[mountains(s.far), .12], [hills(s.far), .3]]) {
+      const fx = -((camX * f) % layer.width);
+      for (let x = fx; x < vw; x += layer.width) ctx.drawImage(layer, Math.round(x), 0);
+    }
+  }
+
+  function draw(ctx, layer, view, t, jobs, colourOf, numberOf) {
+    const { vw, camX } = view;
+    const s = Sky.at(view.hours);
+    ctx.save();
+    ctx.translate(0, -World.TOP);
+    sky(ctx, vw, camX, s, t);
+    ctx.save();
+    ctx.translate(-Math.round(camX), 0);
+    const land = Land.visible(camX, camX + vw);
+    land.forEach((piece) => ctx.drawImage(piece.canvas, piece.x, World.TOP));
+    ctx.drawImage(layer, 0, World.TOP);
+    if (s.dark > .02) { ctx.fillStyle = C.yellow; World.WINDOWS.forEach(([x, y, w, h], i) => { if ((i * 7) % 5 < 3) ctx.fillRect(x, y, w, h); }); }
+
+    const [gx, gy, gw, gh] = World.FORGE_GLOW;
+    ctx.fillStyle = Math.floor(t / 160) % 2 ? C.orange : C.yellow; ctx.fillRect(gx + 3, gy + 6, gw - 6, gh - 6);
+    for (const [sx, sy, n] of [[...World.FORGE_SMOKE, 4], ...World.CHIMNEYS.map(([x, y]) => [x, y, 3])]) {
+      for (let i = 0; i < n; i++) {
+        const k = ((t / 2800) + i / n + sx / 97) % 1;
+        puff(ctx, Math.round(sx + Math.sin(k * 5 + i) * 2 + k * 8), Math.round(sy - k * 26), 1 + Math.round(k * 3.5), k < .7 ? 1 : (1 - k) / .3);
+      }
+    }
+    chickens(ctx, t);
+    land.forEach((piece) => piece.anims.forEach((a) => countryside(ctx, a, t)));
+
+    const hits = [];
+    jobs.filter((j) => j.stage === "queued").slice(0, 6).forEach((j, i) => {
+      const x = World.BOARD + 1 + (i % 3) * 7, y = World.BASE - 24 + Math.floor(i / 3) * 7;
+      ctx.fillStyle = C.white; ctx.fillRect(x, y, 6, 6); ctx.fillStyle = colourOf(j.id); ctx.fillRect(x + 2, y, 2, 2);
+      ctx.fillStyle = C.silver; ctx.fillRect(x + 1, y + 3, 4, 1);
+      hits.push({ x0: x, y0: y, x1: x + 6, y1: y + 6, job: j.id, label: `Queued · ${numberOf(j.id)} ${j.title || ""}` });
+    });
+
+    // A covered cart per open PR, waiting outside the coaching inn to carry it off.
+    const carts = jobs.filter((j) => (j.pipeline || []).some((st) => st.key === "pr" && ["active", "waiting"].includes(st.status)));
+    carts.slice(0, World.CARTS.length).forEach((j, i) => {
+      const x = World.CARTS[i], y = World.GROUND;
+      ctx.fillStyle = C.black; ctx.fillRect(x - 14, y - 26, 28, 18); ctx.fillRect(x - 15, y - 12, 30, 7);
+      ctx.fillStyle = C.cream; ctx.fillRect(x - 13, y - 25, 26, 14); ctx.fillStyle = C.tan; ctx.fillRect(x - 13, y - 14, 26, 2); ctx.fillRect(x + 7, y - 25, 6, 12);
+      for (const k of [-6, 0, 6]) { ctx.fillStyle = C.tan; ctx.fillRect(x + k, y - 25, 1, 12); }
+      ctx.fillStyle = C.brown; ctx.fillRect(x - 14, y - 11, 28, 5); ctx.fillStyle = C.rust; ctx.fillRect(x - 14, y - 7, 28, 1);
+      for (const wx of [x - 8, x + 8]) {
+        ctx.fillStyle = C.black; ctx.fillRect(wx - 4, y - 8, 8, 8); ctx.fillRect(wx - 3, y - 9, 6, 10);
+        ctx.fillStyle = C.brown; ctx.fillRect(wx - 3, y - 7, 6, 6); ctx.fillRect(wx - 2, y - 8, 4, 8);
+        ctx.fillStyle = C.rust; ctx.fillRect(wx - 1, y - 5, 2, 2);
+      }
+      ctx.fillStyle = colourOf(j.id); ctx.fillRect(x - 12, y - 22, 6, 4);
+      hits.push({ x0: x - 15, y0: y - 26, x1: x + 15, y1: y, job: j.id, label: `PR · ${numberOf(j.id)} ${j.title || ""}` });
+    });
+
+    const F = Chars.FOOT, G = World.GROUND;
+    const speed = { walk: 150, hammer: 260, sweep: 300, read: 700, cheer: 300, angry: 200, call: 500, idle: 900 };
+    const at = (poseName) => Math.floor(t / (speed[poseName] || 700));
+
+    // The street is the backdrop: everyone works where their job is, but what it means is on the cards.
+    for (const a of Village.all()) {
+      const x = Math.round(a.x), moving = Village.walking(a);
+      const poseName = moving ? "walk" : a.pose, dir = moving ? a.dir : a.face;
+      ctx.drawImage(Chars.frame(a.role, dir || "right", poseName, at(poseName), a.mood), x - F.x, G - F.y);
+      if (!moving && a.pose === "hammer" && at("hammer") % 2) {
+        ctx.fillStyle = C.yellow; [[10, -10], [12, -13], [14, -8]].forEach(([dx, dy]) => ctx.fillRect(x + (dir === "left" ? -dx : dx), G + dy, 1, 1));
+      }
+      const job = jobs.find((j) => j.id === a.job);
+      hits.push({ x0: x - 7, y0: G - 24, x1: x + 7, y1: G, job: a.job,
+                  label: `${Chars.name(a.role)} · ${a.role}` + (job ? ` — ${numberOf(job.id)} ${job.title || ""}` : " — free") });
+    }
+    ctx.restore();
+    weather(ctx, vw, t, s);
+    if (s.dark > .02) light(ctx, view, s.dark, t);
+    ctx.restore();
+    return hits;
+  }
+
+  // Life in the countryside: the windmill's sails, cows and sheep grazing along the fence, ducks.
+  function countryside(ctx, a, t) {
+    const G = World.BASE, put = (c, x, y, w, h) => { ctx.fillStyle = C[c] || c; ctx.fillRect(Math.round(x), Math.round(y), w, h); };
+    if (a.kind === "mill") {
+      const turn = t / 1800;
+      for (let k = 0; k < 4; k++) {
+        const ang = turn + (k * Math.PI) / 2, dx = Math.cos(ang), dy = Math.sin(ang), px = -dy, py = dx;
+        for (let s = 2; s <= 26; s++) {
+          put("black", a.x + dx * s, a.y + dy * s, 1, 1);
+          if (s > 6) for (let w = 1; w <= 4; w++) put(s % 4 === 0 || w === 4 ? "brown" : "white", a.x + dx * s + px * w, a.y + dy * s + py * w, 1, 1);
+        }
+      }
+      put("black", a.x - 2, a.y - 2, 5, 5); put("rust", a.x - 1, a.y - 1, 3, 3);
+      return;
+    }
+    const swing = Math.sin(t / 9000 + a.seed), x = Math.round(a.x + swing * a.range), right = Math.cos(t / 9000 + a.seed) > 0;
+    const head = (dx) => x + (right ? dx : -dx), graze = Math.floor(t / 700 + a.seed * 3) % 3 === 0;
+    if (a.kind === "cow") {
+      put("black", x - 8, G - 15, 16, 8); put("white", x - 7, G - 14, 14, 6);
+      put("black", x - 4, G - 14, 4, 3); put("black", x + 3, G - 12, 3, 2);
+      for (const lx of [-6, -3, 3, 5]) put("black", x + lx, G - 7, 1, 5);
+      const hy = graze ? G - 11 : G - 16;
+      put("black", head(8) - (right ? 0 : 5), hy, 6, 6); put("white", head(9) - (right ? 0 : 4), hy + 1, 4, 4); put("pink", head(11) - (right ? 0 : 2), hy + 3, 2, 2);
+      put("black", head(8) - (right ? 0 : 1), hy - 1, 1, 1);
+    } else if (a.kind === "sheep") {
+      put("black", x - 6, G - 11, 12, 7); put("white", x - 5, G - 12, 10, 7); put("silver", x - 5, G - 7, 10, 1);
+      for (const lx of [-4, -1, 2, 4]) put("black", x + lx, G - 5, 1, 4);
+      const hy = graze ? G - 8 : G - 12;
+      put("black", head(5) - (right ? 0 : 3), hy, 4, 4); put("ash", head(6) - (right ? 0 : 2), hy + 1, 2, 2);
+    } else if (a.kind === "duck") {
+      const y = G - 6 + (Math.floor(t / 500 + a.seed) % 2);
+      put("black", x - 3, y - 4, 7, 5); put("white", x - 2, y - 3, 5, 3); put("black", head(2) - (right ? 0 : 2), y - 6, 3, 3);
+      put("jade", head(2) - (right ? 0 : 1), y - 5, 2, 2); put("orange", head(4) - (right ? 0 : 1), y - 4, 1, 1);
+    }
+  }
+
+  // Three chickens wandering the sidewalk, now and then pecking.
+  const hens = new Map();
+  function hen(peck, left) {
+    const key = `${peck}${left}`;
+    if (!hens.has(key)) {
+      const g = Gfx.grid(10, 9, 1, 1);
+      g.rect(1, 3, 6, 3, "white"); g.rect(2, 2, 4, 1, "white"); g.rect(0, 2, 2, 2, "white");
+      if (peck) { g.rect(6, 4, 2, 2, "white"); g.set(8, 5, "orange"); g.set(6, 3, "red"); }
+      else { g.rect(5, 0, 2, 3, "white"); g.set(7, 1, "orange"); g.set(5, -1, "red"); g.set(6, -1, "red"); g.set(6, 1, "black"); }
+      g.set(3, 6, "orange"); g.set(5, 6, "orange");
+      const c = Gfx.canvas(10, 9);
+      Gfx.paint(c.getContext("2d"), g, { white: "white", orange: "orange", red: "red", black: "black" }, 0, 0, left);
+      hens.set(key, c);
+    }
+    return hens.get(key);
+  }
+  function chickens(ctx, t) {
+    [[48, 0], [96, 2], [312, 4]].forEach(([base, seed]) => {
+      const k = t / 4000 + seed, x = Math.round(base + Math.sin(k) * 16);
+      const peck = Math.abs(Math.cos(k)) < .25 && Math.floor(t / 300 + seed) % 2 === 0;
+      ctx.drawImage(hen(peck, Math.cos(k) < 0), x - 5, World.GROUND - 8);
+    });
+  }
+
+  // Birds crossing the sky, and the season's petals, leaves or snow drifting down in front of it all.
+  function weather(ctx, vw, t, s) {
+    if (s.dark < .3) {
+      ctx.fillStyle = C.black;
+      for (let i = 0; i < 3; i++) {
+        const x = Math.round(((t / 30 + i * 260) % (vw + 120)) - 60), y = Math.round(40 + i * 9 + Math.sin(t / 700 + i) * 4);
+        const up = Math.floor(t / 220 + i) % 2;
+        [[0, up ? -1 : 0], [1, 0], [2, 1], [3, 0], [4, up ? -1 : 0]].forEach(([dx, dy]) => ctx.fillRect(x + dx, y + dy, 1, 1));
+      }
+    }
+    const fall = { spring: [C.pink, C.white], autumn: [C.amber, C.orange, C.rust], winter: [C.white, C.white, C.silver] }[Season];
+    if (fall) {
+      for (let i = 0; i < 36; i++) {
+        const speed = Season === "winter" ? 14 + (i % 4) * 4 : 18 + (i % 5) * 5;
+        const y = ((i * 53 + t / 1000 * speed) % (World.VH + 10)) - 5 + World.TOP;
+        const x = ((i * 97 + Math.sin(t / 900 + i) * 12 - t / 1000 * (Season === "winter" ? 4 : 12)) % (vw + 20) + vw + 20) % (vw + 20) - 10;
+        ctx.fillStyle = fall[i % fall.length];
+        ctx.fillRect(Math.round(x), Math.round(y), Season === "winter" ? 1 : 2, 1);
+      }
+    } else if (s.dark > .3) {
+      for (let i = 0; i < 14; i++) {
+        if ((Math.floor(t / 400) + i) % 3) continue;
+        ctx.fillStyle = C.yellow;
+        ctx.fillRect(Math.round((i * 131) % vw + Math.sin(t / 800 + i) * 6), Math.round(100 + (i * 17) % 40 + Math.cos(t / 600 + i) * 4), 1, 1);
+      }
+    }
+  }
+
+  // Night: darkness over the view with stepped pools of light around lamps, lit windows and the forge.
+  let shade = null;
+  function light(ctx, view, dark, t) {
+    if (!shade || shade.width !== view.vw) shade = Gfx.canvas(view.vw, World.VH);
+    const c = shade.getContext("2d");
+    c.globalCompositeOperation = "source-over";
+    c.clearRect(0, 0, shade.width, shade.height);
+    c.fillStyle = `rgba(10,12,40,${dark})`; c.fillRect(0, 0, shade.width, shade.height);
+    c.globalCompositeOperation = "destination-out";
+    const pools = [...World.LAMPS.map(([x, y]) => [x, y, 30]), [165, 128, 30],
+                   ...World.WINDOWS.filter((_, i) => (i * 7) % 5 < 3).map(([x, y, w, h]) => [x + w / 2, y + h / 2, 10])];
+    for (const [x, y, r] of pools) {
+      const sx = x - view.camX;
+      if (sx < -r || sx > view.vw + r) continue;
+      for (const [k, a] of [[1, .3], [.65, .35], [.35, .35]]) {
+        c.fillStyle = `rgba(0,0,0,${a})`;
+        const rr = Math.round(r * k + (Math.floor(t / 300 + x) % 2));
+        c.fillRect(Math.round(sx - rr), Math.round(y - World.TOP - rr), rr * 2, rr * 2);
+      }
+    }
+    ctx.drawImage(shade, 0, World.TOP);
+  }
+
+  // A job's crew for its window: the same figures, poses and marks as in the street, side by side.
+  const CREW_STEP = 16, CREW_H = 40;
+  function crew(canvas, jobId, t) {
+    const members = Village.all().filter((a) => a.job === jobId && !a.leaving).sort((p, q) => p.x - q.x);
+    const ctx = canvas.getContext("2d"), F = Chars.FOOT, speed = { walk: 150, hammer: 260, sweep: 300, read: 700, cheer: 300, angry: 200, call: 500, idle: 900 };
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = C.tan; ctx.fillRect(0, CREW_H - 3, canvas.width, 1);
+    members.forEach((a, i) => {
+      const moving = Village.walking(a), poseName = moving ? "walk" : a.pose, x = 12 + i * CREW_STEP;
+      ctx.drawImage(Chars.frame(a.role, (moving ? a.dir : a.face) || "right", poseName, Math.floor(t / (speed[poseName] || 700)), a.mood), x - F.x, CREW_H - 2 - F.y);
+      if (a.mark && !moving) ctx.drawImage(bubble(a.mark), x - 5, 1 + (Math.floor(t / 500) % 2));
+    });
+  }
+  const crewWidth = (n) => 24 + Math.max(0, n - 1) * CREW_STEP;
+
+  return { draw, crew, crewWidth, CREW_H };
+})();
+
 (() => {
   const params = new URLSearchParams(location.search);
   let token = params.get("token");
@@ -160,17 +1347,17 @@
     else token = sessionStorage.getItem("factory-token");
   } catch (e) { /* storage unavailable: keep the token in memory only */ }
 
-  const GROUPS = [
-    ["Can't read", ["unknown"]], ["Needs you", ["needs-human"]],
-    ["Working", ["starting", "building", "reviewing", "rebasing", "merging"]],
-    ["Waiting for merge", ["pr-open"]], ["Queued", ["queued"]],
-  ];
   const FINISHED = ["merged", "done", "cancelled"];
+  const ACTIVE = { unknown: 0, "needs-human": 1, starting: 2, building: 2, reviewing: 2, rebasing: 2, merging: 2, "pr-open": 3 };
+  const JOB_COLOURS = ["red", "blue", "orange", "pink", "jade", "amber", "lavender", "cobalt"].map((n) => Gfx.C[n]);
   const STATUS_TEXT = { done: "done", active: "in progress", waiting: "waiting", blocked: "stopped",
                         skipped: "skipped", pending: "not started" };
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-  let board = { jobs: [] }, openJob = null, openStage = null, openFiles = "", sending = false, pending = false;
+  const T = Font.text;
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let board = { jobs: [] }, openJob = null, openStage = null, openFiles = "", sending = false, pending = false, drawn = "";
+  let hits = [], layer = null, first = true;
 
   async function api(path, opts = {}) {
     const res = await fetch(path, { ...opts, headers: { "X-Factory-Token": token || "", ...(opts.headers || {}) } });
@@ -183,64 +1370,190 @@
     return min < 60 ? `${min} min` : `${Math.floor(min / 60)} h ${min % 60} min`;
   }
 
-  function step(st) {
-    const detail = [st.detail, st.since ? ago(st.since) : ""].filter(Boolean).join(" · ");
-    const revs = (st.reviewers || []).map((r) =>
-      `<span class="chip ${esc(r.status)}" title="${esc(r.name)}: ${esc(r.status)}">${esc(r.name)}`
-      + `${r.status === "running" && r.since ? ` · ${esc(ago(r.since))}` : ""}</span>`).join("");
-    const current = ["active", "waiting", "blocked"].includes(st.status);
-    return `<li class="step ${esc(st.status)}"${current ? ` aria-current="step"` : ""}><span class="bar"></span>`
-      + `<span class="label">${esc(st.label)}<span class="sr"> — ${esc(STATUS_TEXT[st.status] || st.status)}</span></span>`
-      + (detail ? `<span class="detail">${esc(detail)}</span>` : "")
-      + (revs ? `<span class="revs">${revs}</span>` : "") + `</li>`;
+  const numberOf = (id) => String(id).match(/^\d+/)?.[0] || String(id).slice(0, 3);
+  const colourOf = (id) => JOB_COLOURS[(parseInt(numberOf(id), 10) || 0) % JOB_COLOURS.length];
+  const roster = () => ["builder", "tidy", ...(board.reviewers || []), "herald"];
+
+  // The status line a job's window leads with, and how loudly: for you, stopped, or just working.
+  function status(job) {
+    const steps = job.pipeline || [];
+    const cur = steps.find((s) => ["active", "waiting", "blocked"].includes(s.status)) || {};
+    const d = job.decision || {};
+    const reviewers = (steps.find((s) => s.key === "review") || {}).reviewers || [];
+    const since = cur.since || reviewers.find((r) => r.since)?.since;
+    if (job.stage === "unknown") return { text: "CAN'T READ", tone: "bad" };
+    if (d.kind === "question") return { text: "A QUESTION FOR YOU", tone: "you" };
+    if (d.kind === "stopped") return { text: "STOPPED", tone: "bad" };
+    if (cur.key === "approve") return { text: "READY FOR YOU", tone: "you" };
+    const detail = (cur.detail || "").toUpperCase();
+    const text = { start: "MAKING CAMP", build: ["BUILDING", detail].filter(Boolean).join(" · "), verify: "VERIFYING",
+                   tidy: "TIDYING", review: `REVIEWING ${reviewers.filter((r) => r.verdict).length}/${reviewers.length}`,
+                   pr: { "pr-open": "PR OPEN", rebasing: "REBASING", merging: "MERGING" }[job.stage] || "OPENING PR" }[cur.key];
+    return { text: text || job.stage.toUpperCase(), since };
   }
 
-  // A card is an article with one button, the title, that opens the job; a click anywhere on the card
-  // does the same. A button may hold only text, so the pipeline sits beside it, not inside it.
-  function card(job) {
-    const human = job.stage === "needs-human" || job.stage === "unknown";
-    return `<article class="card ${human ? "human" : ""}" data-id="${esc(job.id)}">
-      <div class="head"><button class="title" data-open="${esc(job.id)}">${esc(job.title || job.id)}</button>
-        <span class="id">${esc(job.id)}${job.round ? ` · round ${esc(job.round)}` : ""}</span></div>
-      <ol class="pipe" aria-label="Progress">${(job.pipeline || []).map(step).join("")}</ol>
-      ${job.reason ? `<div class="reason">${esc(job.reason)}</div>` : ""}</article>`;
+  const MOOD = (c) => c == null ? null : c >= 8 ? "happy" : c >= 5 ? null : "worried";
+  const faces = new Map();
+  function face(c) {
+    const mood = MOOD(c) || "neutral";
+    if (!faces.has(mood)) faces.set(mood, Chars.face("herald", mood === "neutral" ? null : mood));
+    return `<span class="mood"><img class="face" src="${faces.get(mood)}" alt="">confidence ${esc(c)}/10</span>`;
   }
 
-  function compact(job) {
-    return `<article class="card compact" data-id="${esc(job.id)}"><button class="title" data-open="${esc(job.id)}">`
-      + `${esc(job.title || job.id)}</button><span class="id">${esc(job.id)} · ${esc(job.stage)}</span>`
-      + ((job.waits_for || []).length ? `<span class="waits">waits for ${esc(job.waits_for.join(", "))}</span>` : "")
-      + `</article>`;
+  function summary(job) {
+    return (job.pipeline || []).map((st) => `${st.label}: ${STATUS_TEXT[st.status] || st.status}`
+      + (st.reviewers || []).map((r) => `, ${r.name} ${r.status}`).join("")).join("; ");
   }
 
-  function orchestratorNote(o) {
-    if (!o || o.state === "running") return "";
-    const text = o.state === "stale"
-      ? `orchestrator silent for ${ago(o.last_seen)} — it may have stopped; commands wait until it runs`
-      : "orchestrator not running — commands wait for /factory run";
-    return ` · <span class="stopping">${esc(text)}</span>`;
+  const crewCount = (job) => Village.all().filter((a) => a.job === job.id && !a.leaving).length;
+
+  function jobWindow(job) {
+    const s = status(job);
+    const tone = { you: "#c4471f", bad: "#b02a2a" }[s.tone] || "#5b2a12";
+    const reviewers = ((job.pipeline || []).find((st) => st.key === "review") || {}).reviewers || [];
+    const showCrew = ["REVIEWING", "STOPPED"].some((w) => s.text.startsWith(w)) && reviewers.length;
+    const mark = { PASS: "✓", CHANGES: "✗", running: "…", waiting: "·" };
+    return `<article class="win job ${s.tone || ""}" data-id="${esc(job.id)}">
+      <div class="job-head"><span class="swatch" style="background:${colourOf(job.id)}"></span>${T(numberOf(job.id), colourOf(job.id), 2)}
+        <button class="title" data-open="${esc(job.id)}">${esc(job.title || job.id)}</button></div>
+      <div class="line">${T(s.text, tone, 2)}${job.round > 1 ? T(`R${job.round}`, "#8a5a35", 2) : ""}${s.since ? `<span class="time">${esc(ago(s.since))}</span>` : ""}</div>
+      ${crewCount(job) ? `<canvas class="crew-art" data-job="${esc(job.id)}" width="${Scene.crewWidth(crewCount(job))}" height="${Scene.CREW_H}"
+        style="width:${Scene.crewWidth(crewCount(job)) * 2}px;height:${Scene.CREW_H * 2}px" aria-hidden="true"></canvas>` : ""}
+      ${showCrew ? `<div class="crew">${reviewers.map((r) => `<span class="${esc(r.status)}">${esc(r.name)} ${mark[r.status] || ""}</span>`).join("")}</div>` : ""}
+      ${job.confidence == null ? "" : crewCount(job) ? `<span class="mood">confidence ${esc(job.confidence)}/10</span>` : face(job.confidence)}
+      <p class="sr">${esc(summary(job))}</p>
+      ${job.reason ? `<p class="reason">${esc(job.reason)}</p>` : ""}</article>`;
   }
 
-  function render() {
+  function listItem(job, extra) {
+    return `<article class="job" data-id="${esc(job.id)}"><div class="job-head"><span class="swatch" style="background:${colourOf(job.id)}"></span>`
+      + `${T(numberOf(job.id), colourOf(job.id), 2)}<button class="title" data-open="${esc(job.id)}">${esc(job.title || job.id)}</button></div>`
+      + (extra ? `<p class="reason">${extra}</p>` : "") + `</article>`;
+  }
+
+  function renderPanel() {
     const jobs = board.jobs || [];
+    const active = jobs.filter((j) => j.stage in ACTIVE).sort((a, b) => ACTIVE[a.stage] - ACTIVE[b.stage]);
+    const queued = jobs.filter((j) => j.stage === "queued");
     const finished = jobs.filter((j) => FINISHED.includes(j.stage));
-    const finishedOpen = !!document.querySelector("details.group[open]");
-    $("groups").innerHTML = GROUPS.map(([label, stages]) => {
-      const items = jobs.filter((j) => stages.includes(j.stage));
-      if (!items.length) return "";
-      const draw = stages.includes("queued") ? compact : card;
-      return `<section class="group"><h2>${label} · ${items.length}</h2>${items.map(draw).join("")}</section>`;
-    }).join("")
-      + (finished.length ? `<details class="group"${finishedOpen ? " open" : ""}><summary>Finished · ${finished.length}</summary>${finished.map(compact).join("")}</details>` : "")
-      + (jobs.length ? "" : `<div class="empty">No jobs yet. Queue one with /factory add.</div>`);
+    const hall = document.querySelector("details.hall");
+    const hallOpen = hall ? hall.open : true;
+    const LANES = [["NEEDS YOU", ["unknown", "needs-human"]], ["IN PROGRESS", ["starting", "building", "reviewing", "rebasing", "merging"]],
+                   ["WAITING FOR MERGE", ["pr-open"]]];
+    const cards = LANES.map(([title, stages]) => {
+      const lane = active.filter((j) => stages.includes(j.stage));
+      return `<section class="lane" aria-label="${title.toLowerCase()}"><h2>${T(`${title} · ${lane.length}`, "#fbe2b0", 2, "#5b2a12")}</h2>`
+        + (lane.length ? lane.map(jobWindow).join("") : `<p class="lane-empty">${title === "IN PROGRESS" && !jobs.length ? "No jobs yet. Queue one with /factory add." : "Nothing here."}</p>`)
+        + `</section>`;
+    }).join("");
+    const side = `<section class="win" aria-label="Quest board: queued jobs"><h2>${T("QUEST BOARD", "#5b2a12", 2)}</h2>`
+      + (queued.length ? queued.map((j) => listItem(j, (j.waits_for || []).length ? `after ${esc(j.waits_for.join(", "))}` : "")).join("")
+                       : `<p class="empty">No quests posted.</p>`) + `</section>`
+      + `<details class="win hall"${hallOpen ? " open" : ""}><summary>${T(`HALL OF FAME · ${finished.length}`, "#5b2a12", 2)}</summary>`
+      + (finished.length ? finished.map((j) => listItem(j, `${esc(j.stage)}${j.confidence != null ? ` · confidence ${esc(j.confidence)}/10` : ""}`)).join("")
+                         : `<p class="empty">Nothing finished yet.</p>`) + `</details>`;
+    if (cards + side === drawn) return;
+    drawn = cards + side;
+    $("cards").innerHTML = cards;
+    $("side").innerHTML = side;
+    document.querySelectorAll("#cards [data-id], #side [data-id]").forEach((el) => el.addEventListener("click", (e) => { e.stopPropagation(); open(el.dataset.id); }));
+  }
+
+  // The camera: dragged or scrolled by hand, and otherwise drawn to whatever just started to need you.
+  const canvas = $("map"), ctx = canvas.getContext("2d");
+  const view = { vw: 400, scale: 3, camX: 0, target: 0, touched: 0, hours: 12 };
+  // The village stays centred when the view is wider than it; the countryside fills the rest, and a
+  // narrower view scrolls a little way into the fields on either side.
+  const SPAN = Land.CH * 3;
+  const clampCam = (x) => view.vw >= World.W ? (World.W - view.vw) / 2 : Math.max(-SPAN, Math.min(World.W + SPAN - view.vw, x));
+  function focus(x, force) {
+    if (!force && Date.now() - view.touched < 20000) return;
+    view.target = clampCam(x - view.vw / 2);
+  }
+  // Pixels keep one size, 1.5× on a retina screen (three device pixels each, also when the browser is
+  // zoomed out a little) and 1× otherwise; a wider screen shows more countryside, not a bigger village.
+  function fit() {
+    const width = canvas.parentElement.clientWidth;
+    view.scale = Math.round(devicePixelRatio || 1) >= 2 ? 1.5 : 1;
+    view.vw = Math.ceil(width / view.scale);
+    canvas.width = view.vw; canvas.height = World.VH;
+    canvas.style.width = `${view.vw * view.scale}px`;
+    canvas.style.height = `${World.VH * view.scale}px`;
+    view.camX = view.target = clampCam(view.camX);
+  }
+
+  let seen = new Set();
+  function render() {
+    const active = (board.jobs || []).filter((j) => j.stage in ACTIVE);
+    const arrivals = Village.update(active, roster(), first || still);
+    const calling = active.filter((j) => (j.decision || {}).kind).map((j) => j.id);
+    const fresh = calling.filter((id) => !seen.has(id));
+    if (first) view.camX = view.target = clampCam((calling.length ? World.HALL : arrivals[0]?.x ?? 200) - view.vw / 2);
+    else if (fresh.length) focus(World.HALL);
+    else if (arrivals.length) focus(arrivals[arrivals.length - 1].x);
+    seen = new Set(calling);
+    first = false;
+    renderPanel();
+    const o = board.orchestrator || {};
+    const gm = o.state === "running" ? "" : o.state === "stale"
+      ? ` · <span class="warn">orchestrator silent for ${esc(ago(o.last_seen))} — it may have stopped; commands wait until it runs</span>`
+      : ` · <span class="warn">orchestrator not running — commands wait for /factory run</span>`;
     const when = board.updated_at ? new Date(board.updated_at).toLocaleTimeString() : "never";
     $("meta").innerHTML = `${esc(board.target || "")} · ${esc(board.merge_mode || "")} · updated ${esc(when)}`
-      + (board.stopping ? ` · <span class="stopping">stopping after the current job</span>` : "")
-      + orchestratorNote(board.orchestrator)
-      + (board.stale ? ` · <span class="stopping">showing the last saved board — ${esc(board.stale)}</span>` : "")
+      + (board.stopping ? ` · <span class="warn">stopping after the current job</span>` : "") + gm
+      + (board.stale ? ` · <span class="warn">showing the last saved board — ${esc(board.stale)}</span>` : "")
       + (board.note ? ` · ${esc(board.note)}` : "");
-    document.querySelectorAll(".card").forEach((el) => el.addEventListener("click", () => open(el.dataset.id)));
+    if (still) frame(0);
   }
+
+  let last = performance.now();
+  function frame(now) {
+    if (!layer) layer = World.staticLayer();
+    if (now) { Village.step(Math.min(.1, (now - last) / 1000)); last = now; }
+    view.camX += (view.target - view.camX) * .08;
+    const d = new Date();
+    view.hours = d.getHours() + d.getMinutes() / 60;
+    hits = Scene.draw(ctx, layer, view, still ? 0 : now || 0, board.jobs || [], colourOf, numberOf);
+    document.querySelectorAll("canvas.crew-art").forEach((c) => Scene.crew(c, c.dataset.job, still ? 0 : now || 0));
+    if (!still) requestAnimationFrame(frame);
+  }
+
+  const toWorld = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    return [((e.clientX - rect.left) / rect.width) * view.vw + view.camX, ((e.clientY - rect.top) / rect.height) * World.VH + World.TOP];
+  };
+  const hitAt = (e) => { const [x, y] = toWorld(e); return hits.slice().reverse().find((h) => x >= h.x0 && x <= h.x1 && y >= h.y0 && y <= h.y1); };
+  let drag = null;
+  canvas.addEventListener("pointerdown", (e) => { drag = { x: e.clientX, cam: view.camX, moved: false }; canvas.setPointerCapture(e.pointerId); });
+  canvas.addEventListener("pointermove", (e) => {
+    if (drag) {
+      const dx = (e.clientX - drag.x) / (canvas.getBoundingClientRect().width / view.vw);
+      if (Math.abs(dx) > 3) { drag.moved = true; canvas.classList.add("dragging"); }
+      if (drag.moved) { view.camX = view.target = clampCam(drag.cam - dx); view.touched = Date.now(); $("tip").hidden = true; return; }
+    }
+    const h = hitAt(e), tip = $("tip");
+    canvas.classList.toggle("pointing", !!(h && h.job));
+    if (!h) { tip.hidden = true; return; }
+    tip.textContent = h.label;
+    tip.hidden = false;
+    const wrap = canvas.parentElement.getBoundingClientRect();
+    tip.style.left = `${Math.min(e.clientX - wrap.left + 14, wrap.width - 290)}px`;
+    tip.style.top = `${e.clientY - wrap.top + 14}px`;
+  });
+  canvas.addEventListener("pointerup", (e) => {
+    const wasDrag = drag && drag.moved;
+    drag = null; canvas.classList.remove("dragging");
+    if (!wasDrag) { const h = hitAt(e); if (h && h.job) open(h.job); }
+  });
+  canvas.addEventListener("mouseleave", () => { $("tip").hidden = true; });
+  canvas.addEventListener("wheel", (e) => {
+    const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.shiftKey ? e.deltaY : 0;
+    if (!d) return;
+    e.preventDefault();
+    view.camX = view.target = clampCam(view.camX + d / view.scale);
+    view.touched = Date.now();
+  }, { passive: false });
+  new ResizeObserver(fit).observe(canvas.parentElement);
 
   function markdown(src) {
     const lines = esc(src).split("\n"); const out = []; let list = false, code = false, table = false;
@@ -306,6 +1619,7 @@
       const least = (d.least_sure || []).map((l) => `<li>${markdown(l).replace(/^<p>|<\/p>$/g, "")}</li>`).join("");
       return { html: `<h3>Ready for your approval</h3>${d.summary ? `<div class="ctx">${markdown(d.summary)}</div>` : ""}`
         + checksLine(d.checks)
+        + (job.confidence != null ? `<p class="note">The reviewer's confidence: ${esc(job.confidence)}/10</p>` : "")
         + (least ? `<p class="lead">Check before you approve — the reviewer is least sure of:</p><ol class="least">${least}</ol>`
                  : `<p class="note">The reviewer named nothing it is unsure of.</p>`)
         + ((d.exemptions || []).length ? `<p class="lead">Not covered by an automated test — check by hand:</p><ul class="least">`
@@ -433,6 +1747,7 @@
     loadCommands(job.id);
   }
 
+  $("title").innerHTML = T("FACTORY QUEST", "#ffd75e", 3, "#5b2a12");
   $("dlg-close").addEventListener("click", () => $("dlg").close());
   $("dlg").addEventListener("close", () => { openJob = null; });
 
@@ -446,6 +1761,8 @@
     }
   }
   if (!token) { $("meta").innerHTML = `<span class="error">Open the URL the server printed; it carries the token.</span>`; return; }
+  fit();
+  if (!still) requestAnimationFrame(frame);
   refresh();
   setInterval(refresh, 3000);
 })();
