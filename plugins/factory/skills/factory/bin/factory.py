@@ -10,6 +10,7 @@ import argparse
 import json
 import os
 import sys
+from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -188,6 +189,15 @@ def cmd_wait(a, p):
     return actions.wait(p, a.timeout)
 
 
+def cmd_dashboard(a, p):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("factory_server", Path(__file__).resolve().parent.parent / "server.py")
+    server = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(server)
+    server.run(p, a.port)
+    return {"dashboard": "stopped"}
+
+
 def cmd_run(a, p):
     if a.action == "list":
         cfg = _cfg(p)
@@ -316,6 +326,8 @@ def parser():
         ).add_argument("--lease", required=True)
     add("wait", cmd_wait, "block until an inbox command is pending or the timeout passes (next said wait)"
         ).add_argument("--timeout", type=int, default=actions.WAIT_SECONDS)
+    add("dashboard", cmd_dashboard, "serve the dashboard on 127.0.0.1 until stopped; prints its URL first"
+        ).add_argument("--port", type=int, default=0)
     sp = add("run", cmd_run, "list agent runs, end or abort one, or reset a recorded binding failure")
     sp.add_argument("action", choices=["list", "end", "abort", "binding-reset"])
     sp.add_argument("run", nargs="?")

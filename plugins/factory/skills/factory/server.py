@@ -162,8 +162,12 @@ def serve(paths, port=0, token=None):
 def main():
     ap = argparse.ArgumentParser(description="Factory dashboard on 127.0.0.1")
     ap.add_argument("--port", type=int, default=0, help="port (default: a free one)")
-    args = ap.parse_args()
-    httpd, token, port = serve(Paths(), args.port)
+    run(Paths(), ap.parse_args().port)
+
+
+def run(paths, port=0):
+    """Serves until interrupted; `factory-dashboard` and `factory-cli dashboard` both end up here."""
+    httpd, token, port = serve(paths, port)
     print(f"Factory dashboard: http://127.0.0.1:{port}/?token={token}", flush=True)
     print("Ctrl-C to stop. Anyone with this URL can queue approve/rework/cancel commands.", flush=True)
     try:

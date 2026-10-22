@@ -29,8 +29,11 @@ is bound to the job its brief names. A failure or a wait in one job never holds 
    `--takeover` (allowed once the lease is stale) or `--takeover --force`. Never take over on your own.
 2. `F stop --clear`, then `F board`. Check `factory/project.md` exists; if not, stop and point to
    `/factory init`.
-3. Arm the inbox watch (see **Inbox**), then process any pending inbox commands.
-4. **Agents from before** — `F run list`. A live run left by an earlier session holds its work, and
+3. **Dashboard** — run `F dashboard` with the Bash tool in the background (`run_in_background`). Read
+   its output file once for the line `Factory dashboard: http://127.0.0.1:…/?token=…` and give the
+   human that URL. It serves until this session ends; don't start a second one in the same run.
+4. Arm the inbox watch (see **Inbox**), then process any pending inbox commands.
+5. **Agents from before** — `F run list`. A live run left by an earlier session holds its work, and
    state says `wait-agent` for it until it ends or goes silent. If the human confirms that session
    and its agents are gone, `F run abort <run>` frees the work now; never abort on your own guess.
 

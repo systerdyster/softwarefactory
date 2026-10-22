@@ -48,6 +48,26 @@ class ServerTest(SandboxTest):
         self.assertEqual((status, card["id"], card["stage"]), (200, self.job, "queued"))
         self.assertEqual([s["key"] for s in card["pipeline"]], ["start", "build", "verify", "tidy", "review", "approve", "pr"])
 
+    def test_factory_cli_dashboard_serves_and_prints_its_url_first(self):
+        import os
+        import subprocess
+        import sys
+        cli = Path(__file__).resolve().parents[1] / "factory.py"
+        proc = subprocess.Popen([sys.executable, str(cli), "dashboard"], stdout=subprocess.PIPE, text=True,
+                                env=dict(os.environ, FACTORY_ROOT=str(self.paths.root)))
+        try:
+            url = proc.stdout.readline().strip().split(": ", 1)[1]
+            port, token = url.split(":")[2].split("/")[0], url.split("token=")[1]
+            conn = http.client.HTTPConnection("127.0.0.1", int(port), timeout=5)
+            conn.request("GET", "/board.json", headers={"X-Factory-Token": token})
+            res = conn.getresponse()
+            self.assertEqual((res.status, json.loads(res.read())["jobs"][0]["id"]), (200, self.job))
+            conn.close()
+        finally:
+            proc.terminate()
+            proc.wait(timeout=5)
+            proc.stdout.close()
+
     def test_a_foreign_host_header_is_refused(self):
         self.assertEqual(self.request("GET", "/", headers={"Host": "evil.example"})[0], 403)
 
