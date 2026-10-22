@@ -15,8 +15,8 @@ One skill, two kinds of session:
 - **Intake** — `/factory add`: an interactive session where a developer frames one case with you and
   approves a spec and a plan. It ends by queueing the job. Any number may run, also while the factory
   is building.
-- **Orchestrator** — `/factory run`: one session (it holds a lease) that builds queued jobs, up to two
-  at once, each in its own worktree, spawning every agent. It is the only writer of `factory/board.json` and the only session that pushes.
+- **Orchestrator** — `/factory run`: one session (it holds a lease) that builds queued jobs, up to
+  `[factory] parallel` at once, each in its own worktree, spawning every agent. It is the only writer of `factory/board.json` and the only session that pushes.
 
 The factory is a plugin. Its machinery is `factory-cli`, which the plugin puts on PATH (Python
 standard library only; every command prints JSON and exits non-zero on failure). Below, `F` means

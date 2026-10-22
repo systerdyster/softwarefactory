@@ -7,7 +7,7 @@ metadata:
 
 # /factory run — the orchestrator
 
-You build queued jobs — up to two at once (`[factory] parallel`) — until the queue is empty and every
+You build queued jobs — up to `[factory] parallel` at once — until the queue is empty and every
 job is finished: a job waiting for the developer's approval or for its PR keeps the run going. You
 spawn every agent, you are the only writer of `factory/board.json`, and you are the only session that
 pushes. Run this session on sonnet (`claude --model sonnet`); if it isn't, say so once and continue.
@@ -48,7 +48,7 @@ Repeat:
    that moved under an open PR makes it `rebase`, and the job takes the next free slot.
 3. **Pick** — `F next --lease <lease>`. `jobs` lists the jobs to work on now: those already holding a
    build slot, then a job coming back from waiting (a rework), then new jobs taken from the queue —
-   at most two. A job waiting for a human (needs-human, an open PR) keeps its worktree but holds no
+   at most `[factory] parallel`. A job waiting for a human (needs-human, an open PR) keeps its worktree but holds no
    slot; one beyond the slots is listed under `waiting_for_slot`; a job queued `--after` another that
    isn't done is listed under `blocked`. `action` is `stop` (after `/factory stop`, once nothing is
    active) or `idle` (the queue is empty and every job is finished): then `F board`, report (below),
@@ -58,8 +58,8 @@ Repeat:
    round the loop again. Don't end the run on `wait`.
 4. **Act** — for **each** job in `jobs`, ask `F state <id>` and perform its `next.action` from the
    table below, then its **Jira** to-dos. Spawn agents in the background, so one job's agents run
-   while you act on the other; when an agent returns, ask that job's state again. Never let one job
-   wait on the other.
+   while you act on the others; when an agent returns, ask that job's state again. Never let one job
+   wait on another.
 5. **Board** — `F board`.
 
 ### Actions
@@ -158,7 +158,7 @@ The inbox refuses a second identical command for a job while the first is still 
 
 - **approve `<id>`** — for a needs-human job: `F approve <id> --by "<who>"`. State then takes it
   through rebase, the project's checks and `merge_mode`. **Integration is one job at a time**: act on
-  `pr`/`merge-local` for one job, and ask the other's state afterwards — once the target has moved,
+  `pr`/`merge-local` for one job, and ask the others' state afterwards — once the target has moved,
   state sends it through rebase and the project's checks again before it is integrated. A rebase
   that needed conflict resolution goes back through the builder and review, and needs approval again.
 - **rework `<id>` `<note>`** — for a needs-human or open-PR job: `F rework <id> --note "<note>" --by
@@ -166,7 +166,7 @@ The inbox refuses a second identical command for a job while the first is still 
   builder round and review again, and the job comes back for approval; the same PR is updated. The
   job takes the next free build slot (`F next`).
 - **cancel `<id>` `[reason]`** — first stop that job's running agents (TaskStop on each background
-  agent of that job, none of the other's), then `F cancel <id> --reason "<reason>"`: it closes an open
+  agent of that job, none of another job's), then `F cancel <id> --reason "<reason>"`: it closes an open
   PR, removes the job's worktree and branches, marks `[-]` and writes the reason to decision.md. For a Jira
   job, transition the issue per project.md's cancel mapping and unassign it — no comment — and
   `F jira-log` each.

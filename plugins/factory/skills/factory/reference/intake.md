@@ -80,7 +80,7 @@ calls), and ui, ux, platform where project.md enables them — and name them on 
 `## Decided`, including outcomes they expect — "the diff will exceed max_diff", "no test for the
 Wiki task". Reviewers don't reopen what is there without a new circumstance.
 
-**Other jobs in flight.** Two jobs can be built at once. Look at the jobs queued or being built
+**Other jobs in flight.** Several jobs can be built at once (`[factory] parallel`). Look at the jobs queued or being built
 (`F queue list`, their plan.md): if this case **needs** another's change, it is queued `--after` that
 job and starts once it is done. If both touch the same shared contract, styles or dependencies,
 write the overlap in spec.md's `## Decided` (what is shared, which job goes first if it matters) and

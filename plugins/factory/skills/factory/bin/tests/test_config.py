@@ -36,6 +36,12 @@ class ConfigTest(unittest.TestCase):
         with self.assertRaises(FactoryError):
             parse("[factory]\nverify = suite, lint\n\n[commands]\nsuite = make test").verify_commands
 
+    def test_parallel_is_any_number_of_jobs_from_one_and_defaults_to_two(self):
+        self.assertEqual(parse("[factory]\n").parallel, 2)
+        self.assertEqual(parse("[factory]\nparallel = 4").parallel, 4)
+        with self.assertRaises(FactoryError):
+            parse("[factory]\nparallel = 0").parallel
+
     def test_docs_and_reviewer_commands(self):
         cfg = parse("[rules]\ndocs = Wiki/*.md, docs/adr/**\n\n[reviewers]\ncommands = test-components")
         self.assertEqual((cfg.docs, cfg.reviewer_commands), (["Wiki/*.md", "docs/adr/**"], ["test-components"]))

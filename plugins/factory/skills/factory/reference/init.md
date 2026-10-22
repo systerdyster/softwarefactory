@@ -44,8 +44,10 @@ section of `factory/project.md`:
   from the main checkout (`.env`, `appsettings.Development.json`, user-secrets…) with
   `$FACTORY_REPO_ROOT`, never an absolute path. List the `lockfiles` (and install settings such as
   `.npmrc`) whose change means setup must rerun.
-- **Two jobs at once** — `[factory] parallel` (1 or 2, default 2). Read the commands for what two
-  worktrees would share:
+- **Jobs at once** — `[factory] parallel` (1 or more, default 2). **Ask the developer** how many jobs
+  to build at once, after you have read what worktrees would share (below), and tell them the cost:
+  each job is its own worktree with its own dependencies and its own agents running at the same time,
+  and jobs are still integrated one at a time. Read the commands for what the worktrees would share:
   - **Ports and output.** Each job has one port, `$FACTORY_PORT`, the same for all its commands, and
     its own `$FACTORY_OUTPUT`. A dev server, browser test or screenshot command must use them —
     change the command in project.md (`pnpm dev --port $FACTORY_PORT`, a Playwright config reading

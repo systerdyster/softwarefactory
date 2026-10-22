@@ -44,7 +44,7 @@ suite_timeout = 1800
 ; [commands] names that together run the project's tests, build and lint, without running anything
 ; twice (default: lint, build, suite — each where defined)
 verify =
-; jobs built at once, each in its own worktree: 1 or 2
+; jobs built at once, each in its own worktree: 1 or more
 parallel = 2
 ; [commands] names that write shared data (migrations, seeding, tests against a shared database):
 ; they share one lock, so no two of them run at once in any job. Read-only use of a shared backend

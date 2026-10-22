@@ -32,13 +32,15 @@ only. It was first built from a blueprint prompt; this repo is now the source.
 spec.md's `## Decided` is settled for every agent; project.md's `[rules] docs` (a wiki's
 architecture and component pages) are rules every brief lists.
 
-## Two jobs at once
+## Several jobs at once
 
 - **One worktree per job**, `factory/workspaces/<id>/`, on the job's branch: created at `start`
   (workspace_setup there — for pnpm its own node_modules from the shared store), kept through
   building, review, fixes and waiting for approval, removed at finish or cancel. Setup reruns only
   when a listed lockfile changes.
-- **At most two active jobs** (`[factory] parallel`). `F next --lease` returns them: jobs holding a
+- **At most `[factory] parallel` active jobs** (1 or more, default 2; `/factory init` asks the
+  developer). The tests fill three slots with their own worktrees and ports; real agents have run
+  at most two. `F next --lease` returns them: jobs holding a
   slot keep it, a job coming back from waiting (a rework) takes the next free one, then the queue.
   A job waiting for a human keeps its worktree but holds no slot.
 - **One orchestrator**: `F lease acquire` (a stale lease is taken over only with `--takeover`); `F

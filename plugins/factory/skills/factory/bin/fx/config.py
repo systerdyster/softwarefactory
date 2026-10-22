@@ -95,10 +95,10 @@ class Config:
 
     @property
     def parallel(self):
-        """Active build slots: jobs building, reviewing or rebasing at once. 1 or 2."""
+        """Active build slots: jobs building, reviewing or rebasing at once. 1 or more."""
         value = self.getint("factory", "parallel", 2)
-        if value not in (1, 2):
-            raise FactoryError(f"project.md: [factory] parallel must be 1 or 2, got {value}")
+        if value < 1:
+            raise FactoryError(f"project.md: [factory] parallel must be 1 or more, got {value}")
         return value
 
     @property

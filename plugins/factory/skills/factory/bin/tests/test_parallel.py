@@ -5,7 +5,7 @@ import unittest
 
 from support import SandboxTest, git
 
-from fx import actions, pr, queue, runs, schedule, state, workspace
+from fx import actions, config, pr, queue, runs, schedule, state, workspace
 from fx.errors import FactoryError
 
 
@@ -48,6 +48,17 @@ class ParallelTest(SandboxTest):
         self.assertNotIn("src/app.py", git(self.sb.ws_of(self.b), "diff", "--name-only", "origin/main"))
         self.assertEqual(self.next()["jobs"], [self.a, self.b])
         self.assertEqual(queue.entry(self.paths, self.c)["status"], "queued")
+
+    def test_parallel_sets_how_many_jobs_take_a_slot(self):
+        self.paths.project.write_text(self.paths.project.read_text().replace(
+            "max_diff = 400\n", "max_diff = 400\nparallel = 3\n"), encoding="utf-8")
+        self.cfg = config.load(self.paths)
+        self.sb.queue_job("004-fourth", "Fourth")
+        result = self.next()
+        self.assertEqual((result["jobs"], result["slots"]), ([self.a, self.b, self.c], 3))
+        for job in result["jobs"]:
+            actions.start(self.paths, self.cfg, job)
+        self.assertEqual(len({workspace.job_port(self.paths, job) for job in result["jobs"]}), 3)
 
     def test_a_job_waiting_for_approval_keeps_its_worktree_but_frees_its_slot(self):
         self.next()
