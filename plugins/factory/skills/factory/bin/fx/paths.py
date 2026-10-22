@@ -50,7 +50,6 @@ class Paths:
         self.inbox = self.factory / "inbox"
         self.inbox_done = self.inbox / "done"
         self.workspaces = self.factory / "workspaces"
-        self.agents = self.factory / "agents"
         self.locks = self.factory / "locks"
         self.orchestrator = self.factory / "orchestrator.json"
         self.logs = self.factory / "logs"

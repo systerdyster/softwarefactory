@@ -45,11 +45,17 @@ section of `factory/project.md`:
   `$FACTORY_REPO_ROOT`, never an absolute path. List the `lockfiles` (and install settings such as
   `.npmrc`) whose change means setup must rerun.
 - **Two jobs at once** — `[factory] parallel` (1 or 2, default 2). Read the commands for what two
-  worktrees would share: a dev server or browser test on a fixed port or output folder (use
-  `$FACTORY_PORT` and `$FACTORY_OUTPUT` in the command, or make it configurable), and migrations,
-  seeding or tests that write a shared database — list those under `[factory] serial` so they run
-  one job at a time. Read-only use of a shared backend needs nothing. If something can't be
-  separated, say so and propose `parallel = 1`.
+  worktrees would share:
+  - **Ports and output.** Each job has one port, `$FACTORY_PORT`, the same for all its commands, and
+    its own `$FACTORY_OUTPUT`. A dev server, browser test or screenshot command must use them —
+    change the command in project.md (`pnpm dev --port $FACTORY_PORT`, a Playwright config reading
+    the variable), or the project's config if it can't take them, which is a change for the human to
+    decide. A test runner that starts its own server keeps doing so on that port. If the tests need
+    a server the command doesn't start, set `[server] command` and list the commands in `for`: the
+    factory starts it on the port, waits until it listens, and stops it after.
+  - **Shared data.** Migrations, seeding or tests that write a shared database go under
+    `[factory] serial`; they share one lock. Read-only use of a shared backend needs nothing.
+  - If something can't be separated, say so and propose `parallel = 1`.
 - **Written rules** — `[rules] docs`: globs of the project's own rule pages beyond CLAUDE.md and
   AGENTS.md — a wiki's architecture and component pages, ADRs, a styleguide (`Wiki/*.md`,
   `docs/adr/**`). Every agent's brief lists them as rules. Look for them; ask which count as rules.

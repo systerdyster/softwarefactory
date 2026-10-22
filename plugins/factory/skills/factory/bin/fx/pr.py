@@ -182,6 +182,8 @@ def status(paths, cfg, job_id):
     record = jobs.read_json(jd / "pr.json")
     if not record:
         raise FactoryError(f"{job_id} has no PR")
+    if cfg.remote:
+        gitutil.run(["fetch", cfg.remote], paths.root, timeout=300)
     if record["tool"] == "gh":
         view = _gh_view(paths, record["number"])
         record["state"] = view["state"]
@@ -189,8 +191,6 @@ def status(paths, cfg, job_id):
         data = _az_show(paths, record["number"])
         record["state"] = AZ_STATE.get(data.get("status"), "OPEN")
     else:
-        if cfg.remote:
-            gitutil.run(["fetch", cfg.remote], paths.root, timeout=300)
         if gitutil.is_ancestor(record["head"], cfg.base_ref, paths.root):
             record["state"] = "MERGED"
     record["checked_at"] = jobs.now()

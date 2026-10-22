@@ -47,17 +47,27 @@ verify =
 ; jobs built at once, each in its own worktree: 1 or 2
 parallel = 2
 ; [commands] names that write shared data (migrations, seeding, tests against a shared database):
-; they run one job at a time. Read-only use of a shared backend needs nothing here.
+; they share one lock, so no two of them run at once in any job. Read-only use of a shared backend
+; needs nothing here; every other command runs in parallel.
 serial =
 
 [commands]
 ; run in the job's worktree, factory/workspaces/<job>/; {target} is where a single test's argument goes.
-; Each command gets $FACTORY_PORT (a free port) and $FACTORY_OUTPUT (the job's own folder): use them
-; for a dev server or browser test that would otherwise collide with another job's.
+; Each command gets $FACTORY_PORT — the job's own port, the same for all its commands and never
+; another job's — and $FACTORY_OUTPUT, the job's own folder. A dev server or browser test must bind
+; to $FACTORY_PORT (a test runner that starts its own server, like Playwright's webServer, passes it
+; on) and write screenshots and reports under $FACTORY_OUTPUT.
 build =
 lint =
 suite =
 test =
+
+[server]
+; optional: a dev server the factory starts on $FACTORY_PORT before each command listed in `for`,
+; waits for (up to `timeout` seconds) and stops after. Leave empty when a test command starts its own.
+command =
+for =
+timeout = 120
 
 [workspace]
 ; one command per line, run in each job's new worktree and again when a listed lockfile changes;

@@ -7,7 +7,7 @@ without git. Network state (PR status) is read from pr.json, which `pr status` r
 import json
 from pathlib import Path
 
-from . import gitutil, jobs, queue, workspace
+from . import gitutil, jobs, queue, runs, workspace
 from .config import REQUIRED_REVIEWERS
 from .paths import branch_name
 
@@ -292,14 +292,17 @@ def _approval(f, human):
     last = _latest_rebase(f)
     rebased = last and last.get("after") == f["head"] and last.get("result") == "green" \
         and last.get("fingerprint") == f["verify_fingerprint"]
-    if pr and pr.get("state") in ("OPEN", "MANUAL") and pr.get("head") == f["head"]:
-        return _out(f, "pr-open", "wait-pr", f"PR open: {pr.get('url')}", url=pr.get("url"))
+    current = rebased and last.get("target") == f["target_head"]
     if pr and pr.get("state") in ("CLOSED", "ABANDONED"):
         return _out(f, "needs-human", "needs-human", f"the PR was closed without merging: {pr.get('url')}")
-    if not rebased or last.get("target") != f["target_head"]:
+    if pr and pr.get("state") in ("OPEN", "MANUAL") and pr.get("head") == f["head"] and current:
+        return _out(f, "pr-open", "wait-pr", f"PR open: {pr.get('url')}", url=pr.get("url"))
+    if not current:
+        why = "the target branch moved; rebase the open PR's branch and check it again" if pr \
+            else "rebase on the target branch and run the project's checks"
         if not f["workspace"].get("on_branch"):
-            return _out(f, "rebasing", "open-workspace", "rebase on the target branch")
-        return _out(f, "rebasing", "rebase", "rebase on the target branch and run the full suite")
+            return _out(f, "rebasing", "open-workspace", why)
+        return _out(f, "rebasing", "rebase", why)
     if f["merge_mode"] == "local-merge":
         blocked = f["merge"] and f["merge"].get("blocked") and f["merge"].get("head") == f["head"]
         if blocked:
@@ -346,10 +349,35 @@ def jira_todo(f, result):
     return todo
 
 
+PASS_THROUGH = ("cancel", "finish", "needs-human", "wait-pr", "none", "take", "start")
+
+
+def hold_for_runs(f, result):
+    """Live agent runs (see runs.py) hold the job: while its builder runs, nothing else happens to the
+    workspace; a reviewer already running is not started again."""
+    nxt = result["next"]
+    live = f.get("live_runs") or []
+    builder = next((r for r in live if r["role"] == "builder"), None)
+    if builder and nxt["action"] not in PASS_THROUGH:
+        result["next"] = {"action": "wait-agent", "run": builder["run"]}
+        result["reason"] = f"builder run {builder['run']} is {builder['status']}"
+        return result
+    if nxt["action"] == "spawn-reviewers":
+        busy = {r["role"][len("review-"):] for r in live if r["role"].startswith("review-") and r["round"] == nxt["round"]}
+        left = [n for n in nxt["reviewers"] if n not in busy]
+        if not left:
+            result["next"] = {"action": "wait-agent", "runs": sorted(r["run"] for r in live)}
+            result["reason"] = f"reviewers running: {', '.join(sorted(busy))}"
+        else:
+            nxt["reviewers"] = left
+    return result
+
+
 def state(paths, cfg, job_id):
     jobs.check_id(job_id)
     f = gather(paths, cfg, job_id)
-    result = decide(f)
+    f["live_runs"] = runs.for_job(paths, cfg, job_id)
+    result = hold_for_runs(f, decide(f))
     if result["next"].get("ready") and f["head"]:
         c = checks(paths, cfg, f["head"])
         result["checks"] = c

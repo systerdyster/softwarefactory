@@ -49,7 +49,8 @@ the dashboard does, and the orchestrator runs it on its next step (or on its nex
   and the allowlist in `.claude/settings.local.json`.
 - **The developer's own checkout is never touched.** Each job's code work happens in its own
   worktree, `factory/workspaces/<id>/`, on its own branch, kept until the job is finished or
-  cancelled. Every command and brief names its job; an agent is bound to its job by the guard.
+  cancelled. Every command and brief names its job; a brief reserves an agent run, and an agent writes
+  only through its own live run, in that run's job.
 - **The project's tests, build and lint are green on the target branch, or the factory stops.** It
   never works around a red check, adds a lint exception or weakens a check; fixing them is human work.
 - **State lives in files and git, never in a conversation.** Ask `F state <id>` before acting; agents
@@ -63,7 +64,8 @@ plugin skills/factory/    SKILL.md, reference/, bin/ (factory.py, hook.py, fx/, 
 plugin agents/factory-*   builder, review-code (the main reviewer), specialists
                           review-{security,performance,stability,platform,ux,ui}, codex-fallback
 factory/                  project.md, backlog.md, board.json, orchestrator.json (lease and slots), inbox/,
-                          workspaces/<id>/, logs/<id>/, out/<id>/, agents/ (agent→job bindings), locks/, jobs/<id>/
+                          workspaces/<id>/, logs/<id>/, out/<id>/, runs/ (agent runs), binding.json (a failed
+                          agent binding), locks/, jobs/<id>/
 factory/jobs/<id>/        job.json spec.md plan.md tests.md build.md baseline.json workspace.json
                           rebase.json pr.json jira.md spawns.jsonl rework-K.md human-approval.md
                           decision.md (only when cancelled)

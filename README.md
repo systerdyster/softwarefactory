@@ -38,19 +38,30 @@ architecture and component pages) are rules every brief lists.
 - **One orchestrator**: `F lease acquire` (a stale lease is taken over only with `--takeover`); `F
   next` refuses without the current lease, so a second orchestrator takes no job.
 - **Explicit job identity**: `ws run <job>`, `git -C factory/workspaces/<job>`, logs under
-  `factory/logs/<job>/`, verify results in the job's round folders. The guard binds each agent (the
-  hook's `agent_id`) to the first job it touches, and only to a job with an unclaimed spawn of that
-  role; then it may touch no other job.
-- **Ports and shared data**: every command gets `FACTORY_PORT` (a free port) and `FACTORY_OUTPUT`
-  (the job's own folder); commands in `[factory] serial` (migrations, seeding, tests writing a shared
-  database) run one job at a time.
+  `factory/logs/<job>/`, verify results in the job's round folders.
+- **Agent runs** (`factory/runs/`): `F brief` reserves the run and refuses while a live one holds the
+  same work, so a builder attempt or a reviewer is never started twice, also after a restart. The
+  plugin's PostToolUse hook on the Agent call attaches the `agentId` Claude Code returns; SubagentStop
+  ends it; a reservation no agent took expires after three minutes, a running agent that goes silent
+  after the suite timeout. state says `wait-agent` while a job's agent runs.
+- **Binding from the brief, not the path**: the guard allows a write only through a live running run
+  whose `agent_id` is the hook's, in that run's job and role. A done, aborted or expired run's agent
+  writes nothing; without `agent_id` nothing is written. If an agent's id matches no run, the reason
+  is recorded and `F next` stops the factory — it never falls back to weaker isolation.
+- **Ports**: each job has one port, `FACTORY_PORT`, kept in its workspace.json — the same for all its
+  commands, never another job's, re-picked when something outside holds it. A `[server] command` is
+  started on it for the commands in `[server] for`, waited for and stopped; a test command may also
+  start its own server on it. `FACTORY_OUTPUT` is the job's own folder.
+- **Shared data**: the commands in `[factory] serial` (migrations, seeding, tests writing a shared
+  database) share one lock; everything else runs in parallel.
 - **Order between jobs** is explicit: `queue add --after <id>` waits until that job is done. Known
   overlaps in shared contracts, styles or dependencies are noted at intake; nothing tries to predict
   file conflicts.
 - **Integration** is one job at a time, with the developer's approval per job and no new automatic
-  merge. When the target moves, an approved job rebases and runs the checks again before its PR; a
-  rebase that needed conflict resolution goes back through the builder and review and needs approval
-  again.
+  merge. When the target moves, an approved job rebases and runs the checks again before its PR —
+  an open PR too: `pr status` fetches the target, the branch is rebased and checked, and the same PR
+  is updated. A clean rebase keeps the approval and, when nothing moved, reruns nothing; a rebase
+  that needed conflict resolution goes back through the builder and review and needs approval again.
 
 ## Install
 
@@ -159,11 +170,13 @@ the installed CLI (0.153.4).
 - A real `codex exec` review (detection is verified; the call sends code to OpenAI, so it waits for a
   project that has enabled it).
 - Jira claim, transitions and the hand-back comment.
-- Two real jobs at once: the orchestrator alternating between them with background agents; the hook
-  input actually carrying `agent_id` (without it the guard checks each call alone and can't hold an
-  agent to one job); two `pnpm install`s in parallel sharing the store; the project's dev server and
-  browser tests honouring `$FACTORY_PORT` / `$FACTORY_OUTPUT`; a target move from one job's merge
-  sending the other through rebase and checks.
+- Two real jobs at once: the orchestrator alternating between them with background agents; the
+  Agent call's returned `agentId` being the same value the hooks see as `agent_id` (documented as
+  "identifier for the subagent run" and "unique identifier for the subagent", not documented as
+  equal — if they differ, nothing writes and `F next` stops with the reason); PostToolUse firing for
+  background Agent calls and SubagentStop for factory agents; two `pnpm install`s in parallel sharing
+  the store; the project's dev server and browser tests honouring `$FACTORY_PORT` /
+  `$FACTORY_OUTPUT`; a merge in Azure DevOps moving the target under the other job's open PR.
 
 ## Gotchas
 

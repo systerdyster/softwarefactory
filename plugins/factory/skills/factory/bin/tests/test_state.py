@@ -246,6 +246,43 @@ class ApprovalAndMergeTest(unittest.TestCase):
         self.assertEqual(state.decide(f)["stage"], "needs-human")
 
 
+class OpenPrTest(unittest.TestCase):
+    def open_pr(self, **over):
+        f = base_facts(build=[done(1)], rounds={1: passing()}, human_approval={"head": H1},
+                       rebase={"history": [{"before": H1, "after": H1, "result": "green", "target": T1, "fingerprint": FP}]},
+                       pr={"state": "OPEN", "head": H1, "url": "u"})
+        f.update(over)
+        return f
+
+    def test_an_open_pr_on_the_current_target_waits(self):
+        self.assertEqual(nxt(self.open_pr()), "wait-pr")
+
+    def test_an_open_pr_is_rebased_when_the_target_moves(self):
+        r = state.decide(self.open_pr(target_head=T2))
+        self.assertEqual((r["stage"], r["next"]["action"]), ("rebasing", "rebase"))
+        self.assertIn("open PR", r["reason"])
+
+
+class LiveRunTest(unittest.TestCase):
+    def test_a_live_builder_holds_every_step_of_its_job(self):
+        f = base_facts(build=[done(1)], rounds={1: rnd(verifies={})})
+        f["live_runs"] = [{"run": "r1", "role": "builder", "round": 1, "attempt": 1, "status": "running"}]
+        r = state.hold_for_runs(f, state.decide(f))
+        self.assertEqual(r["next"], {"action": "wait-agent", "run": "r1"})
+
+    def test_a_cancel_is_not_held(self):
+        f = base_facts(backlog="cancelled")
+        f["live_runs"] = [{"run": "r1", "role": "builder", "round": 1, "attempt": 1, "status": "running"}]
+        self.assertEqual(state.hold_for_runs(f, state.decide(f))["next"]["action"], "cancel")
+
+    def test_running_reviewers_are_not_listed_again(self):
+        f = base_facts(build=[done(1)], rounds={1: rnd({}, scheduled=["code", "ui"])})
+        f["live_runs"] = [{"run": "r2", "role": "review-code", "round": 1, "attempt": None, "status": "reserved"}]
+        self.assertEqual(state.hold_for_runs(f, state.decide(f))["next"]["reviewers"], ["ui"])
+        f["live_runs"].append({"run": "r3", "role": "review-ui", "round": 1, "attempt": None, "status": "running"})
+        self.assertEqual(state.hold_for_runs(f, state.decide(f))["next"]["action"], "wait-agent")
+
+
 class HumanTest(unittest.TestCase):
     def test_human_approval_skips_the_open_verdicts(self):
         rounds = {n: rnd({"code": "CHANGES"}) for n in (1, 2, 3)}

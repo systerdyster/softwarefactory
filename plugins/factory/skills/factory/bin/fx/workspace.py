@@ -7,9 +7,14 @@ dependencies (for pnpm its own node_modules, from pnpm's shared store); workspac
 worktree is created and again only when a listed lockfile changes.
 
 Every command runs with FACTORY_JOB, FACTORY_WORKSPACE, FACTORY_OUTPUT (a folder of the job's own)
-and FACTORY_PORT (a free port) in its environment, so dev servers and browser tests of two jobs don't
-collide. Commands listed in [factory] serial — migrations, seeding, tests that write shared data —
-run one at a time across all jobs."""
+and FACTORY_PORT in its environment. FACTORY_PORT is the job's own port, kept in its workspace.json,
+the same for every command of the job and never another job's; if something else holds it when a
+command starts, the job gets a new one. A command that starts its own server (Playwright's
+webServer, a test script) binds it to $FACTORY_PORT. A command listed in [server] for gets the
+project's [server] command started first on that port, waited for, and stopped after.
+
+Commands listed in [factory] serial — migrations, seeding, tests that write shared data — share one
+lock: no two of them run at the same time, in any job. Everything else runs in parallel."""
 
 import contextlib
 import fcntl
@@ -17,10 +22,12 @@ import hashlib
 import os
 import shlex
 import shutil
+import signal
 import socket
 import subprocess
+import time
 
-from . import gitutil, jobs
+from . import gitutil, jobs, queue
 from .errors import FactoryError
 from .paths import branch_name
 
@@ -64,10 +71,10 @@ def _free_port():
 
 
 @contextlib.contextmanager
-def _serial(paths, name):
-    """One at a time across every job, for a command that writes shared data."""
+def _serial(paths):
+    """One [factory] serial command at a time across every job: they share whatever they write."""
     paths.locks.mkdir(parents=True, exist_ok=True)
-    with open(paths.locks / f"{name}.lock", "w") as handle:
+    with open(paths.locks / "serial.lock", "w") as handle:
         fcntl.flock(handle, fcntl.LOCK_EX)
         try:
             yield
@@ -75,26 +82,92 @@ def _serial(paths, name):
             fcntl.flock(handle, fcntl.LOCK_UN)
 
 
+def _port_in_use(port):
+    """True while something listens on the port; a closed server's lingering TIME_WAIT doesn't count."""
+    with socket.socket() as s:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            s.bind(("127.0.0.1", port))
+            return False
+        except OSError:
+            return True
+
+
+def job_port(paths, job_id):
+    """The job's port: stable across its commands, distinct from every other job's, and re-picked
+    when something outside the factory holds it."""
+    state_file = paths.job(job_id) / "workspace.json"
+    with queue.locked(paths):
+        state = jobs.read_json(state_file) or {}
+        port = state.get("port")
+        if port and not _port_in_use(port):
+            return port
+        taken = {(jobs.read_json(f) or {}).get("port") for f in paths.jobs.glob("*/workspace.json")
+                 if f.parent.name != job_id} if paths.jobs.exists() else set()
+        port = next(p for p in iter(_free_port, None) if p not in taken)
+        jobs.write_json(state_file, {**state, "port": port})
+        return port
+
+
+def _wait_for_port(port, process, timeout):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            return f"the server exited with {process.returncode} before it listened on {port}"
+        with socket.socket() as s:
+            s.settimeout(0.5)
+            if s.connect_ex(("127.0.0.1", port)) == 0:
+                return None
+        time.sleep(0.2)
+    return f"the server did not listen on {port} within {timeout}s"
+
+
+@contextlib.contextmanager
+def _server(paths, cfg, cwd, env, log):
+    """The project's [server] command on the job's port for the length of one command, then stopped
+    with its whole process group. Yields None when it listens, or why it didn't."""
+    with open(log, "w") as out:
+        process = subprocess.Popen(cfg.server_command, shell=True, cwd=str(cwd), env=env, stdout=out,
+                                   stderr=subprocess.STDOUT, start_new_session=True)
+        try:
+            yield _wait_for_port(int(env["FACTORY_PORT"]), process, cfg.server_timeout)
+        finally:
+            if process.poll() is None:
+                os.killpg(process.pid, signal.SIGTERM)
+                try:
+                    process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    os.killpg(process.pid, signal.SIGKILL)
+                    process.wait()
+
+
 def _shell(command, paths, cfg, cwd, log_name, job_id, name=None):
     logs = paths.logs / (job_id or "_")
     logs.mkdir(parents=True, exist_ok=True)
-    log = logs / f"{log_name}-{jobs.now().replace(':', '')}.log"
+    stamp = jobs.now().replace(":", "")
+    log = logs / f"{log_name}-{stamp}.log"
     out = paths.output(job_id or PROBE)
     out.mkdir(parents=True, exist_ok=True)
+    port = job_port(paths, job_id) if job_id else _free_port()
     env = dict(os.environ, FACTORY_REPO_ROOT=str(paths.root), FACTORY_WORKSPACE=str(cwd), FACTORY_JOB=job_id or "",
-               FACTORY_OUTPUT=str(out), FACTORY_PORT=str(_free_port()), CI="true")
-    serial = _serial(paths, name) if name and name in cfg.serial_commands else contextlib.nullcontext()
-    with serial:
-        try:
-            result = subprocess.run(command, shell=True, cwd=str(cwd), env=env,
-                                    capture_output=True, text=True, timeout=cfg.suite_timeout)
-            output, code = result.stdout + result.stderr, result.returncode
-        except subprocess.TimeoutExpired as e:
-            partial = [p.decode(errors="replace") if isinstance(p, bytes) else (p or "") for p in (e.stdout, e.stderr)]
-            output = "".join(partial) + f"\n[factory] timed out after {cfg.suite_timeout}s\n"
-            code = 124
+               FACTORY_OUTPUT=str(out), FACTORY_PORT=str(port), CI="true")
+    serial = _serial(paths) if name and name in cfg.serial_commands else contextlib.nullcontext()
+    needs_server = bool(name and cfg.server_command and name in cfg.server_for)
+    server = _server(paths, cfg, cwd, env, logs / f"server-{stamp}.log") if needs_server else contextlib.nullcontext()
+    with serial, server as server_failed:
+        if server_failed:
+            output, code = f"[factory] {server_failed}; see {paths.relative(logs / f'server-{stamp}.log')}\n", 1
+        else:
+            try:
+                result = subprocess.run(command, shell=True, cwd=str(cwd), env=env,
+                                        capture_output=True, text=True, timeout=cfg.suite_timeout)
+                output, code = result.stdout + result.stderr, result.returncode
+            except subprocess.TimeoutExpired as e:
+                partial = [p.decode(errors="replace") if isinstance(p, bytes) else (p or "") for p in (e.stdout, e.stderr)]
+                output = "".join(partial) + f"\n[factory] timed out after {cfg.suite_timeout}s\n"
+                code = 124
     log.write_text(f"$ {command}\n{output}\n[exit {code}]\n", encoding="utf-8")
-    return {"command": command, "exit_code": code, "log": paths.relative(log),
+    return {"command": command, "exit_code": code, "log": paths.relative(log), "port": port,
             "tail": "\n".join(output.splitlines()[-TAIL_LINES:])}
 
 
@@ -115,8 +188,9 @@ def _setup(paths, cfg, cwd, job_id):
 def setup(paths, cfg, job_id):
     _require(paths, job_id)
     ran = _setup(paths, cfg, paths.workspace(job_id), job_id)
-    jobs.write_json(paths.job(job_id) / "workspace.json",
-                    {"lockfiles": _lock_hashes(cfg, paths.workspace(job_id)), "setup_at": jobs.now()})
+    state_file = paths.job(job_id) / "workspace.json"
+    jobs.write_json(state_file, {**(jobs.read_json(state_file) or {}),
+                                 "lockfiles": _lock_hashes(cfg, paths.workspace(job_id)), "setup_at": jobs.now()})
     return {"setup": ran}
 
 

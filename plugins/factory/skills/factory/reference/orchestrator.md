@@ -29,6 +29,9 @@ is bound to the job its brief names. A failure or a wait in one job never holds 
 2. `F stop --clear`, then `F board`. Check `factory/project.md` exists; if not, stop and point to
    `/factory init`.
 3. Arm the inbox watch (see **Inbox**), then process any pending inbox commands.
+4. **Agents from before** — `F run list`. A live run left by an earlier session holds its work, and
+   state says `wait-agent` for it until it ends or goes silent. If the human confirms that session
+   and its agents are gone, `F run abort <run>` frees the work now; never abort on your own guess.
 
 ## The loop
 
@@ -36,7 +39,8 @@ Repeat:
 
 1. **Inbox** — process pending commands (below).
 2. **Waiting jobs** — for each job whose stage is `pr-open`, `F pr status <id>` (at most once per ten
-   minutes per job). A merged PR makes its next action `finish`.
+   minutes per job). It fetches the target too: a merged PR makes the next action `finish`; a target
+   that moved under an open PR makes it `rebase`, and the job takes the next free slot.
 3. **Pick** — `F next --lease <lease>`. `jobs` lists the jobs to work on now: those already holding a
    build slot, then a job coming back from waiting (a rework), then new jobs taken from the queue —
    at most two. A job waiting for a human (needs-human, an open PR) keeps its worktree but holds no
@@ -56,7 +60,8 @@ Repeat:
 |---|---|
 | `start` | `F start <id>`. It creates the job's worktree on its new branch from the target, runs workspace_setup there (its own dependencies), and runs the project's checks (`[factory] verify`: tests, build, lint). Running it again keeps the worktree. **Red: the target is broken.** Report the failing check from the log, `F stop` — fixing it is human work; the other job carries on. |
 | `open-workspace` | `F workspace open <id>` — the job's worktree is missing (removed by hand); it is created again on the job's branch. |
-| `spawn-builder` | Spawn `factory-builder` with `F brief <id> builder` as its prompt, verbatim. |
+| `spawn-builder` | `F brief <id> builder`, then spawn `factory-builder` in the background with it as its prompt, verbatim. The brief reserves the run; the plugin's hook attaches the agent to it when the Agent call returns. |
+| `wait-agent` | Nothing: an agent of this job is reserved or running (`next.run`/`next.runs`). Ask again when it returns. |
 | `verify` | `F verify <id>` — the project's tests, build and lint on the builder's result, in project.md's `[factory] verify` order, stopping at the first red one. Red is not an error to handle: state sends the builder back. A result is reused only for the same head and the same commands. |
 | `schedule` | `F schedule <id>` — writes round-N/scheduled.md. |
 | `spawn-reviewers` | See **Reviewers**. |
@@ -69,12 +74,29 @@ Repeat:
 | `finish` | `F finish <id>` — removes the job's worktree and branches, marks `[x]`. Other jobs' worktrees are not touched. |
 | `cancel` | `F cancel <id> --reason "<reason>"` (a cancelled job whose branch still exists). |
 | `needs-human` | Nothing to do; the job waits for `/factory approve`, `rework` or `cancel`. Report its reason. With `next.ready` every review passed and the job waits for the developer's approval — that approval is always a human's; never approve a job yourself. |
-| `wait-pr` | Nothing; the job is waiting on its PR. |
+| `wait-pr` | Nothing; the job is waiting on its PR, on the current target. |
 
 Every agent is spawned **fresh** with the Agent tool, `subagent_type` = `factory:` + the agent's name (plugin agents are scoped by the plugin, e.g. `factory:factory-builder`), and the
 brief as the prompt — never resumed, never sent a message. The brief comes from `F brief`; never write
-or edit one yourself. `F brief` refuses when state doesn't call for that agent; that means ask state
-again. Agents return one line; don't act on it — ask state.
+or edit one yourself, and keep its last line, `Factory run: <id>`.
+
+**Runs.** `F brief` reserves an agent run and refuses while one already holds that work — the same
+builder attempt, the same reviewer in the round — so nothing is started twice, also after a restart.
+When the Agent call returns, the plugin's PostToolUse hook attaches the agentId Claude Code returned
+to the run; SubagentStop ends it. The guard lets an agent write only through its own live run, in
+that run's job. So:
+
+- Spawn the agent right after its brief. A reservation that no agent took expires after three
+  minutes, and the work can be briefed again.
+- If the hook reports that a run could not be attached, that agent can write nothing: `F run abort
+  <run>`, stop the agent (TaskStop) and ask state again.
+- When an agent returns, `F run end <run>` (SubagentStop normally did it already), then ask state.
+- A cancel aborts the job's runs; their agents lose write access at once.
+- If `F next` says `stop` because agents can't be bound to their jobs, report its reason to the human
+  and end the run: the factory doesn't build with weaker isolation. `F run binding-reset` once fixed.
+
+`F brief` refuses when state doesn't call for that agent; that means ask state again. Agents return
+one line; don't act on it — ask state.
 
 ### Reviewers
 

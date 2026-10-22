@@ -5,7 +5,7 @@ import unittest
 
 from support import SandboxTest, git
 
-from fx import actions, guard, pr, queue, schedule, state, workspace
+from fx import actions, pr, queue, runs, schedule, state, workspace
 from fx.errors import FactoryError
 
 
@@ -104,14 +104,14 @@ class ParallelTest(SandboxTest):
         for job in (self.a, self.b):
             actions.start(self.paths, self.cfg, job)
         self.sb.write("scratch.txt", "b's work", base=self.sb.ws_of(self.b))
-        self.paths.agents.mkdir(parents=True, exist_ok=True)
-        actions.log_spawn(self.paths, self.b, "builder", 1, 1, None)
-        guard.bind(self.paths, "agent-b", "builder", self.b)
+        for job, agent in ((self.a, "agent-a"), (self.b, "agent-b")):
+            runs.attach(self.paths, runs.reserve(self.paths, self.cfg, job, "builder", 1, 1, None)["run"], agent)
         actions.cancel(self.paths, self.cfg, self.a, "not needed", pr)
         self.assertFalse(self.sb.ws_of(self.a).exists())
         self.assertEqual(workspace.check(self.paths, self.b)["dirty"], ["scratch.txt"])
-        self.assertTrue((self.paths.agents / "agent-b.json").exists())
-        self.assertEqual(state.state(self.paths, self.cfg, self.b)["stage"], "building")
+        self.assertEqual(runs.for_agent(self.paths, "agent-a")["status"], "aborted")
+        self.assertEqual(runs.for_agent(self.paths, "agent-b")["status"], "running")
+        self.assertEqual(state.state(self.paths, self.cfg, self.b)["next"]["action"], "wait-agent")
 
 
 class MovedTargetTest(SandboxTest):
@@ -137,6 +137,35 @@ class MovedTargetTest(SandboxTest):
         entry = actions.rebase(self.paths, self.cfg, b)
         self.assertEqual((entry["result"], entry.get("reused")), ("green", None))
         self.assertEqual(state.state(self.paths, self.cfg, b)["next"]["action"], "pr")
+
+    def test_an_open_pr_is_rebased_checked_and_updated_when_the_other_job_lands(self):
+        a, b = self.sb.queue_job("001-answer", "Answer"), self.sb.queue_job("002-greeting", "Greeting")
+        lease = actions.acquire_lease(self.paths)["lease"]
+        actions.next_job(self.paths, self.cfg, lease)
+        helper = ParallelTest("test_two_jobs_build_at_once_in_their_own_worktrees")
+        helper.sb, helper.paths, helper.cfg = self.sb, self.paths, self.cfg
+        for job in (a, b):
+            actions.start(self.paths, self.cfg, job)
+        helper.to_ready(b, "src/greeting.py", "HELLO = 'hej'\n")
+        actions.approve(self.paths, self.cfg, b, "Fredrik")
+        actions.rebase(self.paths, self.cfg, b)
+        self.assertEqual(pr.open_or_update(self.paths, self.cfg, b)["state"], "MANUAL")
+        self.assertEqual(state.state(self.paths, self.cfg, b)["next"]["action"], "wait-pr")
+        logs = set(self.paths.logs.rglob("*.log"))
+        self.assertEqual(state.state(self.paths, self.cfg, b)["next"]["action"], "wait-pr")
+        self.assertEqual(set(self.paths.logs.rglob("*.log")), logs)
+
+        helper.build(a, "src/app.py", "def answer():\n    return 42\n")
+        git(self.sb.root, "push", "origin", f"{git(self.sb.root, 'rev-parse', 'factory/001-answer')}:refs/heads/main")
+        pr.status(self.paths, self.cfg, b)
+        s = state.state(self.paths, self.cfg, b)
+        self.assertEqual((s["stage"], s["next"]["action"]), ("rebasing", "rebase"))
+        entry = actions.rebase(self.paths, self.cfg, b)
+        self.assertEqual((entry["result"], entry.get("reused")), ("green", None))
+        self.assertEqual(state.state(self.paths, self.cfg, b)["next"]["action"], "pr")
+        record = pr.open_or_update(self.paths, self.cfg, b)
+        self.assertEqual(record["head"], git(self.sb.root, "rev-parse", "factory/002-greeting"))
+        self.assertEqual(state.state(self.paths, self.cfg, b)["next"]["action"], "wait-pr")
 
     def test_a_conflict_resolved_on_rebase_is_reviewed_again_not_covered_by_the_old_approval(self):
         b = self.sb.queue_job("002-greeting", "Greeting")

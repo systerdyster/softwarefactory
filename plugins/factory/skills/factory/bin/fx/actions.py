@@ -7,7 +7,7 @@ import secrets
 import subprocess
 from datetime import datetime
 
-from . import gitutil, guard, jobs, queue, state as state_mod, workspace
+from . import gitutil, jobs, queue, runs, state as state_mod, workspace
 from .errors import Conflict, FactoryError
 from .paths import branch_name
 
@@ -187,7 +187,7 @@ def cleanup(paths, cfg, job_id, discard=False):
     if gitutil.remote_branch_exists(cfg.remote, branch, paths.root):
         gitutil.run(["push", cfg.remote, "--delete", branch], paths.root, timeout=300)
         result["remote_deleted"] = True
-    guard.release(paths, job_id)
+    result["runs_aborted"] = runs.abort_job(paths, job_id, "the job was finished or cancelled")
     return result
 
 
@@ -289,6 +289,11 @@ def next_job(paths, cfg, lease):
     to the oldest active job without one (a rework coming back), then to the queue. A job waiting for
     a human keeps its workspace but takes no slot."""
     held = check_lease(paths, lease).get("slots", [])
+    failed = runs.binding_failure(paths)
+    if failed:
+        return {"jobs": [], "taken": [], "action": "stop",
+                "reason": f"agents can't be bound to their jobs, so the factory won't build: {failed} "
+                          "Fix it, then `run binding-reset`."}
     taken = active_jobs(paths, cfg)
     running = [s["id"] for s in sorted((s for s in taken if not s["waiting"] and s["next"]["action"] not in IDLE_ACTIONS),
                                        key=lambda s: _started_at(paths, s["id"]))]

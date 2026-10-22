@@ -8,8 +8,11 @@ run the project commands project.md lists under [reviewers] commands, e.g. the b
 render components; nothing else that executes.
 
 Every call that touches a job names it: its worktree (factory/workspaces/<job>), its job folder, or
-`ws run <job>`. An agent is bound to the first job it touches (by the hook's agent_id), and only to a
-job whose spawn log has an unclaimed spawn of that role; after that it may touch no other job."""
+`ws run <job>`. A call that writes or executes — a file write, a git write, `ws run` — is allowed only
+for a live running agent run (runs.py) whose agent_id is the hook's agent_id, in that run's job and
+role. The run came from the orchestrator's brief, so the binding is the orchestrator's assignment,
+not the path the agent picks; a done, aborted or expired run's agent writes nothing. Reads need no
+run."""
 
 import json
 import re
@@ -17,7 +20,7 @@ import shlex
 import sys
 from pathlib import Path
 
-from . import config, jobs, queue
+from . import config, jobs, runs
 from .errors import FactoryError
 from .paths import Paths
 
@@ -67,7 +70,7 @@ def _usage(role, review_commands):
 
 
 def check_bash(paths, role, command, review_commands=()):
-    """Returns the job the command touches, or None for one that touches no job."""
+    """Returns (job, writes): the job the command touches, or None, and whether it writes or runs."""
     if METACHARS.search(command):
         raise Blocked("shell operators are not allowed.\n" + _usage(role, review_commands))
     try:
@@ -81,13 +84,13 @@ def check_bash(paths, role, command, review_commands=()):
     if argv[0] == FACTORY_CLI and len(argv) >= 2:
         sub = argv[1]
         if sub in READ_FACTORY:
-            return None
+            return None, False
         if sub == "ws" and len(argv) >= 5 and argv[2] == "run":
             if role == "builder" or argv[4] in review_commands:
-                return argv[3]
+                return argv[3], True
         raise Blocked(f"`{' '.join(argv[:5])}` is not available to the {role}.\n" + _usage(role, review_commands))
     if argv[0] in ("ls", "pwd", "wc"):
-        return None
+        return None, False
     raise Blocked(f"`{argv[0]}` is not available to the {role}.\n" + _usage(role, review_commands))
 
 
@@ -100,8 +103,10 @@ def _check_git(paths, role, argv, review_commands):
     banned = [a for a in rest if a.split("=", 1)[0] in BANNED_FLAGS]
     if banned:
         raise Blocked(f"git flag {banned[0]} is not allowed")
-    if sub in READ_GIT or (sub in WRITE_GIT and role == "builder"):
-        return job
+    if sub in READ_GIT:
+        return job, False
+    if sub in WRITE_GIT and role == "builder":
+        return job, True
     raise Blocked(f"`git {sub}` is not available to the {role}. Only the orchestrator switches, rebases or pushes.\n"
                   + _usage(role, review_commands))
 
@@ -130,39 +135,26 @@ def check_write(paths, role, raw_path):
     raise Blocked(f"the {role} may write only inside factory/workspaces/<job>/ and build.md and tests.md in its job folder")
 
 
-def _spawn_name(role):
-    return "codex-fallback" if role == "review-codex" else role
-
-
-def bind(paths, agent_id, role, job):
-    """Holds an agent to one job. Without an agent_id (an older Claude Code) each call is checked
-    on its own: the job must have spawned this role."""
-    spawned = sum(1 for line in (jobs.read(paths.job(job) / "spawns.jsonl") or "").splitlines()
-                  if line.strip() and json.loads(line).get("agent") == _spawn_name(role))
+def authorize(paths, cfg, agent_id, role, job):
+    """Allows a write only through the agent's own live running run, in that run's job and role."""
     if not agent_id:
-        if not spawned:
-            raise Blocked(f"{job} has not spawned a {role}")
-        return
-    claim = paths.agents / f"{re.sub(r'[^A-Za-z0-9_.-]', '_', agent_id)}.json"
-    with queue.locked(paths):
-        current = jobs.read_json(claim)
-        if current:
-            if current["job"] != job:
-                raise Blocked(f"this agent works on {current['job']}; {job} belongs to another agent")
-            return
-        claimed = sum(1 for f in paths.agents.glob("*.json") if (jobs.read_json(f) or {}).get("job") == job
-                      and jobs.read_json(f).get("role") == role) if paths.agents.exists() else 0
-        if claimed >= spawned:
-            raise Blocked(f"{job} has no {role} spawned for this agent; work only on the job your brief names")
-        jobs.write_json(claim, {"job": job, "role": role, "at": jobs.now()})
-
-
-def release(paths, job):
-    """Forgets the agents bound to a job, once it is finished or cancelled."""
-    if paths.agents.exists():
-        for f in paths.agents.glob("*.json"):
-            if (jobs.read_json(f) or {}).get("job") == job:
-                f.unlink()
+        raise Blocked("the hook gave no agent_id, so the factory can't tell which run this agent is; it writes "
+                      "nothing. A Claude Code that sends agent_id to PreToolUse is required.")
+    run = runs.for_agent(paths, agent_id)
+    if not run:
+        why = (f"agent_id {agent_id} matches no factory run. The run is attached from the agentId the Agent "
+               "call returns; if Claude Code's two ids differ, agents can't be bound to their jobs and the "
+               "factory stops building in parallel.")
+        runs.record_binding_failure(paths, why)
+        raise Blocked(why)
+    if run["status"] != "running" or not runs.live(run, cfg):
+        raise Blocked(f"run {run['run']} is {run['status'] if run['status'] != 'running' else 'expired'}; "
+                      "this agent may no longer write")
+    if run["job"] != job:
+        raise Blocked(f"this agent's run is for {run['job']}; {job} is another job's")
+    if run["role"] != role:
+        raise Blocked(f"this agent's run is a {run['role']}, not a {role}")
+    runs.touch(paths, run)
 
 
 def _review_commands(paths, role):
@@ -185,16 +177,17 @@ def run(role, stream=None, paths=None):
     tool = event.get("tool_name", "")
     tool_input = event.get("tool_input") or {}
     try:
-        job = None
+        job, writes = None, False
         if tool == "Bash":
-            job = check_bash(paths, role, tool_input.get("command", ""), _review_commands(paths, role))
+            job, writes = check_bash(paths, role, tool_input.get("command", ""), _review_commands(paths, role))
         elif tool in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
-            job = check_write(paths, role, tool_input.get("file_path") or tool_input.get("notebook_path"))
+            job, writes = check_write(paths, role, tool_input.get("file_path") or tool_input.get("notebook_path")), True
         elif tool in ("Agent", "Task"):
             raise Blocked("factory agents do not spawn agents")
         if job:
             jobs.check_id(job)
-            bind(paths, event.get("agent_id"), role, job)
+        if writes:
+            authorize(paths, config.load(paths), event.get("agent_id"), role, job)
     except Blocked as e:
         print(f"factory guard ({role}): {e}", file=sys.stderr)
         return 2

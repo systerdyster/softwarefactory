@@ -13,7 +13,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from fx import actions, board, brief, codex, config, findings, guard, jobs, pr, queue, schedule, setup, workspace  # noqa: E402
+from fx import actions, board, brief, codex, config, findings, guard, jobs, pr, queue, runs, schedule, setup, workspace  # noqa: E402
 from fx import state as state_mod  # noqa: E402
 from fx.errors import Fallback, FactoryError  # noqa: E402
 from fx.paths import Paths  # noqa: E402
@@ -174,6 +174,21 @@ def cmd_next(a, p):
     return actions.next_job(p, _cfg(p), a.lease)
 
 
+def cmd_run(a, p):
+    if a.action == "list":
+        cfg = _cfg(p)
+        return {"runs": [{**r, "live": runs.live(r, cfg)} for r in runs.all_runs(p) if not a.job or r["job"] == a.job]}
+    if a.action == "binding-reset":
+        (p.factory / "binding.json").unlink(missing_ok=True)
+        return {"binding": "reset"}
+    if not a.run:
+        raise FactoryError(f"run {a.action} needs a run id")
+    ended = runs.end(p, a.run, status="done" if a.action == "end" else "aborted", why=a.why or a.action)
+    if not ended:
+        raise FactoryError(f"no run {a.run}")
+    return ended
+
+
 def cmd_lease(a, p):
     if a.action == "acquire":
         return actions.acquire_lease(p, takeover=a.takeover, force=a.force)
@@ -284,6 +299,11 @@ def parser():
     sp.add_argument("--by", default="")
     add("next", cmd_next, "the jobs to work on now: up to [factory] parallel active, slots filled from the queue"
         ).add_argument("--lease", required=True)
+    sp = add("run", cmd_run, "list agent runs, end or abort one, or reset a recorded binding failure")
+    sp.add_argument("action", choices=["list", "end", "abort", "binding-reset"])
+    sp.add_argument("run", nargs="?")
+    sp.add_argument("--job")
+    sp.add_argument("--why")
     sp = add("lease", cmd_lease, "acquire|check|release the one-orchestrator lease")
     sp.add_argument("action", choices=["acquire", "check", "release"])
     sp.add_argument("--lease")

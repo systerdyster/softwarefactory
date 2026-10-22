@@ -1,3 +1,4 @@
+import socket
 import threading
 import unittest
 
@@ -53,21 +54,92 @@ class WorkspaceTest(SandboxTest):
         self.assertEqual((job, out), (self.job, str(self.paths.output(self.job))))
         self.assertTrue(port.isdigit())
 
-    def test_a_serial_command_never_runs_in_two_jobs_at_once(self):
+    def configure(self, factory="", commands="", extra=""):
+        text = self.paths.project.read_text().replace("[factory]\n", f"[factory]\n{factory}")
+        text = text.replace("echo = echo\n", f"echo = echo\n{commands}").replace("[jira]\n", f"{extra}[jira]\n")
+        self.sb.write("project.md", text, base=self.paths.factory)
+        return config.load(self.paths)
+
+    def concurrently(self, *calls):
+        threads = [threading.Thread(target=fn, args=args) for fn, args in calls]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+    def test_two_different_serial_commands_never_overlap_across_jobs(self):
         log = self.sb.tmp / "shared.log"
-        self.sb.write("project.md", self.paths.project.read_text()
-                      .replace("[factory]\n", "[factory]\nserial = seed\n")
-                      .replace("echo = echo\n", f"echo = echo\nseed = echo start >> {log} && sleep 0.3 && echo end >> {log}\n"),
-                      base=self.paths.factory)
-        cfg = config.load(self.paths)
+        cfg = self.configure("serial = migrate, seed\n",
+                             f"migrate = echo m-start >> {log} && sleep 0.3 && echo m-end >> {log}\n"
+                             f"seed = echo s-start >> {log} && sleep 0.3 && echo s-end >> {log}\n")
         for job in (self.job, self.other):
             self.sb.open_job(job)
-        runs = [threading.Thread(target=workspace.run, args=(self.paths, cfg, job, "seed", [])) for job in (self.job, self.other)]
-        for t in runs:
-            t.start()
-        for t in runs:
-            t.join()
-        self.assertEqual(log.read_text().split(), ["start", "end", "start", "end"])
+        self.concurrently((workspace.run, (self.paths, cfg, self.job, "migrate", [])),
+                          (workspace.run, (self.paths, cfg, self.other, "seed", [])))
+        words = log.read_text().split()
+        self.assertIn(words, (["m-start", "m-end", "s-start", "s-end"], ["s-start", "s-end", "m-start", "m-end"]))
+
+    def test_an_independent_command_still_runs_alongside_a_serial_one(self):
+        log = self.sb.tmp / "shared.log"
+        cfg = self.configure("serial = migrate\n",
+                             f"migrate = echo m-start >> {log} && sleep 0.4 && echo m-end >> {log}\n"
+                             f"lintish = sleep 0.1 && echo lint >> {log}\n")
+        for job in (self.job, self.other):
+            self.sb.open_job(job)
+        self.concurrently((workspace.run, (self.paths, cfg, self.job, "migrate", [])),
+                          (workspace.run, (self.paths, cfg, self.other, "lintish", [])))
+        self.assertEqual(log.read_text().split(), ["m-start", "lint", "m-end"])
+
+    def test_one_port_per_job_shared_by_its_commands_and_never_by_another_job(self):
+        a, b = self.sb.open_job(self.job), self.sb.open_job(self.other)
+        port = lambda job: workspace.run(self.paths, self.cfg, job, "echo", ["$FACTORY_PORT"])["port"]
+        self.assertEqual(port(self.job), port(self.job))
+        self.assertNotEqual(port(self.job), port(self.other))
+
+    def test_a_port_someone_else_took_is_replaced(self):
+        self.sb.open_job()
+        first = workspace.job_port(self.paths, self.job)
+        with socket.socket() as squatter:
+            squatter.bind(("127.0.0.1", first))
+            squatter.listen()
+            self.assertNotEqual(workspace.job_port(self.paths, self.job), first)
+
+    SERVER = "python3 -m http.server $FACTORY_PORT --bind 127.0.0.1"
+    PROBE = ("python3 -c \"import os, urllib.request; "
+             "urllib.request.urlopen('http://127.0.0.1:' + os.environ['FACTORY_PORT'], timeout=5); print('served')\"")
+
+    def test_the_server_starts_on_the_jobs_port_for_its_tests_and_stops_after(self):
+        cfg = self.configure(commands=f"e2e = {self.PROBE}\n",
+                             extra=f"[server]\ncommand = {self.SERVER}\nfor = e2e\ntimeout = 20\n\n")
+        self.sb.open_job()
+        result = workspace.run(self.paths, cfg, self.job, "e2e", [])
+        self.assertEqual(result["exit_code"], 0, result["tail"])
+        self.assertIn("served", result["tail"])
+        self.assertFalse(workspace._port_in_use(result["port"]))
+
+    def test_two_jobs_run_their_servers_and_tests_at_once_on_their_own_ports(self):
+        cfg = self.configure(commands=f"e2e = {self.PROBE}\n",
+                             extra=f"[server]\ncommand = {self.SERVER}\nfor = e2e\ntimeout = 20\n\n")
+        for job in (self.job, self.other):
+            self.sb.open_job(job)
+        results = {}
+        self.concurrently(*[(lambda j: results.__setitem__(j, workspace.run(self.paths, cfg, j, "e2e", [])), (j,))
+                            for j in (self.job, self.other)])
+        self.assertEqual([r["exit_code"] for r in results.values()], [0, 0])
+        self.assertNotEqual(results[self.job]["port"], results[self.other]["port"])
+
+    def test_a_server_that_never_listens_fails_the_command_and_is_stopped(self):
+        cfg = self.configure(commands=f"e2e = {self.PROBE}\n",
+                             extra="[server]\ncommand = sleep 30\nfor = e2e\ntimeout = 1\n\n")
+        self.sb.open_job()
+        result = workspace.run(self.paths, cfg, self.job, "e2e", [])
+        self.assertNotEqual(result["exit_code"], 0)
+        self.assertIn("did not listen", result["tail"])
+
+    def test_a_test_command_may_start_its_own_server_on_the_port(self):
+        cfg = self.configure(commands=f"selfserved = {self.SERVER} & sleep 1 && {self.PROBE}; kill %1\n")
+        self.sb.open_job()
+        self.assertIn("served", workspace.run(self.paths, cfg, self.job, "selfserved", [])["tail"])
 
     def test_unknown_command_is_refused(self):
         self.sb.open_job()

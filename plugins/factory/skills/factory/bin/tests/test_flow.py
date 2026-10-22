@@ -7,7 +7,7 @@ import json
 import os
 import unittest
 
-from support import SandboxTest, git
+from support import SandboxTest, agent_starts, agent_stops, git
 
 import factory
 
@@ -34,6 +34,16 @@ class FlowTest(SandboxTest):
         text = out.getvalue()
         return text if args[0] == "brief" else json.loads(text)
 
+    def brief(self, *args):
+        """A brief, and the agent it starts doing its work at once: attached and stopped through the hooks."""
+        text = self.cli("brief", self.job, *args)
+        agent_type = "factory:factory-builder" if args[0] == "builder" else f"factory:factory-review-{args[-1]}"
+        self.agents = getattr(self, "agents", 0) + 1
+        agent_id = f"agent-{self.agents}"
+        self.assertEqual(agent_starts(self.paths.root, text, agent_id, agent_type), 0)
+        self.assertEqual(agent_stops(self.paths.root, agent_id, agent_type), 0)
+        return text
+
     def expect(self, action):
         nxt = self.cli("state", self.job)["next"]
         self.assertEqual(nxt["action"], action, nxt)
@@ -44,7 +54,7 @@ class FlowTest(SandboxTest):
         self.sb.write("build.md", old + f"\n{section}\nStatus: done\n", base=self.jd)
 
     def review(self, n, name, findings=""):
-        self.assertIn(f"review-{name}.md", self.cli("brief", self.job, "reviewer", "--reviewer", name))
+        self.assertIn(f"review-{name}.md", self.brief("reviewer", "--reviewer", name))
         self.sb.write(f"round-{n}/review-{name}.md", f"VERDICT: PASS\n\n## Findings\n{findings}\n", base=self.jd)
 
     def test_one_job_from_queue_to_merged(self):
@@ -53,7 +63,7 @@ class FlowTest(SandboxTest):
         self.cli("start", self.job)
 
         self.expect("spawn-builder")
-        self.assertIn("Map each acceptance criterion", self.cli("brief", self.job, "builder"))
+        self.assertIn("Map each acceptance criterion", self.brief("builder"))
         self.sb.write("src/app.py", "def answer():\n    return 43\n", base=self.sb.ws)
         self.sb.write("tests/test_answer.py", TEST, base=self.sb.ws)
         self.sb.write("LINT_ERROR", "", base=self.sb.ws)
@@ -65,7 +75,7 @@ class FlowTest(SandboxTest):
         self.cli("verify", self.job, expect=1)
         nxt = self.expect("spawn-builder")
         self.assertEqual(nxt["attempt"], 2)
-        self.assertIn("lint was red", self.cli("brief", self.job, "builder"))
+        self.assertIn("lint was red", self.brief("builder"))
         (self.sb.ws / "LINT_ERROR").unlink()
         self.sb.commit("Fix lint", cwd=self.sb.ws)
         self.log("## Round 1 (attempt 2)")
@@ -74,14 +84,14 @@ class FlowTest(SandboxTest):
         self.expect("schedule")
         self.assertEqual(self.cli("schedule", self.job)["reviewers"], ["code"])
         self.expect("spawn-reviewers")
-        self.cli("brief", self.job, "reviewer", "--reviewer", "code")
+        self.brief("reviewer", "--reviewer", "code")
         self.sb.write("round-1/review-code.md", "VERDICT: CHANGES\n\n## Findings\n"
                       "1. BLOCKING `src/app.py:2` — returns 43; AC1 asks for 42.\n"
                       "2. NOTE `src/app.py:1` — a docstring would not hurt.\n", base=self.jd)
 
         nxt = self.expect("spawn-builder")
         self.assertEqual(nxt["round"], 2)
-        brief = self.cli("brief", self.job, "builder")
+        brief = self.brief("builder")
         self.assertIn("1 blocking item(s)", brief)
         self.assertIn("returns 43", (self.jd / "round-1" / "findings.md").read_text())
         self.sb.write("src/app.py", "def answer():\n    return 42\n", base=self.sb.ws)
@@ -91,7 +101,7 @@ class FlowTest(SandboxTest):
         self.cli("verify", self.job)
         self.expect("schedule")
         self.assertEqual(self.cli("schedule", self.job)["reviewers"], ["code"])
-        self.assertIn("This round checks the fixes", self.cli("brief", self.job, "reviewer", "--reviewer", "code"))
+        self.assertIn("This round checks the fixes", self.brief("reviewer", "--reviewer", "code"))
         self.review(2, "code")
 
         s = self.cli("state", self.job)
@@ -127,12 +137,12 @@ class FlowTest(SandboxTest):
         self.log("## Round 1")
         self.cli("verify", self.job)
         self.cli("schedule", self.job)
-        self.cli("brief", self.job, "reviewer", "--reviewer", "code")
+        self.brief("reviewer", "--reviewer", "code")
         self.sb.write("round-1/review-code.md", "VERDICT: CHANGES\n\n## Findings\n### The total can drift (should fix)\n",
                       base=self.jd)
         s = self.cli("state", self.job)
         self.assertEqual((s["next"]["action"], s["next"]["reviewers"]), ("spawn-reviewers", ["code"]))
-        self.assertIn("rejected", self.cli("brief", self.job, "reviewer", "--reviewer", "code"))
+        self.assertIn("rejected", self.brief("reviewer", "--reviewer", "code"))
 
     def test_every_brief_lists_the_projects_written_rules(self):
         self.sb.push_target_change("Wiki/Components.md", "# Components\n\nA modifier only reassigns private variables.\n")
@@ -140,7 +150,7 @@ class FlowTest(SandboxTest):
             "[reviewers]\n", "[rules]\ndocs = Wiki/*.md\n\n[reviewers]\n"), base=self.paths.factory)
         self.cli("next", "--lease", self.lease)
         self.cli("start", self.job)
-        self.assertIn(str(self.sb.ws / "Wiki/Components.md"), self.cli("brief", self.job, "builder"))
+        self.assertIn(str(self.sb.ws / "Wiki/Components.md"), self.brief("builder"))
 
     def test_brief_refuses_an_agent_state_did_not_ask_for(self):
         self.cli("next", "--lease", self.lease)

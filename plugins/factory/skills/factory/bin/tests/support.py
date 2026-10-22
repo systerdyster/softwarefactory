@@ -2,6 +2,8 @@
 factory/ folder with project.md. The suite is `python3 check.py`, which fails while a file named
 BROKEN exists, so a test can turn it red with one file."""
 
+import io
+import json
 import os
 import subprocess
 import sys
@@ -146,3 +148,36 @@ class SandboxTest(unittest.TestCase):
 
     def tearDown(self):
         self.sb.cleanup()
+
+
+def agent_starts(root, brief, agent_id, agent_type="factory:factory-builder"):
+    """What Claude Code does when the orchestrator's Agent call with this brief returns: the plugin's
+    PostToolUse hook attaches the returned agentId to the brief's run."""
+    import hook
+    event = {"hook_event_name": "PostToolUse", "tool_name": "Agent",
+             "tool_input": {"prompt": brief, "subagent_type": agent_type, "description": "factory"},
+             "tool_response": {"status": "async_launched", "agentId": agent_id}}
+    with _root(root):
+        return hook.main(stream=io.StringIO(json.dumps(event)))
+
+
+def agent_stops(root, agent_id, agent_type="factory:factory-builder"):
+    import hook
+    event = {"hook_event_name": "SubagentStop", "agent_id": agent_id, "agent_type": agent_type}
+    with _root(root):
+        return hook.main(stream=io.StringIO(json.dumps(event)))
+
+
+class _root:
+    def __init__(self, root):
+        self.root, self.old = str(root), None
+
+    def __enter__(self):
+        self.old = os.environ.get("FACTORY_ROOT")
+        os.environ["FACTORY_ROOT"] = self.root
+
+    def __exit__(self, *exc):
+        if self.old is None:
+            os.environ.pop("FACTORY_ROOT", None)
+        else:
+            os.environ["FACTORY_ROOT"] = self.old

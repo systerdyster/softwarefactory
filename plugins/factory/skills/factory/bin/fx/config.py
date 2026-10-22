@@ -102,6 +102,19 @@ class Config:
         return value
 
     @property
+    def server_command(self):
+        """A dev server the factory starts on $FACTORY_PORT for the commands in [server] for."""
+        return self.get("server", "command")
+
+    @property
+    def server_for(self):
+        return self.getlist("server", "for")
+
+    @property
+    def server_timeout(self):
+        return self.getint("server", "timeout", 120)
+
+    @property
     def serial_commands(self):
         """[commands] names that write shared data (migrations, seeding, tests against a shared
         database) and so run one at a time across jobs."""

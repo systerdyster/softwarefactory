@@ -3,7 +3,7 @@ freshly spawned agent. It is derived from `state`, so the round, attempt and rea
 the job folder, and it refuses when `state` does not call for that agent. Every brief is logged
 to spawns.jsonl, which `state` reads to notice an agent that keeps making no progress."""
 
-from . import actions, findings, gitutil, jobs, state as state_mod
+from . import actions, findings, gitutil, jobs, runs, state as state_mod
 from .errors import FactoryError
 from .paths import branch_name
 
@@ -179,9 +179,13 @@ def brief(paths, cfg, job_id, agent, reviewer_name=None):
         if agent == "reviewer" and name not in REVIEWER_AGENTS:
             raise FactoryError(f"{name} has no reviewer agent; codex runs through `codex-review`")
         lines += reviewer(paths, cfg, job_id, s, nxt, name)
+    role = {"builder": "builder", "codex-fallback": "review-codex"}.get(agent, f"review-{reviewer_name}")
+    run = runs.reserve(paths, cfg, job_id, role, nxt.get("round"), nxt.get("attempt"), s["head"])
     actions.log_spawn(paths, job_id, agent if agent != "reviewer" else f"review-{reviewer_name}",
                       nxt.get("round"), nxt.get("attempt"), s["head"],
-                      {"conflicts": sorted(gitutil.unmerged_files(paths.workspace(job_id))) if s["stage"] == "rebasing" else []})
+                      {"run": run["run"],
+                       "conflicts": sorted(gitutil.unmerged_files(paths.workspace(job_id))) if s["stage"] == "rebasing" else []})
+    lines += ["", f"{runs.MARKER} {run['run']}"]
     return "\n".join(str(l) for l in lines) + "\n"
 
 
