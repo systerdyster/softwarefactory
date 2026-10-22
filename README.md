@@ -264,6 +264,11 @@ the repo root (or `-s tests` from `skills/factory/bin`).
   spec.md's summary, the diff size and the main review's least-sure list. Approve is refused unless
   the job is ready: it used to accept a job stopped on an objection and take unfinished work to a PR.
   Every job opens on a few lines of what has happened, round by round (`fx/story.py`).
+- **The PR description is as short as a commit body; the review facts are a PR comment.** Azure
+  DevOps and a GitHub merge put the description into the merge commit, and job 003's left 40 lines
+  of verdicts and least-sure items on main. Agents write commits to `[handoff] commits` (default: an
+  imperative short subject, a 2–3 line body only for the why), and the guard and `pr open` refuse AI
+  attribution in a commit or a description.
 - **One dashboard per project**, recorded in `factory/dashboard.json` (URL, pid, port; mode 0600,
   removed on exit). `/factory run` starts it, or links to the one already running; started by hand
   it reads the queue and jobs without an orchestrator, and its header says so, since commands then

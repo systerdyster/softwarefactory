@@ -153,7 +153,7 @@ def cmd_pr(a, p):
     if a.action == "comments":
         return {"comments": pr.comments(p, cfg, a.job)}
     if a.action == "body":
-        return {"body": pr.body(p, cfg, a.job)}
+        return {"body": pr.body(p, cfg, a.job), "details": pr.details(p, cfg, a.job), "commits": cfg.commits}
     return pr.close(p, cfg, a.job)
 
 

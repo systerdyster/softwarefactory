@@ -3,6 +3,7 @@ az (Azure DevOps) or `other` (push only; a human opens the PR). Only the orchest
 and it is the only place the factory pushes."""
 
 import json
+import os
 import re
 import subprocess
 import tempfile
@@ -38,9 +39,19 @@ def _summary(spec):
 
 
 def body(paths, cfg, job_id):
+    """The PR description: what changed and why, kept as short as a commit body — Azure DevOps and a
+    GitHub merge put it into the merge commit. The review facts go in a comment (`details`)."""
     jd = paths.job(job_id)
     meta = jobs.read_json(jd / "job.json") or {}
-    spec = jobs.read(jd / "spec.md") or ""
+    lines = [_summary(jobs.read(jd / "spec.md") or "") or "_spec.md has no summary_"]
+    if meta.get("jira") and cfg.jira_link in ("body", "both"):
+        lines += ["", jira_line(cfg, meta["jira"])]
+    return "\n".join(lines) + "\n"
+
+
+def details(paths, cfg, job_id):
+    """The review facts a PR's reviewers want and the git history doesn't: posted as one PR comment."""
+    jd = paths.job(job_id)
     tests = jobs.read(jd / "tests.md") or ""
     human = jobs.read(jd / "human-approval.md")
     rounds = jobs.rounds_on_disk(jd)
@@ -48,10 +59,7 @@ def body(paths, cfg, job_id):
     least = next((_section(t, "Least sure") for t in reversed(main_reviews) if _section(t, "Least sure")), "")
     verdicts = schedule.latest_verdicts(paths, job_id, max(rounds, default=0))
     fallback = any(r.get("fallback") for n in rounds for r in jobs.reviews(paths.round_dir(job_id, n)).values())
-    lines = [f"## {meta.get('title', job_id)}", ""]
-    if meta.get("jira") and cfg.jira_link in ("body", "both"):
-        lines += [jira_line(cfg, meta["jira"]), ""]
-    lines += ["### Summary", "", _summary(spec) or "_spec.md has no summary_", ""]
+    lines = [f"## Software factory — job `{job_id}`", ""]
     lines += ["### Reviews", "", "| Reviewer | Verdict |", "|---|---|"]
     lines += [f"| {name} | {v} |" for name, v in sorted(verdicts.items())]
     lines += ["", f"Rounds: {len(rounds)}"]
@@ -69,8 +77,46 @@ def body(paths, cfg, job_id):
     if human:
         lines += ["", f"Approved by {jobs.field(human, 'Approved-By') or 'a human'} at "
                       f"`{(jobs.field(human, 'Head') or '')[:12]}`."]
-    lines += ["", f"_Built by the software factory, job `{job_id}`._"]
     return "\n".join(lines) + "\n"
+
+
+def _post_details(paths, record, text):
+    """Posts the details comment, or rewrites the one posted before, so the PR carries one."""
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as handle:
+        if record["tool"] == "gh":
+            json.dump({"body": text}, handle)
+        else:
+            json.dump({"comments": [{"parentCommentId": 0, "content": text, "commentType": 1}], "status": "closed"}
+                      if not record.get("details_thread") else {"content": text}, handle)
+        payload = handle.name
+    try:
+        _send_details(paths, record, payload)
+    finally:
+        os.unlink(payload)
+
+
+def _send_details(paths, record, payload):
+    if record["tool"] == "gh":
+        if record.get("details_comment"):
+            _cli(["gh", "api", "-X", "PATCH", f"repos/{{owner}}/{{repo}}/issues/comments/{record['details_comment']}",
+                  "--input", payload], paths.root)
+        else:
+            data = json.loads(_cli(["gh", "api", "-X", "POST", f"repos/{{owner}}/{{repo}}/issues/{record['number']}/comments",
+                                    "--input", payload], paths.root))
+            record["details_comment"] = data["id"]
+        return
+    repo = (_az_show(paths, record["number"]).get("repository") or {})
+    route = [f"project={repo.get('project', {}).get('name')}", f"repositoryId={repo.get('id')}",
+             f"pullRequestId={record['number']}"]
+    if record.get("details_thread"):
+        _cli(["az", "devops", "invoke", "--area", "git", "--resource", "pullRequestThreadComments",
+              "--route-parameters", *route, f"threadId={record['details_thread']}", "commentId=1",
+              "--http-method", "PATCH", "--in-file", payload, "--api-version", "7.0", "--output", "json"], paths.root)
+    else:
+        data = json.loads(_cli(["az", "devops", "invoke", "--area", "git", "--resource", "pullRequestThreads",
+                                "--route-parameters", *route, "--http-method", "POST", "--in-file", payload,
+                                "--api-version", "7.0", "--output", "json"], paths.root))
+        record["details_thread"] = data["id"]
 
 
 def _push(paths, cfg, job_id):
@@ -156,6 +202,22 @@ def open_or_update(paths, cfg, job_id):
     with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as handle:
         handle.write(text)
         body_file = handle.name
+    try:
+        _open_with(paths, cfg, record, existing, meta, branch, title, text, body_file, auto)
+    finally:
+        os.unlink(body_file)
+    try:
+        _post_details(paths, record, details(paths, cfg, job_id))
+        record.pop("details_error", None)
+    except FactoryError as e:
+        record["details_error"] = str(e)
+    record["head"] = head
+    jobs.write_json(jd / "pr.json", record)
+    return record
+
+
+def _open_with(paths, cfg, record, existing, meta, branch, title, text, body_file, auto):
+    tool = cfg.pr_tool
     if tool == "gh":
         if existing and existing.get("state") == "OPEN":
             _cli(["gh", "pr", "edit", str(existing["number"]), "--body-file", body_file], paths.root)
@@ -180,9 +242,6 @@ def open_or_update(paths, cfg, job_id):
         if auto:
             _cli(["az", "repos", "pr", "update", "--id", str(data["pullRequestId"]), "--auto-complete", "true",
                   "--output", "json"], paths.root)
-    record["head"] = head
-    jobs.write_json(jd / "pr.json", record)
-    return record
 
 
 def status(paths, cfg, job_id):
