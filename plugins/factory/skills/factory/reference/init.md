@@ -65,6 +65,11 @@ section of `factory/project.md`:
   applies: none by default, one only where the why is a trap the code can't show, the surrounding
   file's style kept. Note what the project already does (section headers, a required comment) — a
   written rule in the docs wins over the default — and let the developer confirm.
+- **Documentation voice** — `[rules] writing`: how agents write wiki pages and other docs. Left
+  empty, the factory's default applies: plain framing, then the exact ingredients, then the gotcha;
+  present tense, no pasted code, one page per fact that needs upkeep, the neighbours' language. Note
+  a wiki-conventions page or skill if the project has one — its rules win — and let the developer
+  confirm.
 - **Reviewers** — every job gets the main review (`code`); security, performance and stability are
   specialists available everywhere. Enable the optional ones that fit (`platform` for a CMS or
   framework with traps, `ux` and `ui` for user-facing front ends). Leave `codex` off and say why: it

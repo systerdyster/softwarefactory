@@ -66,7 +66,9 @@ BLOCKING.
 timeout; a scheduled job, event subscription or cache with no stated reason or failure path.
 
 **Readable** — names say what things are; functions do one thing. Comments follow the brief's
-comment rule: one the change added that the rule doesn't allow is a NOTE naming the line.
+comment rule: one the change added that the rule doesn't allow is a NOTE naming the line. Documentation
+the change wrote follows the brief's documentation rule; a page that pastes code, reads as a
+changelog or contradicts another page is a NOTE.
 
 **Complexity** — grade what the change leaves behind, 1–10. 7–8 is a NOTE naming a specific refactor;
 9–10 is BLOCKING. Put `Complexity: n/10 — <one line>` at the end of your review.

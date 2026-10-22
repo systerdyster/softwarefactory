@@ -82,6 +82,9 @@ docs =
 ; when agents write code comments; empty = none by default, only where the why is a trap the code
 ; can't show, keeping the surrounding file's style
 comments =
+; how agents write documentation (wiki pages, READMEs); empty = plain framing, then the exact
+; ingredients, then the gotcha; present tense, no pasted code, one page per fact
+writing =
 
 [reviewers]
 ; code (main) runs on every job; security, performance, stability are specialists everywhere

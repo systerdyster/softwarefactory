@@ -23,6 +23,14 @@ DEFAULT_COMMENTS = ("Write none by default: names and small functions say what t
                     "of a props type, no paragraph introducing a file or a variant. Keep to the comment style of "
                     "the surrounding file (section headers it already uses stay), and don't strip comments from "
                     "code you aren't otherwise changing.")
+DEFAULT_WRITING = ("Frame it plainly first — what the thing is and why it exists, for a capable reader new to this "
+                   "domain, without talking down — then name the exact ingredients (real files, classes, routes, "
+                   "settings, steps in the order they happen), then the gotcha that saves the next developer an "
+                   "hour. Name an ingredient precisely; never paste its mechanics: no method bodies, no CSS dumps, "
+                   "no root-cause forensics. Current state in the present tense — no \"previously\", \"renamed "
+                   "from\", \"now\", version numbers, commit hashes or case keys. A fact that needs upkeep lives on "
+                   "one page and the others link to it. Write in the page's language and its neighbours'; use the "
+                   "customer's own names for their things, and quote code identifiers and UI labels verbatim.")
 
 _BLOCK = re.compile(r"^```ini[^\n]*\n(.*?)^```", re.S | re.M)
 
@@ -231,6 +239,11 @@ class Config:
     def comments(self):
         """When agents write code comments: the project's rule, else DEFAULT_COMMENTS."""
         return self.get("rules", "comments") or DEFAULT_COMMENTS
+
+    @property
+    def writing(self):
+        """How agents write documentation — wiki pages, READMEs: the project's rule, else DEFAULT_WRITING."""
+        return self.get("rules", "writing") or DEFAULT_WRITING
 
     @property
     def commits(self):
