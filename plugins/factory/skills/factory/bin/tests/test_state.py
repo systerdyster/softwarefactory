@@ -348,7 +348,9 @@ class LiveRunTest(unittest.TestCase):
         for rounds in ({1: rnd({"code": "CHANGES"})}, {1: passing()}):
             f = base_facts(build=[done(1)], rounds=rounds)
             f["live_runs"] = running
-            self.assertEqual(state.hold_for_runs(f, state.decide(f))["next"], {"action": "wait-agent", "runs": ["r4"]})
+            r = state.hold_for_runs(f, state.decide(f))
+            self.assertEqual((r["next"], r["stage"], r["waiting"]),
+                             ({"action": "wait-agent", "runs": ["r4"]}, "reviewing", False))
 
 
 class HumanTest(unittest.TestCase):

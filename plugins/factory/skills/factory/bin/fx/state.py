@@ -434,8 +434,8 @@ def hold_for_runs(f, result):
             nxt["reviewers"] = left
             return result
     if busy and nxt["action"] not in ("cancel", "finish"):
-        result["next"] = {"action": "wait-agent", "runs": sorted(r["run"] for r in reviewers)}
-        result["reason"] = f"reviewers running: {', '.join(sorted(busy))}"
+        result.update(stage="reviewing", waiting=False, reason=f"reviewers running: {', '.join(sorted(busy))}",
+                      next={"action": "wait-agent", "runs": sorted(r["run"] for r in reviewers)})
     return result
 
 
