@@ -17,6 +17,12 @@ DEFAULT_COMMITS = ("Subject imperative and short, no trailing period (`Add user 
                    "noun phrase). A body only when the why isn't obvious from subject and diff, then 2–3 lines on the "
                    "reason, never a paraphrase of the diff. No case key in the subject when the branch name carries it. "
                    "Related work in one commit rather than many small ones.")
+DEFAULT_COMMENTS = ("Write none by default: names and small functions say what the code does. Add a comment only "
+                    "where the why is a trap the code cannot show, and check the trap is real. No comment inside a "
+                    "function body narrating it, no doc comment on every export or class, no comment on each prop "
+                    "of a props type, no paragraph introducing a file or a variant. Keep to the comment style of "
+                    "the surrounding file (section headers it already uses stay), and don't strip comments from "
+                    "code you aren't otherwise changing.")
 
 _BLOCK = re.compile(r"^```ini[^\n]*\n(.*?)^```", re.S | re.M)
 
@@ -220,6 +226,11 @@ class Config:
     @property
     def pr_template(self):
         return self.get("handoff", "pr_template")
+
+    @property
+    def comments(self):
+        """When agents write code comments: the project's rule, else DEFAULT_COMMENTS."""
+        return self.get("rules", "comments") or DEFAULT_COMMENTS
 
     @property
     def commits(self):

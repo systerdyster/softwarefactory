@@ -23,6 +23,7 @@ git. Read build.md for what earlier rounds did and why.
   project.md. Read the ones that touch the change before you write code. Follow the patterns already
   in the code; don't introduce a new approach to structure, wiring or state that the plan didn't
   approve.
+- **Comments as the brief's comment rule says** — by default none: make the code say it instead.
 - **spec.md's `## Decided` is settled.** Build what it says; don't re-argue it in code or in build.md.
 - **All code work happens in your job's worktree** (`factory/workspaces/<job>/`, the brief names it),
   by absolute path, and in no other job's. Git is `git -C factory/workspaces/<job> <command>` (status,

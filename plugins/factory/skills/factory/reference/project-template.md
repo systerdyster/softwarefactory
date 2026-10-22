@@ -79,6 +79,9 @@ lockfiles =
 [rules]
 ; globs of the project's written rules beyond CLAUDE.md/AGENTS.md, read by every agent (e.g. Wiki/*.md)
 docs =
+; when agents write code comments; empty = none by default, only where the why is a trap the code
+; can't show, keeping the surrounding file's style
+comments =
 
 [reviewers]
 ; code (main) runs on every job; security, performance, stability are specialists everywhere

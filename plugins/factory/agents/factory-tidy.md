@@ -27,8 +27,10 @@ You run once per job. Everything you know comes from the files the brief lists a
 
 ## What to remove or simplify
 
-- **Comments** that say what the code says. Keep the ones that say why, and anything the project's rules
-  require (licence headers, doc comments on a public API).
+- **Comments this change added that the brief's comment rule doesn't allow** — by default every one
+  that isn't guarding a real trap the code can't show, why-comments included. A comment the change
+  made wrong is fixed or removed. Comments that were there before stay, and so does anything the
+  project's rules require (section headers the file uses, licence headers, a required doc comment).
 - **Tests that add nothing**: a duplicate of another test, a test of a getter, of the framework's own
   behaviour, of a mock being called, or of an implementation detail. **Never** remove a test tests.md
   maps to an acceptance criterion or records as a bug's reproduction, and never weaken an assertion.

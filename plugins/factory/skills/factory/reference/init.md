@@ -61,6 +61,10 @@ section of `factory/project.md`:
 - **Written rules** — `[rules] docs`: globs of the project's own rule pages beyond CLAUDE.md and
   AGENTS.md — a wiki's architecture and component pages, ADRs, a styleguide (`Wiki/*.md`,
   `docs/adr/**`). Every agent's brief lists them as rules. Look for them; ask which count as rules.
+- **Code comments** — `[rules] comments`: when agents write them. Left empty, the factory's default
+  applies: none by default, one only where the why is a trap the code can't show, the surrounding
+  file's style kept. Note what the project already does (section headers, a required comment) — a
+  written rule in the docs wins over the default — and let the developer confirm.
 - **Reviewers** — every job gets the main review (`code`); security, performance and stability are
   specialists available everywhere. Enable the optional ones that fit (`platform` for a CMS or
   framework with traps, `ux` and `ui` for user-facing front ends). Leave `codex` off and say why: it

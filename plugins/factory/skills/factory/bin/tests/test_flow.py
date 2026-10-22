@@ -229,6 +229,12 @@ class FlowTest(SandboxTest):
         self.cli("start", self.job)
         self.assertIn(str(self.sb.ws / "Wiki/Components.md"), self.brief("builder"))
 
+    def test_every_brief_carries_the_comment_rule_the_project_sets_or_the_default(self):
+        self.cli("next", "--lease", self.lease)
+        self.cli("start", self.job)
+        self.assertIn("Code comments, unless a project rule above says otherwise: Write none by default",
+                      self.cli("brief", self.job, "builder"))
+
     def test_brief_refuses_an_agent_state_did_not_ask_for(self):
         self.cli("next", "--lease", self.lease)
         self.cli("brief", self.job, "reviewer", "--reviewer", "code", expect=1)

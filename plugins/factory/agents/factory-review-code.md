@@ -65,7 +65,8 @@ BLOCKING.
 **Baseline stability** — a path that crashes on missing or malformed data; an external call with no
 timeout; a scheduled job, event subscription or cache with no stated reason or failure path.
 
-**Readable** — names say what things are; functions do one thing; comments explain why, not what.
+**Readable** — names say what things are; functions do one thing. Comments follow the brief's
+comment rule: one the change added that the rule doesn't allow is a NOTE naming the line.
 
 **Complexity** — grade what the change leaves behind, 1–10. 7–8 is a NOTE naming a specific refactor;
 9–10 is BLOCKING. Put `Complexity: n/10 — <one line>` at the end of your review.
