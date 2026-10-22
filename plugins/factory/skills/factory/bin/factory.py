@@ -184,6 +184,10 @@ def cmd_next(a, p):
     return actions.next_job(p, _cfg(p), a.lease)
 
 
+def cmd_wait(a, p):
+    return actions.wait(p, a.timeout)
+
+
 def cmd_run(a, p):
     if a.action == "list":
         cfg = _cfg(p)
@@ -310,6 +314,8 @@ def parser():
     sp.add_argument("--by", default="")
     add("next", cmd_next, "the jobs to work on now: up to [factory] parallel active, slots filled from the queue"
         ).add_argument("--lease", required=True)
+    add("wait", cmd_wait, "block until an inbox command is pending or the timeout passes (next said wait)"
+        ).add_argument("--timeout", type=int, default=actions.WAIT_SECONDS)
     sp = add("run", cmd_run, "list agent runs, end or abort one, or reset a recorded binding failure")
     sp.add_argument("action", choices=["list", "end", "abort", "binding-reset"])
     sp.add_argument("run", nargs="?")

@@ -331,7 +331,25 @@ def next_job(paths, cfg, lease):
         return {**result, "action": "work"}
     if paths.stop_flag.exists():
         return {**result, "action": "stop", "reason": "/factory stop was requested"}
-    return {**result, "action": "idle", "reason": "nothing to build: the queue is empty or blocked"}
+    if waiting or blocked:
+        return {**result, "action": "wait",
+                "reason": "nothing to build now; jobs wait for a human or a PR — `wait`, then ask again"}
+    return {**result, "action": "idle", "reason": "the queue is empty and every job is finished"}
+
+
+WAIT_SECONDS = 540
+
+
+def wait(paths, timeout=WAIT_SECONDS, interval=2.0):
+    """Blocks until an inbox command is pending or the timeout passes: how the orchestrator waits for a
+    human's approval while no job can be built, and still polls open PRs every few minutes."""
+    import time
+    deadline = time.monotonic() + timeout
+    while True:
+        pending = inbox_list(paths)
+        if pending or time.monotonic() >= deadline:
+            return {"inbox": len(pending), "timed_out": not pending}
+        time.sleep(interval)
 
 
 LEASE_STALE_MINUTES = 15

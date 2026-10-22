@@ -7,7 +7,8 @@ metadata:
 
 # /factory run — the orchestrator
 
-You build queued jobs — up to two at once (`[factory] parallel`) — until the queue is empty. You
+You build queued jobs — up to two at once (`[factory] parallel`) — until the queue is empty and every
+job is finished: a job waiting for the developer's approval or for its PR keeps the run going. You
 spawn every agent, you are the only writer of `factory/board.json`, and you are the only session that
 pushes. Run this session on sonnet (`claude --model sonnet`); if it isn't, say so once and continue.
 `F` is `factory-cli`, which the plugin puts on PATH.
@@ -46,8 +47,11 @@ Repeat:
    at most two. A job waiting for a human (needs-human, an open PR) keeps its worktree but holds no
    slot; one beyond the slots is listed under `waiting_for_slot`; a job queued `--after` another that
    isn't done is listed under `blocked`. `action` is `stop` (after `/factory stop`, once nothing is
-   active) or `idle` (nothing to build): then `F board`, report (below), `F lease release --lease
-   <lease>` and end the run.
+   active) or `idle` (the queue is empty and every job is finished): then `F board`, report (below),
+   `F lease release --lease <lease>` and end the run. `action` is `wait` when nothing can be built
+   now but jobs wait for a human or a PR: report once (the first time), then run `F wait` (Bash
+   timeout 600000) — it returns when an inbox command is pending, or after nine minutes — and go
+   round the loop again. Don't end the run on `wait`.
 4. **Act** — for **each** job in `jobs`, ask `F state <id>` and perform its `next.action` from the
    table below, then its **Jira** to-dos. Spawn agents in the background, so one job's agents run
    while you act on the other; when an agent returns, ask that job's state again. Never let one job

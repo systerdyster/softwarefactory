@@ -59,6 +59,19 @@ class ParallelTest(SandboxTest):
         self.assertEqual([w["id"] for w in result["waiting"]], [self.a])
         self.assertTrue(self.sb.ws_of(self.a).exists())
 
+    def test_the_run_waits_for_a_human_and_ends_only_when_every_job_is_finished(self):
+        queue.mark(self.paths, self.b, "cancelled")
+        queue.mark(self.paths, self.c, "cancelled")
+        self.next()
+        actions.start(self.paths, self.cfg, self.a)
+        self.to_ready(self.a, "src/app.py", "def answer():\n    return 42\n")
+        self.assertEqual(self.next()["action"], "wait")
+        self.assertEqual(actions.wait(self.paths, timeout=0), {"inbox": 0, "timed_out": True})
+        actions.write_command(self.paths, "approve", self.a, "", "dev")
+        self.assertEqual(actions.wait(self.paths, timeout=60), {"inbox": 1, "timed_out": False})
+        queue.mark(self.paths, self.a, "done")
+        self.assertEqual(self.next()["action"], "idle")
+
     def test_a_rework_waits_for_a_free_slot(self):
         self.next()
         for job in (self.a, self.b):
