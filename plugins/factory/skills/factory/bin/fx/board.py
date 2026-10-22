@@ -107,6 +107,7 @@ def build(paths, cfg, write=True):
         "target": cfg.base_ref,
         "reviewers": cfg.enabled_reviewers,
         "stopping": paths.stop_flag.exists(),
+        "orchestrator": paths.orchestrator.exists(),
         "jobs": cards,
     }
     if not write:

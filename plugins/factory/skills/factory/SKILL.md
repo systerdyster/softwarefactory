@@ -72,5 +72,6 @@ factory/jobs/<id>/        job.json spec.md plan.md tests.md build.md baseline.js
                           round-N/{scheduled.md, review-<name>.md, findings.md, verify-A.json, ruling-A.md}
 ```
 
-The dashboard: `/factory run` starts it and gives its URL (127.0.0.1, random token). Without a run:
-`factory-dashboard` or `F dashboard`.
+The dashboard: `/factory run` starts it and gives its URL (127.0.0.1, random token). Without a run —
+to read the queue and the jobs — `factory-dashboard` or `F dashboard`. One runs per project: a second
+start prints the running one's URL (factory/dashboard.json).

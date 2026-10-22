@@ -52,6 +52,7 @@ class Paths:
         self.workspaces = self.factory / "workspaces"
         self.locks = self.factory / "locks"
         self.orchestrator = self.factory / "orchestrator.json"
+        self.dashboard = self.factory / "dashboard.json"
         self.logs = self.factory / "logs"
         self.stop_flag = self.factory / "STOP"
 

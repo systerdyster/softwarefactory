@@ -17,6 +17,8 @@ import hmac
 import json
 import os
 import secrets
+import signal
+import socket
 import sys
 import threading
 import time
@@ -165,10 +167,37 @@ def main():
     run(Paths(), ap.parse_args().port)
 
 
+def running(paths):
+    """The dashboard already serving this project, from factory/dashboard.json: its process is alive
+    and its port answers. A record left by one that died is removed."""
+    record = jobs.read_json(paths.dashboard) if paths.dashboard.exists() else None
+    if not record:
+        return None
+    try:
+        os.kill(record["pid"], 0)
+        socket.create_connection(("127.0.0.1", record["port"]), timeout=1).close()
+        return record
+    except (OSError, KeyError, TypeError):
+        paths.dashboard.unlink(missing_ok=True)
+        return None
+
+
 def run(paths, port=0):
-    """Serves until interrupted; `factory-dashboard` and `factory-cli dashboard` both end up here."""
+    """Serves until interrupted or terminated — or, when this project's dashboard already runs, prints
+    its URL and returns, so `/factory run` and a hand-started one share it. `factory-dashboard` and
+    `factory-cli dashboard` both end up here."""
+    existing = running(paths)
+    if existing:
+        print(f"Factory dashboard: {existing['url']}", flush=True)
+        print(f"Already running (pid {existing['pid']}); not starting another.", flush=True)
+        return existing
     httpd, token, port = serve(paths, port)
-    print(f"Factory dashboard: http://127.0.0.1:{port}/?token={token}", flush=True)
+    url = f"http://127.0.0.1:{port}/?token={token}"
+    paths.factory.mkdir(parents=True, exist_ok=True)
+    jobs.write_json(paths.dashboard, {"url": url, "port": port, "pid": os.getpid(), "started_at": jobs.now()})
+    os.chmod(paths.dashboard, 0o600)
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    print(f"Factory dashboard: {url}", flush=True)
     print("Ctrl-C to stop. Anyone with this URL can queue approve/rework/cancel commands.", flush=True)
     try:
         httpd.serve_forever()
@@ -176,6 +205,9 @@ def run(paths, port=0):
         pass
     finally:
         httpd.server_close()
+        if (jobs.read_json(paths.dashboard) or {}).get("pid") == os.getpid():
+            paths.dashboard.unlink(missing_ok=True)
+    return None
 
 
 if __name__ == "__main__":

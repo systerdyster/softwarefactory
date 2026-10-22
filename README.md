@@ -176,6 +176,10 @@ the repo root (or `-s tests` from `skills/factory/bin`).
   start, build, verify, tidy, review (each reviewer running, waiting or done), approve, PR — with the
   running agent's time. Every git call runs with `GIT_OPTIONAL_LOCKS=0`, so these reads never take
   `index.lock` from under an agent's commit.
+- **One dashboard per project**, recorded in `factory/dashboard.json` (URL, pid, port; mode 0600,
+  removed on exit). `/factory run` starts it, or links to the one already running; started by hand
+  it reads the queue and jobs without an orchestrator, and its header says so, since commands then
+  wait in the inbox for the next run.
 
 ## Proven, and not yet
 

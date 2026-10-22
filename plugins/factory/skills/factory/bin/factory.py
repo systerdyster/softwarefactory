@@ -194,8 +194,8 @@ def cmd_dashboard(a, p):
     spec = importlib.util.spec_from_file_location("factory_server", Path(__file__).resolve().parent.parent / "server.py")
     server = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(server)
-    server.run(p, a.port)
-    return {"dashboard": "stopped"}
+    existing = server.run(p, a.port)
+    return {"dashboard": "already running", "url": existing["url"]} if existing else {"dashboard": "stopped"}
 
 
 def cmd_run(a, p):

@@ -204,6 +204,7 @@
     const when = board.updated_at ? new Date(board.updated_at).toLocaleTimeString() : "never";
     $("meta").innerHTML = `${esc(board.target || "")} · ${esc(board.merge_mode || "")} · updated ${esc(when)}`
       + (board.stopping ? ` · <span class="stopping">stopping after the current job</span>` : "")
+      + (board.orchestrator === false ? ` · <span class="stopping">orchestrator not running — commands wait for /factory run</span>` : "")
       + (board.note ? ` · ${esc(board.note)}` : "");
     document.querySelectorAll(".card").forEach((el) => el.addEventListener("click", () => open(el.dataset.id)));
   }

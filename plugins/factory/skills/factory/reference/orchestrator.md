@@ -31,7 +31,8 @@ is bound to the job its brief names. A failure or a wait in one job never holds 
    `/factory init`.
 3. **Dashboard** — run `F dashboard` with the Bash tool in the background (`run_in_background`). Read
    its output file once for the line `Factory dashboard: http://127.0.0.1:…/?token=…` and give the
-   human that URL. It serves until this session ends; don't start a second one in the same run.
+   human that URL. It serves until this session ends. When this project's dashboard already runs
+   (started by hand, or by an earlier run), it prints that one's URL and exits instead.
 4. Arm the inbox watch (see **Inbox**), then process any pending inbox commands.
 5. **Agents from before** — `F run list`. A live run left by an earlier session holds its work, and
    state says `wait-agent` for it until it ends or goes silent. If the human confirms that session

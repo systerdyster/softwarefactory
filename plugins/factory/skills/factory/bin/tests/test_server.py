@@ -61,12 +61,23 @@ class ServerTest(SandboxTest):
             conn = http.client.HTTPConnection("127.0.0.1", int(port), timeout=5)
             conn.request("GET", "/board.json", headers={"X-Factory-Token": token})
             res = conn.getresponse()
-            self.assertEqual((res.status, json.loads(res.read())["jobs"][0]["id"]), (200, self.job))
+            board = json.loads(res.read())
+            self.assertEqual((res.status, board["jobs"][0]["id"], board["orchestrator"]), (200, self.job, False))
             conn.close()
+            again = subprocess.run([sys.executable, str(cli), "dashboard"], capture_output=True, text=True, timeout=10,
+                                   env=dict(os.environ, FACTORY_ROOT=str(self.paths.root)))
+            self.assertIn(f"Factory dashboard: {url}", again.stdout)
+            self.assertIn('"already running"', again.stdout)
         finally:
             proc.terminate()
             proc.wait(timeout=5)
             proc.stdout.close()
+        self.assertFalse(self.paths.dashboard.exists())
+
+    def test_a_record_left_by_a_dead_dashboard_is_ignored(self):
+        self.paths.dashboard.write_text(json.dumps({"url": "http://127.0.0.1:1/?token=x", "port": 1, "pid": 999999}))
+        self.assertIsNone(server.running(self.paths))
+        self.assertFalse(self.paths.dashboard.exists())
 
     def test_a_foreign_host_header_is_refused(self):
         self.assertEqual(self.request("GET", "/", headers={"Host": "evil.example"})[0], 403)
