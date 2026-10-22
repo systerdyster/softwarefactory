@@ -28,6 +28,12 @@ spec.md's `## Decided` section records what the developer already decided, inclu
 expected (a large diff, a deliberate exemption). Don't report a finding against a decision there
 unless you name a **new circumstance** the decision didn't know — then say what it is.
 
+**A decision is not licence for a regression.** When following the spec or plan breaks behaviour
+that worked before — content that no longer renders, a heading lost on one path, a page that errors
+for some input — report it as BLOCKING, even though the plan prescribed the change: name the decision
+or plan step, and the concrete failure (input, what happens, what used to happen). The developer
+decides whether it was intended; your job is to make sure they know.
+
 ## The file
 
 ```markdown
