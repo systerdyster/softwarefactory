@@ -1,12 +1,74 @@
 # Software factory
 
-A Claude Code plugin that turns an approved case into a PR: `/factory add` frames a case with the
-developer into a spec and a plan, and `/factory run` builds queued jobs: a fresh builder makes the
-change with meaningful tests for the behaviour it changes, a main reviewer checks it (with specialists
-where the change calls for them), and the developer approves before the PR. Python standard library
-only. It was first built from a blueprint prompt; this repo is now the source.
+A Claude Code plugin that turns an approved case into a pull request. You frame a case once, together
+with Claude, into a spec and a plan you approve. The factory then builds it with fresh agents — a
+builder that writes the change and its tests, a tidy pass, a main reviewer and specialists where the
+change calls for them — runs the project's own tests, build and lint, and hands the job back to you
+for approval before anything reaches a PR. It stops and asks whenever a decision is yours.
 
-## The flow
+A personal tool for use across work projects: in a project it changes no committed file. Python
+standard library only. It was first built from a blueprint prompt; this repo is now the source.
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `/factory init` | Once per project: writes `factory/project.md` — commands, what verify runs, test conventions, worktree setup, how many jobs at once, reviewers and their path patterns, hand-off. |
+| `/factory add <JIRA-KEY or text>` | Intake: frames one case with you into `spec.md` and `plan.md`, and queues it once you approve. Any number of intake sessions can run, also while the factory builds. |
+| `/factory run` | The orchestrator: builds queued jobs until every job is finished, and starts the dashboard. |
+| `/factory approve <id>` | Approves a job that has passed review; it then goes on to rebase, checks and PR. |
+| `/factory answer <id> <text>` | Answers a question the factory stopped on; the builder continues. |
+| `/factory rework <id> <note>` | Sends a job back for another round with your note. |
+| `/factory cancel <id> [reason]` | Stops a job, closes its PR, removes its branch and worktree. |
+| `/factory stop` · `/factory status` | Take no new job · show the board in the terminal. |
+| `factory-dashboard` | The dashboard without a run, to read the queue and jobs. |
+
+Approve, answer, rework and cancel work from any session and from the dashboard: they wait in
+`factory/inbox/` until the orchestrator runs them.
+
+## How it works
+
+### From case to pull request
+
+```mermaid
+flowchart LR
+    A["/factory add<br/>intake with you"] -->|you approve<br/>spec + plan| Q[(queue)]
+    Q --> O["/factory run<br/>orchestrator"]
+    O --> J1[job in its<br/>own worktree]
+    O --> J2[job in its<br/>own worktree]
+    J1 --> H{{you decide}}
+    J2 --> H
+    H -->|approve| PR[rebase, checks,<br/>pull request]
+    H -->|rework| O
+    PR -->|merged| D[done:<br/>worktree removed]
+```
+
+The orchestrator builds up to `[factory] parallel` jobs at once, each on its own branch in its own
+worktree. A job queued `--after` another waits until that one is done. Integration is one job at a
+time.
+
+### One job
+
+```mermaid
+flowchart TD
+    S[start: worktree + project checks<br/>on the target branch] --> B
+    B["builder<br/>change + tests"] --> V{verify<br/>tests · build · lint}
+    V -->|red, max 3 attempts| B
+    V -->|green, round 1| T["tidy pass<br/>once per job"]
+    V -->|green, later rounds| R
+    T --> TV{verify}
+    TV -->|green| R
+    TV -->|red or unfinished:<br/>discard the tidy pass| R
+    R["review<br/>code + specialists"] --> F{blocking<br/>findings?}
+    F -->|yes| B
+    F -->|no| H{{you approve}}
+    B -.->|objection: the plan<br/>can't be followed| J{orchestrator<br/>rules}
+    J -.->|within the approved plan| B
+    J -.->|changes scope or design| Q{{you answer<br/>the question}}
+    Q -.-> B
+    H -->|approve| P[rebase · checks · PR]
+    H -->|rework| B
+```
 
 1. **Builder** — the change, with tests where behaviour changes (logic and helpers above all), TDD
    where it helps, and for a bug a test that reproduces it: tests.md records how it failed before the
@@ -31,6 +93,22 @@ only. It was first built from a blueprint prompt; this repo is now the source.
 
 spec.md's `## Decided` is settled for every agent; project.md's `[rules] docs` (a wiki's
 architecture and component pages) are rules every brief lists.
+
+### When it waits for you
+
+| What you see | What you decide | How you answer |
+|---|---|---|
+| **Ready for your approval** — summary, diff size, what the reviewer is least sure of, what to check by hand | Is this what you want in the PR? | Approve, or Rework with a note |
+| **Your decision** — a question with options, one recommended | Which way, when the plan can't be followed as approved | Pick an option or write your own; it goes into spec.md's `## Decided` |
+| **Stopped** — the reason (red target, too many attempts, blocking findings after the last round) | What to do next | Rework with a note, or Cancel |
+
+### The dashboard
+
+`/factory run` starts it and gives its URL (127.0.0.1, with a token); one runs per project, and a
+second start links to it. Each job is a row of steps — start, build, verify, tidy, review with each
+reviewer, approve, PR — with the running agent's time. Opening a job shows a few lines of what has
+happened, round by round, then what to decide and only the buttons that answer it. The header says
+when no orchestrator is running, since your commands then wait for the next run.
 
 ## Several jobs at once
 
@@ -96,7 +174,7 @@ plugins/factory/
   bin/factory-cli, factory-dashboard      on PATH while the plugin is enabled
   hooks/hooks.json                        the PreToolUse guard for factory agents
   skills/factory/
-    SKILL.md, reference/                  routes init | add | run | stop | approve | rework | cancel | status
+    SKILL.md, reference/                  routes init | add | run | stop | approve | answer | rework | cancel | status
     bin/factory.py, hook.py, fx/          every mechanical step; prints JSON, exits non-zero on failure
     bin/tests/                            unittest, real temp git repos with a bare origin
     server.py, dashboard.html             dashboard + inbox, 127.0.0.1 with a token
@@ -200,22 +278,22 @@ human approval → rebase onto a moved target → PR → merged → cleaned up),
 token/host/origin/path checks, `init-files`, `allowlist`, and Codex detection against
 the installed CLI (0.153.4).
 
-**Not yet run for real** — the build order says each stage is proven on a real job before the next:
+**Run for real** on spa-solidjs-starter-kit (jobs 001–003, 2026-10-21/22, Azure DevOps, PRs 63, 66
+and 67 merged): `/factory run` spawning the agents, the plugin hook with real `agent_type` values,
+agents bound to their runs through the Agent call's `agentId` (it is the hooks' `agent_id`),
+parallel reviewers, the tidy pass, an objection going to the developer, rework, `az` PR create and
+status, and a merge moving the target.
 
-- A real `/factory run` in a project: Claude Code spawning the agents, the plugin hook firing with real `agent_type` values,
-  parallel reviewers, Monitor on the inbox.
-- `gh` and `az` PR calls (create, edit, status, comments via `az devops invoke`, auto-complete) — written
-  against their documented flags, exercised only with `pr_tool = other`.
+**Not yet run for real** — each is proven on a real job before it is relied on:
+
+- Two jobs building at the same moment with real agents (so far a queued job has always waited for
+  its `--after`), and more than two; two `pnpm install`s in parallel; the project's dev server and
+  browser tests honouring `$FACTORY_PORT` / `$FACTORY_OUTPUT`.
+- The question/answer flow, the live dashboard pipeline and `F wait` keeping a run alive.
+- `gh` PR calls and `auto-merge`; comments via `az devops invoke`.
 - A real `codex exec` review (detection is verified; the call sends code to OpenAI, so it waits for a
   project that has enabled it).
 - Jira claim, transitions and the hand-back comment.
-- Two real jobs at once: the orchestrator alternating between them with background agents; the
-  Agent call's returned `agentId` being the same value the hooks see as `agent_id` (documented as
-  "identifier for the subagent run" and "unique identifier for the subagent", not documented as
-  equal — if they differ, nothing writes and `F next` stops with the reason); PostToolUse firing for
-  background Agent calls and SubagentStop for factory agents; two `pnpm install`s in parallel sharing
-  the store; the project's dev server and browser tests honouring `$FACTORY_PORT` /
-  `$FACTORY_OUTPUT`; a merge in Azure DevOps moving the target under the other job's open PR.
 
 ## Gotchas
 
