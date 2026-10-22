@@ -109,14 +109,15 @@ def _check_git(paths, role, argv, review_commands):
         return job, False
     if sub in WRITE_GIT and role in WRITERS:
         if sub == "commit":
-            _check_message(paths, rest)
+            _check_message(target, rest)
         return job, True
     raise Blocked(f"`git {sub}` is not available to the {role}. Only the orchestrator switches, rebases or pushes.\n"
                   + _usage(role, review_commands))
 
 
-def _check_message(paths, args):
-    """A commit message from -m/--message or -F/--file may carry no AI attribution."""
+def _check_message(cwd, args):
+    """A commit message from -m/--message or -F/--file may carry no AI attribution. Git reads -F
+    relative to the directory given with -C; a message file the guard can't read is refused."""
     texts = []
     for i, a in enumerate(args):
         nxt = args[i + 1] if i + 1 < len(args) else ""
@@ -126,9 +127,13 @@ def _check_message(paths, args):
             texts.append(a.split("=", 1)[1])
         elif a.startswith("-m") and len(a) > 2:
             texts.append(a[2:])
-        elif a in ("-F", "--file") or a.startswith("--file="):
-            f = _resolve(paths, nxt if a in ("-F", "--file") else a.split("=", 1)[1])
-            texts.append(f.read_text(encoding="utf-8") if f.is_file() else "")
+        elif a in ("-F", "--file") or a.startswith("--file=") or (a.startswith("-F") and len(a) > 2):
+            raw = nxt if a in ("-F", "--file") else a.split("=", 1)[1] if a.startswith("--file=") else a[2:]
+            f = (cwd / raw).resolve()
+            if raw == "-" or not f.is_file():
+                raise Blocked(f"the commit message file {raw} can't be read by the guard; write it inside the "
+                              "workspace or use -m")
+            texts.append(f.read_text(encoding="utf-8"))
     if any(jobs.attribution(t) for t in texts):
         raise Blocked("commit messages carry no AI attribution — remove the Co-Authored-By / Generated-with line")
 

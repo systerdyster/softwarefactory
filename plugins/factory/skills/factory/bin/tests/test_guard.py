@@ -98,6 +98,12 @@ class GuardTest(SandboxTest):
         self.assertEqual(self.bash("builder", f"git -C {self.ws} commit '--message=Generated with Claude Code'"), 2)
         message = self.sb.write("msg.txt", "Add x\n\nCo-authored-by: Claude Opus <noreply@anthropic.com>\n", base=self.sb.ws)
         self.assertEqual(self.bash("builder", f"git -C {self.ws} commit -F {message}"), 2)
+        for form in ("-F msg.txt", "-Fmsg.txt", "--file=msg.txt"):
+            self.assertEqual(self.bash("builder", f"git -C {self.ws} commit {form}"), 2, form)
+        self.sb.write("clean.txt", "Add x\n", base=self.sb.ws)
+        self.assertEqual(self.bash("builder", f"git -C {self.ws} commit -F clean.txt"), 0)
+        for unreadable in ("-F missing.txt", "-F -"):
+            self.assertEqual(self.bash("builder", f"git -C {self.ws} commit {unreadable}"), 2, unreadable)
         self.assertEqual(self.bash("builder", f"git -C {self.ws} commit -m 'Add x' -m 'Why it was needed'"), 0)
         self.assertEqual(self.bash("builder", f"git -C {self.ws} commit -m 'Refuse trailers' "
                                               "-m 'Job 001 left Co-Authored-By lines on main.'"), 0)
