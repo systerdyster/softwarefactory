@@ -216,10 +216,11 @@ drawn in code in `dashboard.html`; there are no image files. The main reviewer e
 Needs Claude Code, Python 3 (standard library only) and git. Optional: `gh` or `az` for pull requests,
 the Codex CLI for the `codex` review.
 
-Once per developer, from this repo as a local marketplace:
+Once per developer: clone this repo, then add the clone as a local marketplace (use your own path):
 
 ```
-/plugin marketplace add ~/Projects/Private/software-factory
+git clone git@github.com:systerdyster/softwarefactory.git
+/plugin marketplace add <path-to-your-clone>
 /plugin install factory@software-factory          # user scope
 ```
 
@@ -228,7 +229,7 @@ repo's committed settings, which breaks for everyone else. Then, in each project
 
 A plugin from a local-directory marketplace loads in place, so edits here take effect at the next
 session start or `/reload-plugins`, with no version bump. To try a change without the installed
-copy: `claude --plugin-dir ~/Projects/Private/software-factory/plugins/factory`.
+copy: `claude --plugin-dir <path-to-your-clone>/plugins/factory`.
 
 ## Layout
 
@@ -348,8 +349,8 @@ human approval → rebase onto a moved target → PR → merged → cleaned up),
 token/host/origin/path checks, `init-files`, `allowlist`, and Codex detection against
 the installed CLI (0.153.4).
 
-**Run for real** on spa-solidjs-starter-kit (jobs 001–003, 2026-10-21/22, Azure DevOps, PRs 63, 66
-and 67 merged): `/factory run` spawning the agents, the plugin hook with real `agent_type` values,
+**Run for real** on a production web project (jobs 001–003, 2026-10-21/22, Azure DevOps, three PRs
+merged): `/factory run` spawning the agents, the plugin hook with real `agent_type` values,
 agents bound to their runs through the Agent call's `agentId` (it is the hooks' `agent_id`),
 parallel reviewers, the tidy pass, an objection going to the developer, rework, `az` PR create and
 status, and a merge moving the target.
