@@ -99,6 +99,8 @@ class GuardTest(SandboxTest):
         message = self.sb.write("msg.txt", "Add x\n\nCo-authored-by: Claude Opus <noreply@anthropic.com>\n", base=self.sb.ws)
         self.assertEqual(self.bash("builder", f"git -C {self.ws} commit -F {message}"), 2)
         self.assertEqual(self.bash("builder", f"git -C {self.ws} commit -m 'Add x' -m 'Why it was needed'"), 0)
+        self.assertEqual(self.bash("builder", f"git -C {self.ws} commit -m 'Refuse trailers' "
+                                              "-m 'Job 001 left Co-Authored-By lines on main.'"), 0)
 
     def test_the_first_write_to_another_job_is_refused(self):
         self.running("agent-a")

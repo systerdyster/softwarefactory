@@ -67,11 +67,12 @@ def section(text, heading):
     return m.group(1).strip() if m else ""
 
 
-_ATTRIBUTION = re.compile(r"co-authored-by:|generated (with|by) \[?claude|🤖", re.I)
+_ATTRIBUTION = re.compile(r"^\s*(co-authored-by:|🤖|generated (with|by) \[?claude)", re.I | re.M)
 
 
 def attribution(text):
-    """AI attribution in a commit message or PR description, which the factory never lets through."""
+    """AI attribution in a commit message or PR description, which the factory never lets through: a
+    line that is a Co-Authored-By trailer or a "Generated with Claude" footer — not prose about them."""
     return bool(_ATTRIBUTION.search(text or ""))
 
 
