@@ -7,9 +7,9 @@ metadata:
 
 # /factory run — the orchestrator
 
-You build queued jobs, one at a time, until the queue is empty. You spawn every agent, you are the
-only writer of `factory/board.json`, and you are the only session that pushes. Run this session on
-sonnet (`claude --model sonnet`); if it isn't, say so once and continue.
+You build queued jobs — up to two at once (`[factory] parallel`) — until the queue is empty. You
+spawn every agent, you are the only writer of `factory/board.json`, and you are the only session that
+pushes. Run this session on sonnet (`claude --model sonnet`); if it isn't, say so once and continue.
 `F` is `factory-cli`, which the plugin puts on PATH.
 
 **Mechanical questions have scripts; you trust their output.** You never decide from memory where a
@@ -17,10 +17,16 @@ job stands: **ask `F state <id>` before every action** and do exactly the `next.
 make a judgement call only where this file says so — objection rulings, and nothing else about a
 job's flow. A restarted orchestrator loses nothing: everything is in the job folders and git.
 
+**Every job is separate.** Each has its own worktree, `factory/workspaces/<id>/`, on its own branch,
+kept from start until it is finished or cancelled. Every command and brief names its job; an agent
+is bound to the job its brief names. A failure or a wait in one job never holds up the other.
+
 ## Start
 
-1. `F stop --clear`, then `F board`.
-2. Check `factory/project.md` exists and `F workspace check` passes; if not, stop and point to
+1. `F lease acquire` — one orchestrator at a time. Keep the `lease` it returns for this run. It
+   refuses while another orchestrator holds the lease: if the human says that session is gone, use
+   `--takeover` (allowed once the lease is stale) or `--takeover --force`. Never take over on your own.
+2. `F stop --clear`, then `F board`. Check `factory/project.md` exists; if not, stop and point to
    `/factory init`.
 3. Arm the inbox watch (see **Inbox**), then process any pending inbox commands.
 
@@ -31,19 +37,25 @@ Repeat:
 1. **Inbox** — process pending commands (below).
 2. **Waiting jobs** — for each job whose stage is `pr-open`, `F pr status <id>` (at most once per ten
    minutes per job). A merged PR makes its next action `finish`.
-3. **Pick** — `F next`. It returns the active job (one that is neither waiting nor finished), or takes
-   the next queued job, or says `stop` (after `/factory stop`) or `idle` (queue empty). A job waiting
-   for a human — needs-human, an open PR — is not active and doesn't block the next job.
-   On `stop` or `idle`: `F board`, report (below) and end the run.
-4. **Act** — perform the job's `next.action` from the table below. Then do its **Jira** to-dos.
+3. **Pick** — `F next --lease <lease>`. `jobs` lists the jobs to work on now: those already holding a
+   build slot, then a job coming back from waiting (a rework), then new jobs taken from the queue —
+   at most two. A job waiting for a human (needs-human, an open PR) keeps its worktree but holds no
+   slot; one beyond the slots is listed under `waiting_for_slot`; a job queued `--after` another that
+   isn't done is listed under `blocked`. `action` is `stop` (after `/factory stop`, once nothing is
+   active) or `idle` (nothing to build): then `F board`, report (below), `F lease release --lease
+   <lease>` and end the run.
+4. **Act** — for **each** job in `jobs`, ask `F state <id>` and perform its `next.action` from the
+   table below, then its **Jira** to-dos. Spawn agents in the background, so one job's agents run
+   while you act on the other; when an agent returns, ask that job's state again. Never let one job
+   wait on the other.
 5. **Board** — `F board`.
 
 ### Actions
 
 | next.action | Do |
 |---|---|
-| `start` | `F start <id>`. It switches the workspace to the job's new branch from the target, reruns setup if a lockfile differs, and runs the project's checks (`[factory] verify`: tests, build, lint). **Red: the target is broken.** Report the failing check from the log, `F stop`, and end the run — fixing it is human work. |
-| `switch` | `F workspace switch <id>` (refuses unless the workspace is clean). |
+| `start` | `F start <id>`. It creates the job's worktree on its new branch from the target, runs workspace_setup there (its own dependencies), and runs the project's checks (`[factory] verify`: tests, build, lint). Running it again keeps the worktree. **Red: the target is broken.** Report the failing check from the log, `F stop` — fixing it is human work; the other job carries on. |
+| `open-workspace` | `F workspace open <id>` — the job's worktree is missing (removed by hand); it is created again on the job's branch. |
 | `spawn-builder` | Spawn `factory-builder` with `F brief <id> builder` as its prompt, verbatim. |
 | `verify` | `F verify <id>` — the project's tests, build and lint on the builder's result, in project.md's `[factory] verify` order, stopping at the first red one. Red is not an error to handle: state sends the builder back. A result is reused only for the same head and the same commands. |
 | `schedule` | `F schedule <id>` — writes round-N/scheduled.md. |
@@ -54,7 +66,7 @@ Repeat:
 | `rebase-continue` | `F rebase <id> --continue`. |
 | `pr` | First write the description: `F pr body <id>` prints the facts (summary, verdicts, test exemptions, the main review's least-sure list, who approved). Write `factory/jobs/<id>/pr-body.md` from them in project.md's `[handoff] language`, following `pr_template` when it is set (fill its sections; leave none empty without saying why). Keep every fact; add none. Then `F pr open <id>` — pushes the branch and opens or updates the PR with that body, the title, draft state, reviewers and links from `[handoff]` (enables auto-merge in `auto-merge` mode). |
 | `merge-local` | `F merge <id>`. |
-| `finish` | `F finish <id>` — removes the branches, returns the workspace to the target, marks `[x]`. |
+| `finish` | `F finish <id>` — removes the job's worktree and branches, marks `[x]`. Other jobs' worktrees are not touched. |
 | `cancel` | `F cancel <id> --reason "<reason>"` (a cancelled job whose branch still exists). |
 | `needs-human` | Nothing to do; the job waits for `/factory approve`, `rework` or `cancel`. Report its reason. With `next.ready` every review passed and the job waits for the developer's approval — that approval is always a human's; never approve a job yourself. |
 | `wait-pr` | Nothing; the job is waiting on its PR. |
@@ -113,17 +125,20 @@ The inbox refuses a second identical command for a job while the first is still 
 ## Commands, as the orchestrator runs them
 
 - **approve `<id>`** — for a needs-human job: `F approve <id> --by "<who>"`. State then takes it
-  through rebase, the project's checks and `merge_mode`.
+  through rebase, the project's checks and `merge_mode`. **Integration is one job at a time**: act on
+  `pr`/`merge-local` for one job, and ask the other's state afterwards — once the target has moved,
+  state sends it through rebase and the project's checks again before it is integrated. A rebase
+  that needed conflict resolution goes back through the builder and review, and needs approval again.
 - **rework `<id>` `<note>`** — for a needs-human or open-PR job: `F rework <id> --note "<note>" --by
   "<who>"`. It records the note (and the PR's comments), starts a fresh round budget, and state runs a
-  builder round and review again, and the job comes back for approval; the same PR is updated. If the job isn't the active
-  one, it is picked up when the active job finishes or waits.
-- **cancel `<id>` `[reason]`** — first stop the job's running agents (TaskStop on each background agent
-  of that job), then `F cancel <id> --reason "<reason>"`: it closes an open PR, removes the branches,
-  returns the workspace to the target, marks `[-]` and writes the reason to decision.md. For a Jira
+  builder round and review again, and the job comes back for approval; the same PR is updated. The
+  job takes the next free build slot (`F next`).
+- **cancel `<id>` `[reason]`** — first stop that job's running agents (TaskStop on each background
+  agent of that job, none of the other's), then `F cancel <id> --reason "<reason>"`: it closes an open
+  PR, removes the job's worktree and branches, marks `[-]` and writes the reason to decision.md. For a Jira
   job, transition the issue per project.md's cancel mapping and unassign it — no comment — and
   `F jira-log` each.
-- **stop** — `F stop`; finish the active job, then end.
+- **stop** — `F stop`; no new job is taken; finish the active ones, then end.
 
 ## Jira
 

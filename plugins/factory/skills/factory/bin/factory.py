@@ -57,9 +57,7 @@ def cmd_queue(a, p):
     if a.action == "add":
         branch = queue.branch_for(_cfg(p).branch_pattern, a.job, a.title, a.jira)
         return queue.add(p, a.job, a.title, jira=a.jira, developer=a.developer, branch=branch,
-                         work_item=a.work_item)
-    if a.action == "take":
-        return {"taken": queue.take(p)}
+                         work_item=a.work_item, after=a.after)
     if a.action == "mark":
         return queue.mark(p, a.job, a.status)
     if a.action == "next-id":
@@ -69,31 +67,33 @@ def cmd_queue(a, p):
 
 def cmd_workspace(a, p):
     cfg = _cfg(p)
-    if a.action == "create":
-        return workspace.create(p, cfg)
-    if a.action == "switch":
-        return workspace.switch(p, cfg, a.job)
+    if a.action == "list":
+        return {"workspaces": workspace.listing(p)}
+    if not a.job:
+        raise FactoryError(f"workspace {a.action} needs a job id")
+    jobs.check_id(a.job)
+    if a.action == "open":
+        return workspace.open_(p, cfg, a.job)
     if a.action == "check":
-        result = workspace.check(p)
+        result = workspace.check(p, a.job)
         if not result["clean"]:
-            raise FactoryError("the workspace has changed since the last commit", **result)
+            raise FactoryError(f"{a.job}'s workspace has changed since the last commit", **result)
         return result
-    if a.action == "setup":
-        return workspace.setup(p, cfg)
-    return workspace.detach(p, cfg, discard=a.discard)
+    return workspace.remove(p, cfg, a.job, discard=a.discard)
 
 
 def cmd_ws(a, p):
-    result = workspace.run(p, _cfg(p), a.name, a.args)
+    jobs.check_id(a.job)
+    result = workspace.run(p, _cfg(p), a.job, a.name, a.args)
     if result["exit_code"] != 0:
         raise FactoryError(f"{a.name} failed with exit code {result['exit_code']}", **result)
     return result
 
 
 def cmd_suite(a, p):
-    result = workspace.verify(p, _cfg(p))
+    result = workspace.probe(p, _cfg(p))
     if not result["green"]:
-        raise FactoryError(f"{result['failed']} is red", **result)
+        raise FactoryError(f"{result['failed']} is red on the target", **result)
     return result
 
 
@@ -171,7 +171,15 @@ def cmd_rework(a, p):
 
 
 def cmd_next(a, p):
-    return actions.next_job(p, _cfg(p))
+    return actions.next_job(p, _cfg(p), a.lease)
+
+
+def cmd_lease(a, p):
+    if a.action == "acquire":
+        return actions.acquire_lease(p, takeover=a.takeover, force=a.force)
+    if a.action == "check":
+        return actions.check_lease(p, a.lease)
+    return actions.release_lease(p, a.lease)
 
 
 def cmd_stop(a, p):
@@ -221,7 +229,7 @@ def parser():
     sp = add("findings", cmd_findings, "write a round's merged findings list (default: the current round)")
     sp.add_argument("job")
     sp.add_argument("--round", type=int)
-    sp = add("queue", cmd_queue, "add|take|mark|list|next-id on backlog.md, under a lock")
+    sp = add("queue", cmd_queue, "add|mark|list|next-id on backlog.md, under a lock (jobs are taken by `next`)")
     qs = sp.add_subparsers(dest="action", required=True)
     q = qs.add_parser("add")
     q.add_argument("job")
@@ -229,22 +237,23 @@ def parser():
     q.add_argument("--jira")
     q.add_argument("--developer")
     q.add_argument("--work-item", dest="work_item", help="Azure Boards work item id to link to the PR")
-    qs.add_parser("take")
+    q.add_argument("--after", action="append", default=[], help="a job that must be done first (repeatable)")
     q = qs.add_parser("mark")
     q.add_argument("job")
     q.add_argument("status", choices=list(queue.MARKS))
     qs.add_parser("list")
     qs.add_parser("next-id").add_argument("slug")
-    sp = add("workspace", cmd_workspace, "create|switch|check|setup|detach the persistent worktree")
-    sp.add_argument("action", choices=["create", "switch", "check", "setup", "detach"])
+    sp = add("workspace", cmd_workspace, "open|check|remove a job's worktree, or list them all")
+    sp.add_argument("action", choices=["open", "check", "remove", "list"])
     sp.add_argument("job", nargs="?")
     sp.add_argument("--discard", action="store_true")
-    sp = add("ws", cmd_ws, "run a named project command in the workspace: ws run <name> [args]")
+    sp = add("ws", cmd_ws, "run a named project command in a job's worktree: ws run <job> <name> [args]")
     sp.add_argument("run", choices=["run"])
+    sp.add_argument("job")
     sp.add_argument("name")
     sp.add_argument("args", nargs=argparse.REMAINDER)
-    add("suite", cmd_suite, "run the project's checks ([factory] verify: tests, build, lint) in the workspace")
-    add("start", cmd_start, "switch a taken job's branch from the target and prove its checks green").add_argument("job")
+    add("suite", cmd_suite, "prove the project's checks ([factory] verify) green on the target, in a throwaway worktree")
+    add("start", cmd_start, "open a taken job's worktree on its branch and prove its checks green").add_argument("job")
     add("verify", cmd_verify, "run the project's checks on the builder's round").add_argument("job")
     add("review-reset", cmd_review_reset, "discard the current round's reviews and workspace changes").add_argument("job")
     add("codex-review", cmd_codex_review, "run Codex for the current round; exit 3 means spawn codex-fallback").add_argument("job")
@@ -273,7 +282,13 @@ def parser():
     sp.add_argument("job")
     sp.add_argument("--note", required=True)
     sp.add_argument("--by", default="")
-    add("next", cmd_next, "the job the orchestrator works on now (takes from the queue when idle)")
+    add("next", cmd_next, "the jobs to work on now: up to [factory] parallel active, slots filled from the queue"
+        ).add_argument("--lease", required=True)
+    sp = add("lease", cmd_lease, "acquire|check|release the one-orchestrator lease")
+    sp.add_argument("action", choices=["acquire", "check", "release"])
+    sp.add_argument("--lease")
+    sp.add_argument("--takeover", action="store_true", help="take over a stale lease")
+    sp.add_argument("--force", action="store_true", help="with --takeover: also a fresh one (the human stopped it)")
     add("stop", cmd_stop, "stop after the current job; --clear to lift").add_argument("--clear", action="store_true")
     sp = add("command", cmd_command, "write an approve|rework|cancel command to the inbox")
     sp.add_argument("command", choices=["approve", "rework", "cancel"])

@@ -38,10 +38,18 @@ section of `factory/project.md`:
 - **Test conventions** — read existing tests, at least three: runner, location, file naming, test
   naming, altitude (unit / component / integration / end-to-end, and what this project prefers for
   what), assertion style and libraries, fixtures and builders in use. Quote a short real example.
-- **workspace_setup** — what a fresh worktree needs before the suite passes: dependency install, and
-  copying gitignored local config from the main checkout (`.env`, `appsettings.Development.json`,
-  user-secrets…). Use `$FACTORY_REPO_ROOT` for the main checkout's root, never an absolute path.
-  List the `lockfiles` whose change means setup must rerun.
+- **workspace_setup** — what a fresh worktree needs before the checks pass. Every job gets its own
+  worktree and its own dependencies: for pnpm `pnpm install --frozen-lockfile` (its own node_modules,
+  from pnpm's shared store; never share node_modules between worktrees). Copy gitignored local config
+  from the main checkout (`.env`, `appsettings.Development.json`, user-secrets…) with
+  `$FACTORY_REPO_ROOT`, never an absolute path. List the `lockfiles` (and install settings such as
+  `.npmrc`) whose change means setup must rerun.
+- **Two jobs at once** — `[factory] parallel` (1 or 2, default 2). Read the commands for what two
+  worktrees would share: a dev server or browser test on a fixed port or output folder (use
+  `$FACTORY_PORT` and `$FACTORY_OUTPUT` in the command, or make it configurable), and migrations,
+  seeding or tests that write a shared database — list those under `[factory] serial` so they run
+  one job at a time. Read-only use of a shared backend needs nothing. If something can't be
+  separated, say so and propose `parallel = 1`.
 - **Written rules** — `[rules] docs`: globs of the project's own rule pages beyond CLAUDE.md and
   AGENTS.md — a wiki's architecture and component pages, ADRs, a styleguide (`Wiki/*.md`,
   `docs/adr/**`). Every agent's brief lists them as rules. Look for them; ask which count as rules.
@@ -89,7 +97,7 @@ establish, one question at a time with a recommendation.
 
 `F allowlist` prints the permission rules the agents need in `.claude/settings.local.json`: the
 factory script (through which agents run the project's build, lint and test commands) and the git
-commands agents use in the workspace. Rules already in the shared `.claude/settings.json` count as
+commands agents use in a job's worktree. Rules already in the shared `.claude/settings.json` count as
 present. `git push` is deliberately absent; only the orchestrator pushes, through the script. Show the
 list, and on the human's yes run `F allowlist --write`. Local settings are not committed.
 
@@ -97,22 +105,22 @@ The per-command limits (no shell operators, no switching or pushing, reviewers r
 listed commands and writing only their review) are enforced by the plugin's PreToolUse
 hook, which recognises each factory agent by name, not by the allowlist.
 
-## 4. Create and prove the workspace
+## 4. Prove the target
 
-1. `F workspace create` — the worktree at `factory/workspace/`, detached at the target branch, with
-   workspace_setup run.
-2. `F suite` — the project's checks (`[factory] verify`) once in the workspace.
+`F suite` — a throwaway worktree at the target branch, workspace_setup run in it, the project's
+checks (`[factory] verify`) once, then removed. Each job later gets its own worktree,
+`factory/workspaces/<id>/`, when it starts.
 
 **If a check is red, stop.** Report the failing check and what failed from the log it names. The factory does not
 start on a red target; fixing it is human work that comes first. If setup fails, report which step and
 its output.
 
 Check that the project's tooling ignores `factory/` (watchers, linters, test globs, IDE indexers),
-since the workspace is a full copy of the repo inside the checkout. Tools that read `.gitignore`
+since each job's worktree is a full copy of the repo inside the checkout. Tools that read `.gitignore`
 themselves don't see `.git/info/exclude`. Where one would scan `factory/`, tell the human which tool
 and what it would take — don't edit the project's committed config on your own.
 
 ## Done means
 
-project.md reviewed by a human; allowlist written or consciously skipped; `F workspace check` clean;
-`F suite` green. Report those four lines.
+project.md reviewed by a human; allowlist written or consciously skipped; `F suite` green. Report
+those three lines.

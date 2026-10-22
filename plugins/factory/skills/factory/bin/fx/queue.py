@@ -85,7 +85,7 @@ def branch_for(pattern, job_id, title, jira=None):
     return branch
 
 
-def add(paths, job_id, title, jira=None, developer=None, branch=None, work_item=None):
+def add(paths, job_id, title, jira=None, developer=None, branch=None, work_item=None, after=None):
     jobs.check_id(job_id)
     job_dir = paths.job(job_id)
     for name in ("spec.md", "plan.md"):
@@ -102,8 +102,12 @@ def add(paths, job_id, title, jira=None, developer=None, branch=None, work_item=
                  and branch_name(paths, e["id"]) == branch]
         if clash:
             raise FactoryError(f"branch {branch} is already used by {clash[0]}")
+        known = {e["id"] for e in entries(paths)}
+        unknown = [a for a in after or [] if a not in known]
+        if unknown:
+            raise FactoryError(f"--after names jobs that are not in backlog.md: {unknown}")
         meta = {"id": job_id, "title": title, "jira": jira, "developer": developer, "branch": branch,
-                "work_item": work_item, "queued_at": jobs.now()}
+                "work_item": work_item, "after": list(after or []), "queued_at": jobs.now()}
         jobs.write_json(job_dir / "job.json", meta)
         text = _read(paths).rstrip("\n") + "\n"
         if text.strip() == _HEADER.strip():
@@ -112,10 +116,19 @@ def add(paths, job_id, title, jira=None, developer=None, branch=None, work_item=
     return meta
 
 
+def blocked_by(paths, job_id, statuses=None):
+    """The jobs this one was queued --after that are not done yet."""
+    statuses = statuses or {e["id"]: e["status"] for e in entries(paths)}
+    after = (jobs.read_json(paths.job(job_id) / "job.json") or {}).get("after") or []
+    return [a for a in after if statuses.get(a) != "done"]
+
+
 def take(paths):
+    """Marks the oldest queued job whose --after jobs are all done as taken."""
     with locked(paths):
+        statuses = {e["id"]: e["status"] for e in entries(paths)}
         for e in entries(paths):
-            if e["status"] == "queued":
+            if e["status"] == "queued" and not blocked_by(paths, e["id"], statuses):
                 jobs.write_atomic(paths.backlog, _set_mark(_read(paths), e["id"], MARKS["taken"]))
                 return e["id"]
     return None

@@ -44,16 +44,25 @@ suite_timeout = 1800
 ; [commands] names that together run the project's tests, build and lint, without running anything
 ; twice (default: lint, build, suite — each where defined)
 verify =
+; jobs built at once, each in its own worktree: 1 or 2
+parallel = 2
+; [commands] names that write shared data (migrations, seeding, tests against a shared database):
+; they run one job at a time. Read-only use of a shared backend needs nothing here.
+serial =
 
 [commands]
-; run in factory/workspace/; {target} is where a single test's argument goes
+; run in the job's worktree, factory/workspaces/<job>/; {target} is where a single test's argument goes.
+; Each command gets $FACTORY_PORT (a free port) and $FACTORY_OUTPUT (the job's own folder): use them
+; for a dev server or browser test that would otherwise collide with another job's.
 build =
 lint =
 suite =
 test =
 
 [workspace]
-; one command per line, run in the workspace; $FACTORY_REPO_ROOT is the main checkout
+; one command per line, run in each job's new worktree and again when a listed lockfile changes;
+; $FACTORY_REPO_ROOT is the main checkout. Each worktree gets its own dependencies: for pnpm
+; `pnpm install --frozen-lockfile` (its own node_modules, from pnpm's shared store).
 setup =
 lockfiles =
 

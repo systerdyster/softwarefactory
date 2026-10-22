@@ -2,9 +2,9 @@ import unittest
 
 from support import SandboxTest
 
-from fx import config, guard, pr, queue, workspace
+from fx import config, pr, queue, workspace
 from fx.errors import FactoryError
-from fx.paths import branch_name, job_for_branch
+from fx.paths import branch_name
 
 
 def handoff(**values):
@@ -43,10 +43,9 @@ class QueuedBranchTest(SandboxTest):
         self.sb.write("plan.md", "# Plan\n", base=jd)
         return queue.add(self.paths, job_id, "Title", jira=job_id, branch=branch)
 
-    def test_the_branch_is_recorded_and_found_again_both_ways(self):
+    def test_the_branch_is_recorded(self):
         self.queue("OPT-1", "feature/OPT-1-title")
         self.assertEqual(branch_name(self.paths, "OPT-1"), "feature/OPT-1-title")
-        self.assertEqual(job_for_branch(self.paths, "feature/OPT-1-title"), "OPT-1")
 
     def test_two_active_jobs_may_not_share_a_branch(self):
         self.queue("OPT-1", "feature/same")
@@ -56,13 +55,11 @@ class QueuedBranchTest(SandboxTest):
     def test_jobs_without_a_recorded_branch_keep_factory_prefix(self):
         self.sb.queue_job()
         self.assertEqual(branch_name(self.paths, "001-answer"), "factory/001-answer")
-        self.assertEqual(job_for_branch(self.paths, "factory/001-answer"), "001-answer")
 
-    def test_the_guard_finds_the_job_on_a_custom_branch(self):
-        self.sb.create_workspace()
+    def test_a_custom_branch_gets_its_own_worktree(self):
         self.queue("OPT-1", "feature/OPT-1-title")
-        workspace.switch(self.paths, self.cfg, "OPT-1")
-        self.assertEqual(guard._current_job(self.paths), "OPT-1")
+        workspace.open_(self.paths, self.cfg, "OPT-1")
+        self.assertEqual(workspace.check(self.paths, "OPT-1")["branch"], "feature/OPT-1-title")
 
 
 class PrSettingsTest(unittest.TestCase):

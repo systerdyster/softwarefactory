@@ -3,9 +3,11 @@ review-reset, rebase, finish, cancel, approve, rework, and the bookkeeping aroun
 
 import json
 import os
+import secrets
 import subprocess
+from datetime import datetime
 
-from . import gitutil, jobs, queue, state as state_mod, workspace
+from . import gitutil, guard, jobs, queue, state as state_mod, workspace
 from .errors import Conflict, FactoryError
 from .paths import branch_name
 
@@ -20,14 +22,10 @@ def _archive(paths, job_id, name):
     return paths.relative(dest)
 
 
-def _require_on_branch(paths, job_id, allow_rebase=False):
-    ws = workspace.check(paths)
-    branch = branch_name(paths, job_id)
-    on = ws["branch"] == branch or (ws["rebase_in_progress"] and gitutil.rebasing_branch(paths.workspace) == branch)
-    if not on:
-        raise FactoryError(f"the workspace is on {ws['branch'] or 'a detached HEAD'}, not {branch}; switch first")
+def _require_workspace(paths, job_id, allow_rebase=False):
+    ws = workspace.check(paths, job_id)
     if ws["rebase_in_progress"] and not allow_rebase:
-        raise FactoryError("a rebase is in progress in the workspace")
+        raise FactoryError(f"a rebase is in progress in {job_id}'s workspace")
     return ws
 
 
@@ -35,18 +33,19 @@ def start(paths, cfg, job_id):
     jobs.check_id(job_id)
     entry = queue.entry(paths, job_id)
     if not entry or entry["status"] != "taken":
-        raise FactoryError(f"{job_id} is not taken in backlog.md; run `queue take` first")
-    switched = workspace.switch(paths, cfg, job_id)
-    if not switched["created"]:
+        raise FactoryError(f"{job_id} is not taken in backlog.md; run `next` first")
+    opened = workspace.open_(paths, cfg, job_id)
+    ws = paths.workspace(job_id)
+    if not opened.get("branch_created"):
         workspace.fetch(paths, cfg)
-        if gitutil.is_ancestor("HEAD", cfg.base_ref, paths.workspace):
-            gitutil.run(["merge", "--ff-only", cfg.base_ref], paths.workspace)
-    checks = workspace.verify(paths, cfg)
+        if gitutil.is_ancestor("HEAD", cfg.base_ref, ws):
+            gitutil.run(["merge", "--ff-only", cfg.base_ref], ws)
+    checks = workspace.verify(paths, cfg, job_id)
     base = gitutil.rev(cfg.base_ref, paths.root)
     baseline = {"target": base, "head": checks["head"], "green": checks["green"], "failed": checks["failed"],
                 "log": checks["log"], "at": jobs.now()}
     jobs.write_json(paths.job(job_id) / "baseline.json", baseline)
-    result = {"switched": switched, "baseline": baseline}
+    result = {"workspace": opened, "baseline": baseline}
     if not checks["green"]:
         result["tail"] = checks["tail"]
         raise FactoryError(f"{checks['failed']} is red on {cfg.base_ref}; the factory does not work around red checks",
@@ -55,10 +54,10 @@ def start(paths, cfg, job_id):
 
 
 def verify(paths, cfg, job_id, round_number, attempt):
-    ws = _require_on_branch(paths, job_id)
+    ws = _require_workspace(paths, job_id)
     if ws["dirty"]:
         raise FactoryError("the workspace has uncommitted changes; the builder must commit its work", dirty=ws["dirty"])
-    checks = workspace.verify(paths, cfg)
+    checks = workspace.verify(paths, cfg, job_id)
     record = {k: checks[k] for k in ("head", "green", "failed", "log", "steps", "fingerprint")}
     record["at"] = jobs.now()
     jobs.write_json(paths.round_dir(job_id, round_number) / f"verify-{attempt}.json", record)
@@ -75,11 +74,12 @@ def review_reset(paths, job_id, round_number):
         f.replace(discarded / f.name)
         moved.append(f.name)
     reverted = []
-    ws = workspace.check(paths)
-    if ws["branch"] == branch_name(paths, job_id) and ws["dirty"]:
-        reverted = ws["dirty"]
-        gitutil.run(["reset", "--hard", "HEAD"], paths.workspace)
-        gitutil.run(["clean", "-fd"], paths.workspace)
+    if gitutil.is_worktree(paths.workspace(job_id)):
+        ws = workspace.check(paths, job_id)
+        if ws["dirty"]:
+            reverted = ws["dirty"]
+            gitutil.run(["reset", "--hard", "HEAD"], paths.workspace(job_id))
+            gitutil.run(["clean", "-fd"], paths.workspace(job_id))
     return {"round": round_number, "discarded": moved, "reverted": reverted}
 
 
@@ -115,14 +115,14 @@ def _green_verify(paths, cfg, job_id, head):
 
 
 def _finish_rebase(paths, cfg, job_id, data, entry, resolved):
-    entry["after"] = gitutil.rev("HEAD", paths.workspace)
+    entry["after"] = gitutil.rev("HEAD", paths.workspace(job_id))
     reused = None if resolved or entry["after"] != entry["before"] else _green_verify(paths, cfg, job_id, entry["after"])
     if resolved:
         entry["result"] = "resolved"
     elif reused:
         entry.update(result="green", reused=reused, fingerprint=workspace.fingerprint(cfg))
     else:
-        checks = workspace.verify(paths, cfg)
+        checks = workspace.verify(paths, cfg, job_id)
         entry["result"] = "green" if checks["green"] else "red"
         entry["log"] = checks["log"]
         entry["tail"] = checks["tail"]
@@ -134,38 +134,39 @@ def _finish_rebase(paths, cfg, job_id, data, entry, resolved):
 
 def rebase(paths, cfg, job_id, continue_=False):
     data = _rebase_state(paths, job_id)
+    cwd = paths.workspace(job_id)
     if continue_:
-        ws = _require_on_branch(paths, job_id, allow_rebase=True)
+        ws = _require_workspace(paths, job_id, allow_rebase=True)
         if not ws["rebase_in_progress"]:
             raise FactoryError("no rebase is in progress")
         if ws["unmerged"]:
             raise FactoryError("conflicts remain", unmerged=ws["unmerged"])
         entry = data["history"][-1]
-        result = _rebase_cmd(["rebase", "--continue"], paths.workspace)
-        if result.returncode != 0 and not gitutil.unmerged_files(paths.workspace) and gitutil.rebase_in_progress(paths.workspace):
-            if gitutil.run(["diff", "--cached", "--quiet"], paths.workspace, check=False).returncode == 0:
-                result = _rebase_cmd(["rebase", "--skip"], paths.workspace)
-        if gitutil.rebase_in_progress(paths.workspace):
-            entry["conflicts"] = gitutil.unmerged_files(paths.workspace)
+        result = _rebase_cmd(["rebase", "--continue"], cwd)
+        if result.returncode != 0 and not gitutil.unmerged_files(cwd) and gitutil.rebase_in_progress(cwd):
+            if gitutil.run(["diff", "--cached", "--quiet"], cwd, check=False).returncode == 0:
+                result = _rebase_cmd(["rebase", "--skip"], cwd)
+        if gitutil.rebase_in_progress(cwd):
+            entry["conflicts"] = gitutil.unmerged_files(cwd)
             _save_rebase(paths, job_id, data)
             if not entry["conflicts"]:
                 raise FactoryError(f"git rebase --continue stopped: {result.stderr.strip() or result.stdout.strip()}")
             return {"result": "conflict", "conflicts": entry["conflicts"]}
         return _finish_rebase(paths, cfg, job_id, data, entry, resolved=True)
 
-    ws = _require_on_branch(paths, job_id)
+    ws = _require_workspace(paths, job_id)
     if ws["dirty"]:
         raise FactoryError("the workspace is not clean", dirty=ws["dirty"])
     workspace.fetch(paths, cfg)
     target = gitutil.rev(cfg.base_ref, paths.root)
     built = jobs.build_sections(jobs.read(paths.job(job_id) / "build.md"))
-    entry = {"round": max([s["round"] for s in built], default=0) + 1, "before": gitutil.rev("HEAD", paths.workspace),
+    entry = {"round": max([s["round"] for s in built], default=0) + 1, "before": gitutil.rev("HEAD", cwd),
              "target": target, "result": "conflict", "started_at": jobs.now()}
     data["history"].append(entry)
     _save_rebase(paths, job_id, data)
-    result = _rebase_cmd(["rebase", cfg.base_ref], paths.workspace)
-    if gitutil.rebase_in_progress(paths.workspace):
-        entry["conflicts"] = gitutil.unmerged_files(paths.workspace)
+    result = _rebase_cmd(["rebase", cfg.base_ref], cwd)
+    if gitutil.rebase_in_progress(cwd):
+        entry["conflicts"] = gitutil.unmerged_files(cwd)
         _save_rebase(paths, job_id, data)
         return {"result": "conflict", "conflicts": entry["conflicts"], "round": entry["round"]}
     if result.returncode != 0:
@@ -176,19 +177,17 @@ def rebase(paths, cfg, job_id, continue_=False):
 
 
 def cleanup(paths, cfg, job_id, discard=False):
+    """Removes this job's worktree and branches; no other job's workspace is touched."""
     branch = branch_name(paths, job_id)
-    result = {"branch": branch, "local_deleted": False, "remote_deleted": False, "workspace": None}
-    if gitutil.is_worktree(paths.workspace):
-        ws = workspace.check(paths)
-        rebasing = ws["rebase_in_progress"] and gitutil.rebasing_branch(paths.workspace) == branch
-        if ws["branch"] == branch or rebasing:
-            result["workspace"] = workspace.detach(paths, cfg, discard=discard)
+    result = {"branch": branch, "local_deleted": False, "remote_deleted": False,
+              "workspace": workspace.remove(paths, cfg, job_id, discard=discard)}
     if gitutil.rev(branch, paths.root):
         gitutil.run(["branch", "-D", branch], paths.root)
         result["local_deleted"] = True
     if gitutil.remote_branch_exists(cfg.remote, branch, paths.root):
         gitutil.run(["push", cfg.remote, "--delete", branch], paths.root, timeout=300)
         result["remote_deleted"] = True
+    guard.release(paths, job_id)
     return result
 
 
@@ -276,21 +275,102 @@ def active_jobs(paths, cfg):
     return result
 
 
-def next_job(paths, cfg):
+IDLE_ACTIONS = ("none", "wait-pr", "needs-human")
+
+
+def _started_at(paths, job_id):
+    baseline = jobs.read_json(paths.job(job_id) / "baseline.json") or {}
+    return baseline.get("at") or (jobs.read_json(paths.job(job_id) / "job.json") or {}).get("queued_at") or ""
+
+
+def next_job(paths, cfg, lease):
+    """The jobs the orchestrator works on now: the active ones (building, reviewing, rebasing,
+    merging), at most [factory] parallel of them. A job that holds a slot keeps it; a free slot goes
+    to the oldest active job without one (a rework coming back), then to the queue. A job waiting for
+    a human keeps its workspace but takes no slot."""
+    held = check_lease(paths, lease).get("slots", [])
     taken = active_jobs(paths, cfg)
-    active = [s for s in taken if not s["waiting"] and s["next"]["action"] not in ("none", "wait-pr", "needs-human")]
-    waiting = [{"id": s["id"], "stage": s["stage"], "reason": s["reason"]} for s in taken if s["waiting"]]
-    if active:
-        ws_branch = gitutil.current_branch(paths.workspace) if gitutil.is_worktree(paths.workspace) else None
-        active.sort(key=lambda s: 0 if branch_name(paths, s["id"]) == ws_branch else 1)
-        return {"job": active[0]["id"], "state": active[0], "also_active": [s["id"] for s in active[1:]],
-                "waiting": waiting}
+    running = [s["id"] for s in sorted((s for s in taken if not s["waiting"] and s["next"]["action"] not in IDLE_ACTIONS),
+                                       key=lambda s: _started_at(paths, s["id"]))]
+    waiting = [{"id": s["id"], "stage": s["stage"], "reason": s["reason"]} for s in taken
+               if s["waiting"] or s["next"]["action"] in IDLE_ACTIONS]
+    active = [j for j in held if j in running][:cfg.parallel]
+    active += [j for j in running if j not in active][:cfg.parallel - len(active)]
+    new = []
+    if not paths.stop_flag.exists():
+        while len(active) + len(new) < cfg.parallel:
+            taken_id = queue.take(paths)
+            if not taken_id:
+                break
+            new.append(taken_id)
+    _hold_slots(paths, lease, active + new)
+    statuses = {e["id"]: e["status"] for e in queue.entries(paths)}
+    blocked = [{"id": e["id"], "after": queue.blocked_by(paths, e["id"], statuses)} for e in queue.entries(paths)
+               if e["status"] == "queued" and queue.blocked_by(paths, e["id"], statuses)]
+    result = {"jobs": active + new, "taken": new, "waiting_for_slot": [j for j in running if j not in active],
+              "waiting": waiting, "blocked": blocked, "slots": cfg.parallel}
+    if result["jobs"]:
+        return {**result, "action": "work"}
     if paths.stop_flag.exists():
-        return {"job": None, "action": "stop", "reason": "/factory stop was requested", "waiting": waiting}
-    taken_id = queue.take(paths)
-    if taken_id:
-        return {"job": taken_id, "state": state_mod.state(paths, cfg, taken_id), "taken": True, "waiting": waiting}
-    return {"job": None, "action": "idle", "reason": "the queue is empty", "waiting": waiting}
+        return {**result, "action": "stop", "reason": "/factory stop was requested"}
+    return {**result, "action": "idle", "reason": "nothing to build: the queue is empty or blocked"}
+
+
+LEASE_STALE_MINUTES = 15
+
+
+def _lease_age_minutes(record):
+    seen = datetime.fromisoformat(record["seen_at"])
+    return (datetime.fromisoformat(jobs.now()) - seen).total_seconds() / 60
+
+
+def acquire_lease(paths, takeover=False, force=False):
+    """One orchestrator at a time. Another session's lease is taken over only with --takeover, and
+    only once it is stale (not refreshed for LEASE_STALE_MINUTES) unless --force says the human
+    stopped that session."""
+    with queue.locked(paths):
+        current = jobs.read_json(paths.orchestrator)
+        if current:
+            age = _lease_age_minutes(current)
+            if not takeover:
+                raise FactoryError(f"another orchestrator holds the lease (last seen {age:.0f} min ago); if that "
+                                   "session is gone, `lease acquire --takeover`", lease=current)
+            if age < LEASE_STALE_MINUTES and not force:
+                raise FactoryError(f"the lease was refreshed {age:.0f} min ago, so another orchestrator looks alive; "
+                                   "stop it first, or add --force", lease=current)
+        record = {"token": secrets.token_hex(8), "since": jobs.now(), "seen_at": jobs.now(),
+                  "slots": (current or {}).get("slots", [])}
+        jobs.write_json(paths.orchestrator, record)
+    return {"lease": record["token"], "took_over": bool(current)}
+
+
+def check_lease(paths, token):
+    with queue.locked(paths):
+        current = jobs.read_json(paths.orchestrator)
+        if not current or current.get("token") != token:
+            raise FactoryError("this session does not hold the orchestrator lease; `lease acquire` first")
+        current["seen_at"] = jobs.now()
+        jobs.write_json(paths.orchestrator, current)
+    return current
+
+
+def _hold_slots(paths, token, job_ids):
+    """Remembers which jobs hold the build slots, so a job already being built keeps its slot and a
+    job coming back from waiting gets the next free one."""
+    with queue.locked(paths):
+        current = jobs.read_json(paths.orchestrator)
+        if current and current.get("token") == token:
+            current["slots"] = job_ids
+            jobs.write_json(paths.orchestrator, current)
+
+
+def release_lease(paths, token):
+    with queue.locked(paths):
+        current = jobs.read_json(paths.orchestrator)
+        if current and current.get("token") == token:
+            paths.orchestrator.unlink()
+            return {"released": True}
+    return {"released": False}
 
 
 def stop(paths, clear=False):

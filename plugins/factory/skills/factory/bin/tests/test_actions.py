@@ -9,7 +9,6 @@ from fx.errors import FactoryError
 class ActionsTest(SandboxTest):
     def setUp(self):
         super().setUp()
-        self.sb.create_workspace()
         self.job = self.sb.queue_job()
         queue.take(self.paths)
 
@@ -53,11 +52,11 @@ class ActionsTest(SandboxTest):
         self.started_with_tests()
         self.sb.write("build.md", "## Round 1\nStatus: done\n", base=self.paths.job(self.job))
         verified = actions.verify(self.paths, self.cfg, self.job, 1, 1)
-        logs_before = set(self.paths.logs.iterdir())
+        logs_before = set(self.paths.logs.rglob("*.log"))
         entry = actions.rebase(self.paths, self.cfg, self.job)
         self.assertEqual((entry["result"], entry["after"]), ("green", verified["head"]))
         self.assertIn("round-1/verify-1.json", entry["reused"])
-        self.assertEqual(set(self.paths.logs.iterdir()), logs_before)
+        self.assertEqual(set(self.paths.logs.rglob("*.log")), logs_before)
 
     def test_a_rebase_that_moves_nothing_still_checks_when_nothing_was_verified(self):
         self.started_with_tests()
@@ -87,14 +86,14 @@ class ActionsTest(SandboxTest):
         git(self.sb.ws, "add", "src/app.py")
         entry = actions.rebase(self.paths, self.cfg, self.job, continue_=True)
         self.assertEqual(entry["result"], "resolved")
-        self.assertFalse(workspace.check(self.paths)["rebase_in_progress"])
+        self.assertFalse(workspace.check(self.paths, self.job)["rebase_in_progress"])
 
-    def test_cleanup_removes_local_and_remote_branches_and_detaches(self):
+    def test_cleanup_removes_the_worktree_and_both_branches(self):
         self.started_with_tests()
         git(self.sb.root, "push", "origin", "factory/001-answer")
         result = actions.cleanup(self.paths, self.cfg, self.job)
-        self.assertTrue(result["local_deleted"] and result["remote_deleted"])
-        self.assertIsNone(workspace.check(self.paths)["branch"])
+        self.assertTrue(result["local_deleted"] and result["remote_deleted"] and result["workspace"]["removed"])
+        self.assertFalse(self.sb.ws.exists())
 
     def test_cancel_marks_the_backlog_and_writes_the_reason(self):
         self.started_with_tests()
@@ -124,17 +123,12 @@ class ActionsTest(SandboxTest):
         self.assertEqual(actions.inbox_list(self.paths), [])
         self.assertTrue((self.paths.inbox_done / queued["queued"]).exists())
 
-    def test_next_returns_the_active_job_before_taking_another(self):
-        self.started_with_tests()
-        self.sb.queue_job("002-next", "Next")
-        self.assertEqual(actions.next_job(self.paths, self.cfg)["job"], self.job)
-        self.assertEqual(queue.entry(self.paths, "002-next")["status"], "queued")
-
     def test_stop_flag_stops_only_when_nothing_is_active(self):
+        lease = actions.acquire_lease(self.paths)["lease"]
         actions.stop(self.paths)
         queue.mark(self.paths, self.job, "done")
         self.sb.queue_job("002-next", "Next")
-        self.assertEqual(actions.next_job(self.paths, self.cfg)["action"], "stop")
+        self.assertEqual(actions.next_job(self.paths, self.cfg, lease)["action"], "stop")
 
 
 if __name__ == "__main__":

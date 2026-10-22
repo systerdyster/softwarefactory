@@ -80,6 +80,13 @@ calls), and ui, ux, platform where project.md enables them — and name them on 
 `## Decided`, including outcomes they expect — "the diff will exceed max_diff", "no test for the
 Wiki task". Reviewers don't reopen what is there without a new circumstance.
 
+**Other jobs in flight.** Two jobs can be built at once. Look at the jobs queued or being built
+(`F queue list`, their plan.md): if this case **needs** another's change, it is queued `--after` that
+job and starts once it is done. If both touch the same shared contract, styles or dependencies,
+write the overlap in spec.md's `## Decided` (what is shared, which job goes first if it matters) and
+ask the developer whether to queue it `--after` the other. Don't try to predict every file conflict;
+a conflict at rebase goes back through the builder and review.
+
 ## 6. Checkpoint: approval
 
 Present the spec and the plan in full and ask for approval with AskUserQuestion. Use no other tool
@@ -93,8 +100,8 @@ between presenting and the answer. Changes requested → revise and present agai
 3. **Claim the Jira issue** (Jira jobs): assign it to the developer and transition it to the claim
    status in project.md. Then `F jira-log <id> claimed` and `F jira-log <id> status:claimed`. No
    comment.
-4. **Queue it**: `F queue add <id> --title "<title>" [--jira <KEY>] [--work-item <ID>] --developer
-   "<name>"`. Pass `--work-item` when project.md has `work_items = true`; ask the developer for the
+4. **Queue it**: `F queue add <id> --title "<title>" [--jira <KEY>] [--work-item <ID>] [--after <id>]
+   --developer "<name>"`. Pass `--work-item` when project.md has `work_items = true`; ask the developer for the
    Azure Boards id if the issue doesn't name it. The script computes the branch from project.md's
    `[handoff] branch` pattern and records it, and takes the file lock, so this is safe while other
    sessions and the orchestrator run. Tell the developer the branch name it returns.

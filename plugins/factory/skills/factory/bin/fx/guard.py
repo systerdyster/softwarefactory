@@ -5,7 +5,11 @@ call; exit 2 blocks it with the reason on stderr, which the agent sees.
 
 Roles: builder, and review-<name> for reviewers (review-codex for the codex fallback). Reviewers may
 run the project commands project.md lists under [reviewers] commands, e.g. the browser tests that
-render components; nothing else that executes."""
+render components; nothing else that executes.
+
+Every call that touches a job names it: its worktree (factory/workspaces/<job>), its job folder, or
+`ws run <job>`. An agent is bound to the first job it touches (by the hook's agent_id), and only to a
+job whose spawn log has an unclaimed spawn of that role; after that it may touch no other job."""
 
 import json
 import re
@@ -13,9 +17,9 @@ import shlex
 import sys
 from pathlib import Path
 
-from . import config, gitutil
+from . import config, jobs, queue
 from .errors import FactoryError
-from .paths import Paths, job_for_branch
+from .paths import Paths
 
 READ_GIT = {"status", "diff", "log", "show", "merge-base", "rev-parse", "ls-files", "blame", "grep", "cat-file"}
 WRITE_GIT = {"add", "rm", "mv", "commit", "restore"}
@@ -27,14 +31,6 @@ READ_FACTORY = {"state", "board"}
 
 class Blocked(Exception):
     pass
-
-
-def _current_job(paths):
-    if not gitutil.is_worktree(paths.workspace):
-        return None
-    branch = gitutil.rebasing_branch(paths.workspace) if gitutil.rebase_in_progress(paths.workspace) \
-        else gitutil.current_branch(paths.workspace)
-    return job_for_branch(paths, branch)
 
 
 def _inside(path, folder):
@@ -50,19 +46,28 @@ def _resolve(paths, raw):
     return (p if p.is_absolute() else paths.root / p).resolve()
 
 
+def job_of(paths, target):
+    """The job a path belongs to: inside its worktree or its job folder; None otherwise."""
+    for base in (paths.workspaces.resolve(), paths.jobs.resolve()):
+        if _inside(target, base) and target != base:
+            return target.relative_to(base).parts[0]
+    return None
+
+
 def _usage(role, review_commands):
     lines = ["Allowed shell commands for this role (one plain command per call, no ; && | > or $()):",
-             "  git -C factory/workspace " + "|".join(sorted(READ_GIT)) + " ..."]
+             "  git -C factory/workspaces/<job> " + "|".join(sorted(READ_GIT)) + " ..."]
     if role == "builder":
-        lines.append("  git -C factory/workspace " + "|".join(sorted(WRITE_GIT)) + " ...")
-        lines.append(f"  {FACTORY_CLI} ws run <command-name> [args]   (names are [commands] in project.md)")
+        lines.append("  git -C factory/workspaces/<job> " + "|".join(sorted(WRITE_GIT)) + " ...")
+        lines.append(f"  {FACTORY_CLI} ws run <job> <command-name> [args]   (names are [commands] in project.md)")
     elif review_commands:
-        lines.append(f"  {FACTORY_CLI} ws run {'|'.join(review_commands)} [args]   ([reviewers] commands in project.md)")
-    lines.append(f"  {FACTORY_CLI} state <job-id>")
+        lines.append(f"  {FACTORY_CLI} ws run <job> {'|'.join(review_commands)} [args]   ([reviewers] commands)")
+    lines.append(f"  {FACTORY_CLI} state <job>")
     return "\n".join(lines)
 
 
 def check_bash(paths, role, command, review_commands=()):
+    """Returns the job the command touches, or None for one that touches no job."""
     if METACHARS.search(command):
         raise Blocked("shell operators are not allowed.\n" + _usage(role, review_commands))
     try:
@@ -76,50 +81,88 @@ def check_bash(paths, role, command, review_commands=()):
     if argv[0] == FACTORY_CLI and len(argv) >= 2:
         sub = argv[1]
         if sub in READ_FACTORY:
-            return
-        if sub == "ws" and len(argv) >= 4 and argv[2] == "run":
-            if role == "builder" or argv[3] in review_commands:
-                return
-        raise Blocked(f"`{' '.join(argv[:4])}` is not available to the {role}.\n" + _usage(role, review_commands))
+            return None
+        if sub == "ws" and len(argv) >= 5 and argv[2] == "run":
+            if role == "builder" or argv[4] in review_commands:
+                return argv[3]
+        raise Blocked(f"`{' '.join(argv[:5])}` is not available to the {role}.\n" + _usage(role, review_commands))
     if argv[0] in ("ls", "pwd", "wc"):
-        return
+        return None
     raise Blocked(f"`{argv[0]}` is not available to the {role}.\n" + _usage(role, review_commands))
 
 
 def _check_git(paths, role, argv, review_commands):
-    if len(argv) < 4 or argv[1] != "-C" or _resolve(paths, argv[2]) != paths.workspace.resolve():
-        raise Blocked("git must run as `git -C factory/workspace <command>`.\n" + _usage(role, review_commands))
+    target = _resolve(paths, argv[2]) if len(argv) >= 4 and argv[1] == "-C" else None
+    job = job_of(paths, target) if target else None
+    if not job or target != paths.workspace(job).resolve():
+        raise Blocked("git must run as `git -C factory/workspaces/<job> <command>`.\n" + _usage(role, review_commands))
     sub, rest = argv[3], argv[4:]
     banned = [a for a in rest if a.split("=", 1)[0] in BANNED_FLAGS]
     if banned:
         raise Blocked(f"git flag {banned[0]} is not allowed")
-    if sub in READ_GIT:
-        return
-    if sub in WRITE_GIT and role == "builder":
-        return
+    if sub in READ_GIT or (sub in WRITE_GIT and role == "builder"):
+        return job
     raise Blocked(f"`git {sub}` is not available to the {role}. Only the orchestrator switches, rebases or pushes.\n"
                   + _usage(role, review_commands))
 
 
-def check_write(paths, role, raw_path, job_id):
+def check_write(paths, role, raw_path):
+    """Returns the job the write lands in; refuses anything outside the role's own files."""
     if not raw_path:
         raise Blocked("no file path given")
     target = _resolve(paths, raw_path)
     if _inside(target, paths.plugin.resolve()):
         raise Blocked("the factory's own files are not changed by a factory job")
-    ws = paths.workspace.resolve()
-    jd = paths.job(job_id).resolve() if job_id else None
+    job = job_of(paths, target)
+    if not job:
+        raise Blocked(f"the {role} writes only inside its job's workspace and job folder")
+    jd = paths.job(job).resolve()
     if role.startswith("review-"):
         name = role[len("review-"):]
-        if jd and _inside(target, jd) and re.fullmatch(rf"round-\d+/review-{re.escape(name)}\.md",
-                                                       str(target.relative_to(jd))):
-            return
-        raise Blocked(f"a reviewer writes only its own review file: factory/jobs/<id>/round-N/review-{name}.md")
+        if _inside(target, jd) and re.fullmatch(rf"round-\d+/review-{re.escape(name)}\.md", str(target.relative_to(jd))):
+            return job
+        raise Blocked(f"a reviewer writes only its own review file: factory/jobs/<job>/round-N/review-{name}.md")
+    ws = paths.workspace(job).resolve()
     if _inside(target, ws) and not _inside(target, ws / ".git"):
+        return job
+    if target in (jd / "build.md", jd / "tests.md"):
+        return job
+    raise Blocked(f"the {role} may write only inside factory/workspaces/<job>/ and build.md and tests.md in its job folder")
+
+
+def _spawn_name(role):
+    return "codex-fallback" if role == "review-codex" else role
+
+
+def bind(paths, agent_id, role, job):
+    """Holds an agent to one job. Without an agent_id (an older Claude Code) each call is checked
+    on its own: the job must have spawned this role."""
+    spawned = sum(1 for line in (jobs.read(paths.job(job) / "spawns.jsonl") or "").splitlines()
+                  if line.strip() and json.loads(line).get("agent") == _spawn_name(role))
+    if not agent_id:
+        if not spawned:
+            raise Blocked(f"{job} has not spawned a {role}")
         return
-    if jd and target in (jd / "build.md", jd / "tests.md"):
-        return
-    raise Blocked(f"the {role} may write only inside factory/workspace/ and build.md and tests.md in its job folder")
+    claim = paths.agents / f"{re.sub(r'[^A-Za-z0-9_.-]', '_', agent_id)}.json"
+    with queue.locked(paths):
+        current = jobs.read_json(claim)
+        if current:
+            if current["job"] != job:
+                raise Blocked(f"this agent works on {current['job']}; {job} belongs to another agent")
+            return
+        claimed = sum(1 for f in paths.agents.glob("*.json") if (jobs.read_json(f) or {}).get("job") == job
+                      and jobs.read_json(f).get("role") == role) if paths.agents.exists() else 0
+        if claimed >= spawned:
+            raise Blocked(f"{job} has no {role} spawned for this agent; work only on the job your brief names")
+        jobs.write_json(claim, {"job": job, "role": role, "at": jobs.now()})
+
+
+def release(paths, job):
+    """Forgets the agents bound to a job, once it is finished or cancelled."""
+    if paths.agents.exists():
+        for f in paths.agents.glob("*.json"):
+            if (jobs.read_json(f) or {}).get("job") == job:
+                f.unlink()
 
 
 def _review_commands(paths, role):
@@ -142,14 +185,20 @@ def run(role, stream=None, paths=None):
     tool = event.get("tool_name", "")
     tool_input = event.get("tool_input") or {}
     try:
+        job = None
         if tool == "Bash":
-            check_bash(paths, role, tool_input.get("command", ""), _review_commands(paths, role))
+            job = check_bash(paths, role, tool_input.get("command", ""), _review_commands(paths, role))
         elif tool in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
-            check_write(paths, role, tool_input.get("file_path") or tool_input.get("notebook_path"),
-                        _current_job(paths))
+            job = check_write(paths, role, tool_input.get("file_path") or tool_input.get("notebook_path"))
         elif tool in ("Agent", "Task"):
             raise Blocked("factory agents do not spawn agents")
+        if job:
+            jobs.check_id(job)
+            bind(paths, event.get("agent_id"), role, job)
     except Blocked as e:
+        print(f"factory guard ({role}): {e}", file=sys.stderr)
+        return 2
+    except FactoryError as e:
         print(f"factory guard ({role}): {e}", file=sys.stderr)
         return 2
     return 0

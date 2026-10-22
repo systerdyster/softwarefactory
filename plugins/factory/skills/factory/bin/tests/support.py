@@ -108,18 +108,21 @@ class Sandbox:
 
     @property
     def ws(self):
-        return self.paths.workspace
+        """The worktree of the default job, 001-answer."""
+        return self.paths.workspace("001-answer")
 
-    def create_workspace(self):
-        workspace.create(self.paths, self.cfg)
-        for key, value in (("user.name", "t"), ("user.email", "t@t")):
-            git(self.ws, "config", key, value)
+    def ws_of(self, job_id):
+        return self.paths.workspace(job_id)
 
-    def queue_job(self, job_id="001-answer", title="Answer 42"):
+    def open_job(self, job_id="001-answer"):
+        workspace.open_(self.paths, self.cfg, job_id)
+        return self.paths.workspace(job_id)
+
+    def queue_job(self, job_id="001-answer", title="Answer 42", after=None):
         jd = self.paths.job(job_id)
         self.write("spec.md", "# Spec\n\n## Summary\n\nThe answer is 42.\n", base=jd)
         self.write("plan.md", "# Plan\n\n1. Change answer().\n", base=jd)
-        queue.add(self.paths, job_id, title)
+        queue.add(self.paths, job_id, title, after=after)
         return job_id
 
     def push_target_change(self, rel, text, message="Upstream change"):

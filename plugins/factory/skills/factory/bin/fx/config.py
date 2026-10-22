@@ -93,6 +93,20 @@ class Config:
     def suite_timeout(self):
         return self.getint("factory", "suite_timeout", 1800)
 
+    @property
+    def parallel(self):
+        """Active build slots: jobs building, reviewing or rebasing at once. 1 or 2."""
+        value = self.getint("factory", "parallel", 2)
+        if value not in (1, 2):
+            raise FactoryError(f"project.md: [factory] parallel must be 1 or 2, got {value}")
+        return value
+
+    @property
+    def serial_commands(self):
+        """[commands] names that write shared data (migrations, seeding, tests against a shared
+        database) and so run one at a time across jobs."""
+        return self.getlist("factory", "serial")
+
     def command(self, name):
         return self.get("commands", name)
 

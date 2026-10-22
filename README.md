@@ -26,6 +26,32 @@ only. It was first built from a blueprint prompt; this repo is now the source.
 spec.md's `## Decided` is settled for every agent; project.md's `[rules] docs` (a wiki's
 architecture and component pages) are rules every brief lists.
 
+## Two jobs at once
+
+- **One worktree per job**, `factory/workspaces/<id>/`, on the job's branch: created at `start`
+  (workspace_setup there — for pnpm its own node_modules from the shared store), kept through
+  building, review, fixes and waiting for approval, removed at finish or cancel. Setup reruns only
+  when a listed lockfile changes.
+- **At most two active jobs** (`[factory] parallel`). `F next --lease` returns them: jobs holding a
+  slot keep it, a job coming back from waiting (a rework) takes the next free one, then the queue.
+  A job waiting for a human keeps its worktree but holds no slot.
+- **One orchestrator**: `F lease acquire` (a stale lease is taken over only with `--takeover`); `F
+  next` refuses without the current lease, so a second orchestrator takes no job.
+- **Explicit job identity**: `ws run <job>`, `git -C factory/workspaces/<job>`, logs under
+  `factory/logs/<job>/`, verify results in the job's round folders. The guard binds each agent (the
+  hook's `agent_id`) to the first job it touches, and only to a job with an unclaimed spawn of that
+  role; then it may touch no other job.
+- **Ports and shared data**: every command gets `FACTORY_PORT` (a free port) and `FACTORY_OUTPUT`
+  (the job's own folder); commands in `[factory] serial` (migrations, seeding, tests writing a shared
+  database) run one job at a time.
+- **Order between jobs** is explicit: `queue add --after <id>` waits until that job is done. Known
+  overlaps in shared contracts, styles or dependencies are noted at intake; nothing tries to predict
+  file conflicts.
+- **Integration** is one job at a time, with the developer's approval per job and no new automatic
+  merge. When the target moves, an approved job rebases and runs the checks again before its PR; a
+  rebase that needed conflict resolution goes back through the builder and review and needs approval
+  again.
+
 ## Install
 
 Once per developer, from this repo as a local marketplace:
@@ -76,7 +102,7 @@ the repo root (or `-s tests` from `skills/factory/bin`).
   `--no-verify`. No agent may edit the plugin's files or spawn agents.
   Shell operators are refused, so every command matches the allowlist plainly. `workspace check`
   after review stays as the second line of defence.
-- **Agents run project commands through `factory-cli ws run <name>`**, named in project.md's
+- **Agents run project commands through `factory-cli ws run <job> <name>`**, named in project.md's
   `[commands]`, so one allowlist rule (`Bash(factory-cli:*)`) covers every project's build, lint and
   test without listing free-form shell, and it does not change between plugin versions.
 - **The project root comes from where the command runs** (`FACTORY_ROOT`, else `CLAUDE_PROJECT_DIR`,
@@ -133,10 +159,15 @@ the installed CLI (0.153.4).
 - A real `codex exec` review (detection is verified; the call sends code to OpenAI, so it waits for a
   project that has enabled it).
 - Jira claim, transitions and the hand-back comment.
+- Two real jobs at once: the orchestrator alternating between them with background agents; the hook
+  input actually carrying `agent_id` (without it the guard checks each call alone and can't hold an
+  agent to one job); two `pnpm install`s in parallel sharing the store; the project's dev server and
+  browser tests honouring `$FACTORY_PORT` / `$FACTORY_OUTPUT`; a target move from one job's merge
+  sending the other through rebase and checks.
 
 ## Gotchas
 
-- The workspace is a full repo copy at `factory/workspace/` inside the checkout. Tools that read
+- Each job's worktree is a full repo copy at `factory/workspaces/<id>/` inside the checkout. Tools that read
   `.gitignore` themselves, or no ignore file at all (some watchers, linters, test globs, IDE indexers),
   don't see `.git/info/exclude` and will see it; init checks for this and reports it.
 - `workspace_setup` output (node_modules, copied `.env`) must be gitignored in the project, or the

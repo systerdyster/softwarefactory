@@ -41,10 +41,9 @@ class ScheduleFileTest(SandboxTest):
     enabled = "ui"
 
     def test_writes_scheduled_md_with_head_base_and_the_plans_specialists(self):
-        self.sb.create_workspace()
         job = self.sb.queue_job()
         self.sb.write("plan.md", "# Plan\n\nSpecialists: security\n", base=self.paths.job(job))
-        workspace.switch(self.paths, self.cfg, job)
+        workspace.open_(self.paths, self.cfg, job)
         self.sb.write("src/components/answer.py", "ANSWER = 42\n", base=self.sb.ws)
         head = self.sb.commit("Answer", cwd=self.sb.ws)
         result = schedule.schedule(self.paths, self.cfg, job, 1, 1)

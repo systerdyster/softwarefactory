@@ -15,8 +15,8 @@ One skill, two kinds of session:
 - **Intake** — `/factory add`: an interactive session where a developer frames one case with you and
   approves a spec and a plan. It ends by queueing the job. Any number may run, also while the factory
   is building.
-- **Orchestrator** — `/factory run`: one session that builds queued jobs, one at a time, spawning every
-  agent. It is the only writer of `factory/board.json` and the only session that pushes.
+- **Orchestrator** — `/factory run`: one session (it holds a lease) that builds queued jobs, up to two
+  at once, each in its own worktree, spawning every agent. It is the only writer of `factory/board.json` and the only session that pushes.
 
 The factory is a plugin. Its machinery is `factory-cli`, which the plugin puts on PATH (Python
 standard library only; every command prints JSON and exits non-zero on failure). Below, `F` means
@@ -30,14 +30,14 @@ standard library only; every command prints JSON and exits non-zero on failure).
 | `init` | [reference/init.md](reference/init.md) |
 | `add <KEY or text>` | [reference/intake.md](reference/intake.md) |
 | `run` | [reference/orchestrator.md](reference/orchestrator.md) |
-| `stop` | `F stop` — the orchestrator finishes the active job, then stops taking new ones. Say so. |
+| `stop` | `F stop` — the orchestrator takes no new job and finishes the active ones. Say so. |
 | `approve <id>` | In the orchestrator session: as in orchestrator.md. Anywhere else: `F command approve <id> --by "<name>"` and say the orchestrator will act on it. |
 | `rework <id> <note>` | Same split: orchestrator acts; elsewhere `F command rework <id> --text "<note>" --by "<name>"`. |
 | `cancel <id> [reason]` | Same split: orchestrator acts; elsewhere `F command cancel <id> --text "<reason>" --by "<name>"`. |
 | `status` | `F board --print`, then show a compact table: id, title, stage, round, verdicts of the latest round, next action or waiting reason, PR link. Needs-human jobs first, with their reason. |
 
 Only the orchestrator executes approve, rework and cancel, because only it can stop a job's running
-agents and it owns the workspace. Any other session queues the command in `factory/inbox/`, exactly as
+agents and it owns the jobs' worktrees. Any other session queues the command in `factory/inbox/`, exactly as
 the dashboard does, and the orchestrator runs it on its next step (or on its next start).
 
 ## Rules that bind every session
@@ -47,8 +47,9 @@ the dashboard does, and the orchestrator runs it on its next step (or on its nex
 - **Nothing in the repo's committed files.** The factory is the developer's own tool. Its code lives
   in the plugin; the project gets only `factory/` (runtime state, ignored through `.git/info/exclude`)
   and the allowlist in `.claude/settings.local.json`.
-- **The developer's own checkout is never touched.** All code work happens in `factory/workspace/`, a
-  persistent git worktree that switches branch only from a clean state.
+- **The developer's own checkout is never touched.** Each job's code work happens in its own
+  worktree, `factory/workspaces/<id>/`, on its own branch, kept until the job is finished or
+  cancelled. Every command and brief names its job; an agent is bound to its job by the guard.
 - **The project's tests, build and lint are green on the target branch, or the factory stops.** It
   never works around a red check, adds a lint exception or weakens a check; fixing them is human work.
 - **State lives in files and git, never in a conversation.** Ask `F state <id>` before acting; agents
@@ -61,8 +62,9 @@ the dashboard does, and the orchestrator runs it on its next step (or on its nex
 plugin skills/factory/    SKILL.md, reference/, bin/ (factory.py, hook.py, fx/, tests/), server.py, dashboard.html
 plugin agents/factory-*   builder, review-code (the main reviewer), specialists
                           review-{security,performance,stability,platform,ux,ui}, codex-fallback
-factory/                  project.md, backlog.md, board.json, inbox/, logs/, workspace/, jobs/<id>/
-factory/jobs/<id>/        job.json spec.md plan.md tests.md build.md baseline.json
+factory/                  project.md, backlog.md, board.json, orchestrator.json (lease and slots), inbox/,
+                          workspaces/<id>/, logs/<id>/, out/<id>/, agents/ (agent→job bindings), locks/, jobs/<id>/
+factory/jobs/<id>/        job.json spec.md plan.md tests.md build.md baseline.json workspace.json
                           rebase.json pr.json jira.md spawns.jsonl rework-K.md human-approval.md
                           decision.md (only when cancelled)
                           round-N/{scheduled.md, review-<name>.md, findings.md, verify-A.json, ruling-A.md}

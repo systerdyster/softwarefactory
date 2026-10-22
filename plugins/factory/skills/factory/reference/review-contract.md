@@ -12,7 +12,7 @@ the scripts can read all of them the same way and merge them into one list for t
 
 ## What you review
 
-The change is `git -C factory/workspace diff <base>..<head>` with the base and head from
+The change is `git -C factory/workspaces/<job> diff <base>..<head>` with the base and head from
 `scheduled.md` (the brief prints the command). Read whatever surrounding code you need to judge it —
 a hunk is not enough context. Judge it against spec.md and plan.md, and against the project's written
 rules the brief lists — CLAUDE.md, AGENTS.md and the docs such as a wiki's architecture and component

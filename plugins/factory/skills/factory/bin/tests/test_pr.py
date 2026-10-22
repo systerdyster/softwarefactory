@@ -10,10 +10,9 @@ class PrTest(SandboxTest):
 
     def setUp(self):
         super().setUp()
-        self.sb.create_workspace()
         self.job = self.sb.queue_job()
         self.jd = self.paths.job(self.job)
-        workspace.switch(self.paths, self.cfg, self.job)
+        workspace.open_(self.paths, self.cfg, self.job)
         self.sb.write("src/app.py", "def answer():\n    return 42\n", base=self.sb.ws)
         self.head = self.sb.commit("Answer", cwd=self.sb.ws)
 

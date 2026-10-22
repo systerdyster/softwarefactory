@@ -74,7 +74,7 @@ def review(paths, cfg, job_id, round_number):
         raise FactoryError(f"codex is not scheduled in round {round_number}")
     version = available()
     out_file = Path(tempfile.mkstemp(suffix=".md")[1])
-    args = ["codex", "exec", "--sandbox", "read-only", "--cd", str(paths.workspace), "--ephemeral",
+    args = ["codex", "exec", "--sandbox", "read-only", "--cd", str(paths.workspace(job_id)), "--ephemeral",
             "--output-last-message", str(out_file), "-"]
     try:
         result = _run(args, timeout=TIMEOUT, input_text=prompt(paths, job_id, round_number, sched))

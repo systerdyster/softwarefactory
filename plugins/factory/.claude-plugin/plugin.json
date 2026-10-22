@@ -1,6 +1,6 @@
 {
   "name": "factory",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Software factory: frame a case into an approved spec and plan, then build it with a builder that tests what it changes and a main reviewer (specialists where needed), verify the project's tests, build and lint, and hand it back for the developer's approval as a PR.",
   "author": { "name": "Fredrik Gardin" }
 }

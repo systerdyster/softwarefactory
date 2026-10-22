@@ -18,9 +18,9 @@ class FlowTest(SandboxTest):
     def setUp(self):
         super().setUp()
         os.environ["FACTORY_ROOT"] = str(self.paths.root)
-        self.sb.create_workspace()
         self.job = self.sb.queue_job()
         self.jd = self.paths.job(self.job)
+        self.lease = self.cli("lease", "acquire")["lease"]
 
     def tearDown(self):
         os.environ.pop("FACTORY_ROOT", None)
@@ -48,7 +48,7 @@ class FlowTest(SandboxTest):
         self.sb.write(f"round-{n}/review-{name}.md", f"VERDICT: PASS\n\n## Findings\n{findings}\n", base=self.jd)
 
     def test_one_job_from_queue_to_merged(self):
-        self.assertEqual(self.cli("next")["job"], self.job)
+        self.assertEqual(self.cli("next", "--lease", self.lease)["jobs"], [self.job])
         self.expect("start")
         self.cli("start", self.job)
 
@@ -116,11 +116,11 @@ class FlowTest(SandboxTest):
         self.cli("finish", self.job)
         self.assertEqual(self.cli("state", self.job)["stage"], "done")
         self.assertEqual(git(self.sb.root, "branch", "--list", "factory/*"), "")
-        self.assertIsNone(self.cli("workspace", "check")["branch"])
+        self.assertEqual(self.cli("workspace", "list")["workspaces"], [])
         self.assertEqual(self.cli("board")["jobs"], 1)
 
     def test_an_unreadable_review_goes_back_to_its_reviewer(self):
-        self.cli("next")
+        self.cli("next", "--lease", self.lease)
         self.cli("start", self.job)
         self.sb.write("src/app.py", "def answer():\n    return 42\n", base=self.sb.ws)
         self.sb.commit("Answer", cwd=self.sb.ws)
@@ -138,12 +138,12 @@ class FlowTest(SandboxTest):
         self.sb.push_target_change("Wiki/Components.md", "# Components\n\nA modifier only reassigns private variables.\n")
         self.sb.write("project.md", self.paths.project.read_text().replace(
             "[reviewers]\n", "[rules]\ndocs = Wiki/*.md\n\n[reviewers]\n"), base=self.paths.factory)
-        self.cli("next")
+        self.cli("next", "--lease", self.lease)
         self.cli("start", self.job)
         self.assertIn(str(self.sb.ws / "Wiki/Components.md"), self.cli("brief", self.job, "builder"))
 
     def test_brief_refuses_an_agent_state_did_not_ask_for(self):
-        self.cli("next")
+        self.cli("next", "--lease", self.lease)
         self.cli("brief", self.job, "reviewer", "--reviewer", "code", expect=1)
 
 

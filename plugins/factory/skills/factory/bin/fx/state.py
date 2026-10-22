@@ -32,15 +32,16 @@ def gather(paths, cfg, job_id):
     jd = paths.job(job_id)
     branch = branch_name(paths, job_id)
     head = gitutil.rev(branch, paths.root)
-    ws = {"exists": gitutil.is_worktree(paths.workspace), "on_branch": False}
+    cwd = paths.workspace(job_id)
+    ws = {"exists": gitutil.is_worktree(cwd), "on_branch": False}
     if ws["exists"]:
-        rebasing = gitutil.rebase_in_progress(paths.workspace)
-        ws["branch"] = gitutil.rebasing_branch(paths.workspace) if rebasing else gitutil.current_branch(paths.workspace)
+        rebasing = gitutil.rebase_in_progress(cwd)
+        ws["branch"] = gitutil.rebasing_branch(cwd) if rebasing else gitutil.current_branch(cwd)
         ws["on_branch"] = ws["branch"] == branch
         if ws["on_branch"]:
             ws["rebase"] = rebasing
-            ws["dirty"] = [] if rebasing else gitutil.dirty_files(paths.workspace)
-            ws["unmerged"] = gitutil.unmerged_files(paths.workspace) if rebasing else []
+            ws["dirty"] = [] if rebasing else gitutil.dirty_files(cwd)
+            ws["unmerged"] = gitutil.unmerged_files(cwd) if rebasing else []
     decision_text = jobs.read(jd / "decision.md")
     human_text = jobs.read(jd / "human-approval.md")
     rounds = {n: _round_facts(paths, job_id, n) for n in jobs.rounds_on_disk(jd)}
@@ -147,7 +148,7 @@ def _builder(f, stage, n, attempt, reason):
         return _out(f, "needs-human", "needs-human",
                     f"builder spawned {STUCK_REPEATS} times in round {n} without a new commit: {reason}")
     if not f["workspace"].get("on_branch"):
-        return _out(f, stage, "switch", reason)
+        return _out(f, stage, "open-workspace", reason)
     return _out(f, stage, "spawn-builder", reason, round=n, attempt=attempt)
 
 
@@ -237,7 +238,7 @@ def _round(f, n, start):
     verify = facts["verifies"].get(a)
     if not _verified(f, verify, heads):
         if not ws.get("on_branch"):
-            return _out(f, "building", "switch", "verify the round")
+            return _out(f, "building", "open-workspace", "verify the round")
         return _out(f, "building", "verify", "run the project's tests, build and lint on the builder's result",
                     round=n, attempt=a)
     if not verify.get("green"):
@@ -260,7 +261,7 @@ def _round(f, n, start):
                         f"{', '.join(stuck)} spawned {STUCK_REPEATS} times in round {n} without a readable review"
                         + (f" ({why})" if why else ""))
         if not ws.get("on_branch"):
-            return _out(f, "reviewing", "switch", "reviewers read the workspace")
+            return _out(f, "reviewing", "open-workspace", "reviewers read the workspace")
         if rejected:
             return _out(f, "reviewing", "spawn-reviewers",
                         "rewrite rejected review: " + "; ".join(f"{r} — {p}" for r, p in rejected.items()),
@@ -297,7 +298,7 @@ def _approval(f, human):
         return _out(f, "needs-human", "needs-human", f"the PR was closed without merging: {pr.get('url')}")
     if not rebased or last.get("target") != f["target_head"]:
         if not f["workspace"].get("on_branch"):
-            return _out(f, "rebasing", "switch", "rebase on the target branch")
+            return _out(f, "rebasing", "open-workspace", "rebase on the target branch")
         return _out(f, "rebasing", "rebase", "rebase on the target branch and run the full suite")
     if f["merge_mode"] == "local-merge":
         blocked = f["merge"] and f["merge"].get("blocked") and f["merge"].get("head") == f["head"]

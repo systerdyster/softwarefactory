@@ -8,12 +8,12 @@ from unittest import mock
 from support import SandboxTest
 
 import hook
-from fx import paths as paths_mod
+from fx import actions, paths as paths_mod
 from fx.errors import FactoryError
 
 
 def event(agent_type=None, **tool):
-    data = {"tool_name": "Bash", "tool_input": tool or {"command": "git -C factory/workspace commit -m x"}}
+    data = {"tool_name": "Bash", "tool_input": tool or {"command": "git -C factory/workspaces/001-answer commit -m x"}}
     if agent_type is not None:
         data["agent_type"] = agent_type
     return io.StringIO(json.dumps(data))
@@ -38,6 +38,11 @@ class RoleTest(unittest.TestCase):
 
 
 class HookTest(SandboxTest):
+    def setUp(self):
+        super().setUp()
+        self.sb.open_job(self.sb.queue_job())
+        actions.log_spawn(self.paths, "001-answer", "review-security", 1, None, None)
+
     def run_hook(self, agent_type, **tool):
         with mock.patch.dict(os.environ, {"FACTORY_ROOT": str(self.sb.root)}):
             return hook.main(stream=event(agent_type, **tool))
@@ -52,7 +57,7 @@ class HookTest(SandboxTest):
     def test_a_factory_reviewer_is_held_to_its_role(self):
         self.assertEqual(self.run_hook("factory:factory-review-security"), 2)
         self.assertEqual(self.run_hook("factory:factory-review-security",
-                                       command="git -C factory/workspace diff HEAD~1"), 0)
+                                       command="git -C factory/workspaces/001-answer diff HEAD~1"), 0)
 
 
 class RootTest(unittest.TestCase):
@@ -64,7 +69,7 @@ class RootTest(unittest.TestCase):
             self.assertEqual(paths_mod._derive_root(), Path("/tmp/project").resolve())
 
     def test_the_workspace_maps_back_to_the_main_checkout(self):
-        with mock.patch.dict(os.environ, {**self.env, "CLAUDE_PROJECT_DIR": "/tmp/project/factory/workspace"},
+        with mock.patch.dict(os.environ, {**self.env, "CLAUDE_PROJECT_DIR": "/tmp/project/factory/workspaces/001-a"},
                              clear=True):
             self.assertEqual(paths_mod._derive_root(), Path("/tmp/project").resolve())
 
@@ -76,7 +81,7 @@ class RootTest(unittest.TestCase):
 
     def test_otherwise_the_git_repository_of_the_working_directory(self):
         with mock.patch.dict(os.environ, self.env, clear=True), \
-                mock.patch.object(paths_mod, "_git_toplevel", return_value=Path("/tmp/repo/factory/workspace")):
+                mock.patch.object(paths_mod, "_git_toplevel", return_value=Path("/tmp/repo/factory/workspaces/001-a")):
             self.assertEqual(paths_mod._derive_root(), Path("/tmp/repo").resolve())
 
 

@@ -1,6 +1,8 @@
 """Where everything lives. The factory runs as a plugin, so its code is not inside the project: the
 repo root comes from FACTORY_ROOT (used by the tests), else CLAUDE_PROJECT_DIR, else the git
-repository the command runs in. Runtime state is under <root>/factory/, which git ignores."""
+repository the command runs in. Runtime state is under <root>/factory/, which git ignores.
+
+Each job has its own worktree, factory/workspaces/<job-id>/, on its own branch."""
 
 import json
 import os
@@ -16,8 +18,8 @@ def _git_toplevel(cwd):
 
 
 def _outside_workspace(root):
-    if root.name == "workspace" and root.parent.name == "factory":
-        return root.parent.parent
+    if root.parent.name == "workspaces" and root.parent.parent.name == "factory":
+        return root.parent.parent.parent
     return root
 
 
@@ -47,13 +49,21 @@ class Paths:
         self.jobs = self.factory / "jobs"
         self.inbox = self.factory / "inbox"
         self.inbox_done = self.inbox / "done"
-        self.workspace = self.factory / "workspace"
-        self.workspace_state = self.factory / "workspace.json"
+        self.workspaces = self.factory / "workspaces"
+        self.agents = self.factory / "agents"
+        self.locks = self.factory / "locks"
+        self.orchestrator = self.factory / "orchestrator.json"
         self.logs = self.factory / "logs"
         self.stop_flag = self.factory / "STOP"
 
     def job(self, job_id):
         return self.jobs / job_id
+
+    def workspace(self, job_id):
+        return self.workspaces / job_id
+
+    def output(self, job_id):
+        return self.factory / "out" / job_id
 
     def round_dir(self, job_id, n):
         return self.job(job_id) / f"round-{n}"
@@ -73,13 +83,3 @@ def branch_name(paths, job_id):
     except (OSError, ValueError):
         meta = {}
     return meta.get("branch") or f"factory/{job_id}"
-
-
-def job_for_branch(paths, branch):
-    if not branch:
-        return None
-    if paths.jobs.exists():
-        for meta_file in paths.jobs.glob("*/job.json"):
-            if branch_name(paths, meta_file.parent.name) == branch:
-                return meta_file.parent.name
-    return branch.split("/", 1)[1] if branch.startswith("factory/") else None

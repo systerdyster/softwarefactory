@@ -73,9 +73,9 @@ class LifecycleTest(unittest.TestCase):
         f = base_facts(build=[done(1)], rounds={1: rnd({}, scheduled=["code"])}, spawns=spawns)
         self.assertEqual(state.decide(f)["stage"], "needs-human")
 
-    def test_agents_need_the_workspace_on_the_job_branch(self):
-        f = base_facts(workspace={"exists": True, "on_branch": False})
-        self.assertEqual(nxt(f), "switch")
+    def test_a_job_without_its_worktree_reopens_it(self):
+        f = base_facts(workspace={"exists": False, "on_branch": False})
+        self.assertEqual(nxt(f), "open-workspace")
 
     def test_the_builder_goes_first_with_no_test_writer(self):
         r = state.decide(base_facts())
@@ -292,13 +292,12 @@ class JiraTest(unittest.TestCase):
 
 class GatherTest(SandboxTest):
     def test_a_fresh_job_reads_as_starting_after_take(self):
-        self.sb.create_workspace()
         job = self.sb.queue_job()
         self.assertEqual(state.state(self.paths, self.cfg, job)["next"]["action"], "take")
         from fx import queue
         queue.take(self.paths)
         self.assertEqual(state.state(self.paths, self.cfg, job)["next"]["action"], "start")
-        workspace.switch(self.paths, self.cfg, job)
+        workspace.open_(self.paths, self.cfg, job)
         self.assertEqual(state.state(self.paths, self.cfg, job)["next"]["action"], "start")
 
 
