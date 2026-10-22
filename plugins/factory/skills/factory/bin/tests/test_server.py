@@ -6,7 +6,7 @@ from pathlib import Path
 
 from support import SandboxTest
 
-from fx import actions
+from fx import actions, board
 
 _spec = importlib.util.spec_from_file_location("factory_server", Path(__file__).resolve().parents[2] / "server.py")
 server = importlib.util.module_from_spec(_spec)
@@ -47,6 +47,14 @@ class ServerTest(SandboxTest):
         card = json.loads(text)["jobs"][0]
         self.assertEqual((status, card["id"], card["stage"]), (200, self.job, "queued"))
         self.assertEqual([s["key"] for s in card["pipeline"]], ["start", "build", "verify", "tidy", "review", "approve", "pr"])
+
+    def test_a_job_carries_the_main_reviewers_latest_confidence(self):
+        jd = self.paths.job(self.job)
+        card = lambda: board.build(self.paths, self.cfg, write=False)["jobs"][0]
+        self.assertIsNone(card()["confidence"])
+        self.sb.write("round-1/review-code.md", "VERDICT: CHANGES\n\nConfidence: 4/10 — the cache key\n", base=jd)
+        self.sb.write("round-2/review-code.md", "VERDICT: PASS\n\nConfidence: 8/10 — only the date format\n", base=jd)
+        self.assertEqual(card()["confidence"], 8)
 
     def test_factory_cli_dashboard_serves_and_prints_its_url_first(self):
         import os

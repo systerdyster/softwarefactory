@@ -2,10 +2,13 @@
 or event — and `decision` — what they must decide now, when the job waits for them. Both are read
 from the job folder; nothing here is judged by an agent."""
 
+import re
+
 from . import jobs
 
 ITEM_LIMIT = 3
 SHORT = 110
+CONFIDENCE = re.compile(r"^Confidence:\s*(\d+)\s*/\s*10", re.MULTILINE)
 
 
 def _short(text):
@@ -87,6 +90,15 @@ def story(paths, job_id, s):
     if pr and pr.get("url"):
         lines.append(f"PR {pr.get('state', '').lower()}: {pr['url']}")
     return lines
+
+
+def confidence(paths, job_id):
+    """The main reviewer's `Confidence: n/10` from its latest round that has one; None without."""
+    for n in reversed(jobs.rounds_on_disk(paths.job(job_id))):
+        found = CONFIDENCE.search(jobs.read(paths.round_dir(job_id, n) / "review-code.md") or "")
+        if found and 1 <= int(found.group(1)) <= 10:
+            return int(found.group(1))
+    return None
 
 
 def decision(paths, job_id, s):

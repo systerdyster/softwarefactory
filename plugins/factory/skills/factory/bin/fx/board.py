@@ -115,6 +115,7 @@ def build(paths, cfg, write=True):
         s["waits_for"] = queue.blocked_by(paths, job_id, statuses) if s["stage"] == "queued" else []
         s["story"] = story.story(paths, job_id, s)
         s["decision"] = story.decision(paths, job_id, s)
+        s["confidence"] = story.confidence(paths, job_id)
         jd = paths.job(job_id)
         s["files"] = sorted(str(p.relative_to(jd)) for p in jd.rglob("*.md")) if jd.exists() else []
         s["queued_at"] = (jobs.read_json(jd / "job.json") or {}).get("queued_at") if jd.exists() else None

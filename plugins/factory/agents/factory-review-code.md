@@ -89,6 +89,10 @@ After Findings and Checked and cleared:
 by likelihood wrong × cost if it is. "Nothing named." is an answer, but claiming nothing means you'd
 inspect nothing — don't pad, don't rubber-stamp.
 
+**Confidence** — how sure you are that the change is right and does what the spec asks, 1–10, set
+by what Least sure holds: 10 is nothing you'd check, 1 is you'd expect it to be wrong. Put
+`Confidence: n/10 — <one line>` at the end of your review, after Complexity.
+
 ## Not findings
 
 - Style the project's formatter or linter owns.
