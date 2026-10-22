@@ -48,8 +48,9 @@ def live_board(paths):
             if cache["at"] is None or time.monotonic() - cache["at"] >= BOARD_MAX_AGE:
                 try:
                     cache["data"] = json.dumps(board.build(paths, config.load(paths), write=False)).encode()
-                except FactoryError:
-                    cache["data"] = paths.board.read_bytes() if paths.board.exists() else None
+                except FactoryError as e:
+                    saved = jobs.read_json(paths.board) if paths.board.exists() else None
+                    cache["data"] = json.dumps({**saved, "stale": str(e)}).encode() if saved else None
                 cache["at"] = time.monotonic()
             return cache["data"]
     return current

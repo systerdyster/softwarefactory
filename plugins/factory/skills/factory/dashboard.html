@@ -161,10 +161,11 @@
   } catch (e) { /* storage unavailable: keep the token in memory only */ }
 
   const GROUPS = [
-    ["Needs you", ["needs-human"]], ["Working", ["starting", "building", "reviewing", "rebasing", "merging"]],
+    ["Can't read", ["unknown"]], ["Needs you", ["needs-human"]],
+    ["Working", ["starting", "building", "reviewing", "rebasing", "merging"]],
     ["Waiting for merge", ["pr-open"]], ["Queued", ["queued"]],
   ];
-  const FINISHED = ["merged", "done", "cancelled", "unknown"];
+  const FINISHED = ["merged", "done", "cancelled"];
   const STATUS_TEXT = { done: "done", active: "in progress", waiting: "waiting", blocked: "stopped",
                         skipped: "skipped", pending: "not started" };
   const $ = (id) => document.getElementById(id);
@@ -197,7 +198,7 @@
   // A card is an article with one button, the title, that opens the job; a click anywhere on the card
   // does the same. A button may hold only text, so the pipeline sits beside it, not inside it.
   function card(job) {
-    const human = job.stage === "needs-human";
+    const human = job.stage === "needs-human" || job.stage === "unknown";
     return `<article class="card ${human ? "human" : ""}" data-id="${esc(job.id)}">
       <div class="head"><button class="title" data-open="${esc(job.id)}">${esc(job.title || job.id)}</button>
         <span class="id">${esc(job.id)}${job.round ? ` · round ${esc(job.round)}` : ""}</span></div>
@@ -210,6 +211,14 @@
       + `${esc(job.title || job.id)}</button><span class="id">${esc(job.id)} · ${esc(job.stage)}</span>`
       + ((job.waits_for || []).length ? `<span class="waits">waits for ${esc(job.waits_for.join(", "))}</span>` : "")
       + `</article>`;
+  }
+
+  function orchestratorNote(o) {
+    if (!o || o.state === "running") return "";
+    const text = o.state === "stale"
+      ? `orchestrator silent for ${ago(o.last_seen)} — it may have stopped; commands wait until it runs`
+      : "orchestrator not running — commands wait for /factory run";
+    return ` · <span class="stopping">${esc(text)}</span>`;
   }
 
   function render() {
@@ -227,7 +236,8 @@
     const when = board.updated_at ? new Date(board.updated_at).toLocaleTimeString() : "never";
     $("meta").innerHTML = `${esc(board.target || "")} · ${esc(board.merge_mode || "")} · updated ${esc(when)}`
       + (board.stopping ? ` · <span class="stopping">stopping after the current job</span>` : "")
-      + (board.orchestrator === false ? ` · <span class="stopping">orchestrator not running — commands wait for /factory run</span>` : "")
+      + orchestratorNote(board.orchestrator)
+      + (board.stale ? ` · <span class="stopping">showing the last saved board — ${esc(board.stale)}</span>` : "")
       + (board.note ? ` · ${esc(board.note)}` : "");
     document.querySelectorAll(".card").forEach((el) => el.addEventListener("click", () => open(el.dataset.id)));
   }
@@ -298,6 +308,8 @@
         + checksLine(d.checks)
         + (least ? `<p class="lead">Check before you approve — the reviewer is least sure of:</p><ol class="least">${least}</ol>`
                  : `<p class="note">The reviewer named nothing it is unsure of.</p>`)
+        + ((d.exemptions || []).length ? `<p class="lead">Not covered by an automated test — check by hand:</p><ul class="least">`
+            + d.exemptions.map((e) => `<li>${markdown(e).replace(/^<p>|<\/p>$/g, "")}</li>`).join("") + `</ul>` : "")
         + `<textarea id="act-text" aria-label="Rework note" placeholder="Rework note — what to change"></textarea>`,
         acts: [["approve", "Approve", "primary"], ["rework", "Rework", ""], ...cancel] };
     }

@@ -103,6 +103,7 @@ def decision(paths, job_id, s):
         rounds = jobs.rounds_on_disk(jd)
         reviews = [jobs.read(paths.round_dir(job_id, n) / "review-code.md") for n in reversed(rounds)]
         least = next((_items(t, "Least sure") for t in reviews if _items(t, "Least sure")), [])
+        exemptions = [e for e in _items(jobs.read(jd / "tests.md"), "Exemptions") if e.lower() != "none"]
         return {"kind": "approve", "summary": jobs.section(jobs.read(jd / "spec.md"), "Summary"),
-                "checks": s.get("checks"), "least_sure": least[:ITEM_LIMIT]}
+                "checks": s.get("checks"), "least_sure": least[:ITEM_LIMIT], "exemptions": exemptions}
     return {"kind": "stopped", "reason": s.get("reason")}

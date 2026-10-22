@@ -62,7 +62,7 @@ class ServerTest(SandboxTest):
             conn.request("GET", "/board.json", headers={"X-Factory-Token": token})
             res = conn.getresponse()
             board = json.loads(res.read())
-            self.assertEqual((res.status, board["jobs"][0]["id"], board["orchestrator"]), (200, self.job, False))
+            self.assertEqual((res.status, board["jobs"][0]["id"], board["orchestrator"]), (200, self.job, {"state": "none"}))
             conn.close()
             again = subprocess.run([sys.executable, str(cli), "dashboard"], capture_output=True, text=True, timeout=10,
                                    env=dict(os.environ, FACTORY_ROOT=str(self.paths.root)))
@@ -78,6 +78,22 @@ class ServerTest(SandboxTest):
         later = self.sb.queue_job("002-later", "Later", after=[self.job])
         cards = {c["id"]: c for c in json.loads(self.request("GET", "/board.json")[1])["jobs"]}
         self.assertEqual((cards[later]["waits_for"], cards[self.job]["waits_for"]), ([self.job], []))
+
+    def test_a_board_that_cant_be_computed_is_served_from_the_saved_one_and_marked_stale(self):
+        from fx import board
+        board.build(self.paths, self.cfg)
+        self.paths.project.write_text("no configuration here\n", encoding="utf-8")
+        served = json.loads(self.request("GET", "/board.json")[1])
+        self.assertEqual(served["jobs"][0]["id"], self.job)
+        self.assertIn("project.md", served["stale"])
+
+    def test_an_orchestrator_heard_from_lately_is_running_and_a_silent_one_stale(self):
+        from fx import actions, board, jobs
+        actions.acquire_lease(self.paths)
+        self.assertEqual(board.orchestrator(self.paths)["state"], "running")
+        lease = jobs.read_json(self.paths.orchestrator)
+        jobs.write_json(self.paths.orchestrator, {**lease, "seen_at": "2026-01-01T00:00:00+00:00"})
+        self.assertEqual(board.orchestrator(self.paths)["state"], "stale")
 
     def test_a_record_left_by_a_dead_dashboard_is_ignored(self):
         self.paths.dashboard.write_text(json.dumps({"url": "http://127.0.0.1:1/?token=x", "port": 1, "pid": 999999}))

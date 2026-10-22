@@ -63,7 +63,8 @@ In tests.md in the job folder keep the traceability, nothing more:
 - `test name` in `file` — before the fix it failed with <the assertion and actual value>; it passes now
 
 ## Exemptions
-- <criterion> — approved in the plan | new: <justification>
+- <criterion> — approved in the plan | new: <justification> — verify: <how a human checks it by hand:
+  where to go, what to do, what they should see — e.g. render it at 375px, reload with a cookie set>
 ```
 
 ## Definition of done for a round

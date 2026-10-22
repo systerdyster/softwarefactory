@@ -1,7 +1,9 @@
 """`board`: rebuilds factory/board.json from every job folder, backlog.md and git. It holds no
 state of its own, so it is safe to run at any time; the dashboard reads it."""
 
-from . import jobs, queue, state as state_mod, story
+from datetime import datetime
+
+from . import actions, jobs, queue, runs, state as state_mod, story
 from .errors import FactoryError
 
 STAGE_ORDER = ["queued", "starting", "building", "reviewing", "rebasing", "merging", "needs-human", "pr-open",
@@ -85,6 +87,19 @@ def pipeline(s):
     return steps
 
 
+def orchestrator(paths):
+    """Whether an orchestrator is there to run commands: its lease, and when it was last heard from.
+    It refreshes the lease only between steps, so its running agents count too — each of their tool
+    calls is a sign of life."""
+    lease = jobs.read_json(paths.orchestrator)
+    if not lease:
+        return {"state": "none"}
+    seen = [lease["seen_at"]] + [r["seen_at"] for r in runs.all_runs(paths) if r["status"] == "running" and r.get("seen_at")]
+    last = max(seen)
+    age = (datetime.fromisoformat(jobs.now()) - datetime.fromisoformat(last)).total_seconds() / 60
+    return {"state": "running" if age < actions.LEASE_STALE_MINUTES else "stale", "last_seen": last}
+
+
 def build(paths, cfg, write=True):
     statuses = {e["id"]: e["status"] for e in queue.entries(paths)}
     ids = list(statuses)
@@ -111,7 +126,7 @@ def build(paths, cfg, write=True):
         "target": cfg.base_ref,
         "reviewers": cfg.enabled_reviewers,
         "stopping": paths.stop_flag.exists(),
-        "orchestrator": paths.orchestrator.exists(),
+        "orchestrator": orchestrator(paths),
         "jobs": cards,
     }
     if not write:
