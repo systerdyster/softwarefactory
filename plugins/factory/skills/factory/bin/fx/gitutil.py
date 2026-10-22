@@ -1,5 +1,9 @@
-"""Thin wrappers over the git CLI. Every call is argument-list based, never a shell string."""
+"""Thin wrappers over the git CLI. Every call is argument-list based, never a shell string.
 
+GIT_OPTIONAL_LOCKS=0: reads such as `git status` would otherwise take index.lock to refresh the
+index, and a state read by the orchestrator or the dashboard would then fail an agent's commit."""
+
+import os
 import subprocess
 from pathlib import Path
 
@@ -14,6 +18,7 @@ def run(args, cwd, check=True, input_text=None, timeout=600):
         capture_output=True,
         text=True,
         timeout=timeout,
+        env=dict(os.environ, GIT_OPTIONAL_LOCKS="0"),
     )
     if check and result.returncode != 0:
         raise FactoryError(f"git {' '.join(args)} failed: {result.stderr.strip() or result.stdout.strip()}")
