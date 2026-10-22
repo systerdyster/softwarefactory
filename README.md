@@ -219,7 +219,7 @@ the Codex CLI for the `codex` review.
 Once per developer: clone this repo, then add the clone as a local marketplace (use your own path):
 
 ```
-git clone git@github.com:systerdyster/softwarefactory.git
+git clone https://github.com/systerdyster/softwarefactory.git
 /plugin marketplace add <path-to-your-clone>
 /plugin install factory@software-factory          # user scope
 ```
