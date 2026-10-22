@@ -190,7 +190,7 @@ def cmd_command(a, p):
 
 def cmd_inbox(a, p):
     if a.action == "done":
-        return actions.inbox_done(p, a.file, a.outcome)
+        return actions.inbox_done(p, a.file, a.outcome, a.refused)
     if a.action == "watch":
         actions.inbox_watch(p)
     return {"pending": actions.inbox_list(p)}
@@ -290,6 +290,7 @@ def parser():
     sp.add_argument("action", choices=["list", "done", "watch"])
     sp.add_argument("file", nargs="?")
     sp.add_argument("--outcome", default="")
+    sp.add_argument("--refused", action="store_true", help="the command was refused, not applied")
     sp = add("jira-log", cmd_jira_log, "record a Jira action taken for a job")
     sp.add_argument("job")
     sp.add_argument("event")

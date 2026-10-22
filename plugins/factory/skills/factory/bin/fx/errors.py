@@ -6,5 +6,9 @@ class FactoryError(Exception):
         self.details = details
 
 
+class Conflict(FactoryError):
+    """The request duplicates one still waiting, such as a second approve before the first ran."""
+
+
 class Fallback(FactoryError):
     """codex-review could not run Codex; the orchestrator spawns codex-fallback instead."""

@@ -72,6 +72,14 @@
   .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
   .btn.danger { color: var(--changes); }
   .btn:focus-visible, .files button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .cmds { display: grid; gap: 4px; padding: 0 16px 12px; font-size: 12.5px; }
+  .cmds:empty { display: none; }
+  .cmd { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; overflow-wrap: anywhere; }
+  .cmd .state { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; }
+  .cmd .state.queued { background: var(--pending-bg); color: var(--ink); }
+  .cmd .state.applied { background: var(--pass-bg); color: var(--pass); }
+  .cmd .state.refused { background: var(--changes-bg); color: var(--changes); }
   .note { font-size: 12.5px; color: var(--muted); }
   .error { color: var(--changes); padding: 16px; }
   @media (prefers-reduced-motion: no-preference) { .card { transition: border-color .15s; } }
@@ -97,6 +105,7 @@
     <article class="doc" id="dlg-doc"></article>
   </div>
   <div class="acts" id="dlg-acts"></div>
+  <div class="cmds" id="dlg-cmds" role="status" aria-live="polite" aria-label="Commands for this job"></div>
 </dialog>
 
 <script>
@@ -115,7 +124,7 @@
   ];
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-  let board = { jobs: [] }, openJob = null;
+  let board = { jobs: [] }, openJob = null, openStage = null, openFiles = "", sending = false, pending = false;
 
   async function api(path, opts = {}) {
     const res = await fetch(path, { ...opts, headers: { "X-Factory-Token": token || "", ...(opts.headers || {}) } });
@@ -202,32 +211,92 @@
       + `<span class="note" id="act-status" role="status"></span>`;
   }
 
+  function lockButtons() {
+    document.querySelectorAll("#dlg-acts button[data-cmd]").forEach((b) => { b.disabled = sending || pending; });
+  }
+
+  const STATE_TEXT = { queued: "Queued", applied: "Applied", refused: "Refused" };
+  function commandLine(c) {
+    const when = new Date(c.done_at || c.at).toLocaleTimeString();
+    const detail = c.status === "queued" ? "waiting for the orchestrator" : c.outcome || "";
+    return `<div class="cmd"><span class="state ${esc(c.status)}">${esc(STATE_TEXT[c.status] || c.status)}</span>`
+      + `<span>${esc(c.command)} · ${esc(when)}${detail ? ` — ${esc(detail)}` : ""}</span></div>`;
+  }
+
+  async function loadCommands(id) {
+    try {
+      const { commands } = await (await api(`/commands?job=${encodeURIComponent(id)}`)).json();
+      if (openJob !== id) return;
+      pending = commands.some((c) => c.status === "queued");
+      $("dlg-cmds").innerHTML = commands.slice().reverse().map(commandLine).join("");
+      lockButtons();
+    } catch (e) { /* the next refresh tries again */ }
+  }
+
   async function send(job, command) {
+    if (sending || pending) return;
     const text = ($("act-text") || {}).value || "";
     if (command === "rework" && !text.trim()) { $("act-status").textContent = "Rework needs a note."; return; }
     if (command === "cancel" && !confirm(`Cancel ${job.id}? This closes its PR and deletes its branch.`)) return;
+    sending = true; lockButtons();
+    $("act-status").textContent = `Sending ${command}…`;
     try {
       await api("/command", { method: "POST", headers: { "Content-Type": "application/json" },
                               body: JSON.stringify({ command, job: job.id, text, by: "dashboard" }) });
-      $("act-status").textContent = `Queued ${command}. The orchestrator runs it on its next step.`;
+      $("act-status").textContent = "";
+      pending = true;
     } catch (e) { $("act-status").textContent = e.message; }
+    sending = false;
+    await loadCommands(job.id);
+  }
+
+  function fillHeader(job) {
+    $("dlg-id").textContent = `${job.id} · ${job.stage}`;
+    $("dlg-title").textContent = job.title || job.id;
+    $("dlg-reason").textContent = job.reason || "";
+  }
+
+  function fillFiles(job) {
+    const files = job.files || [];
+    openFiles = files.join("\n");
+    const current = document.querySelector('#dlg-files button[aria-current="true"]');
+    $("dlg-files").innerHTML = files.map((f) => `<button data-path="${esc(f)}">${esc(f)}</button>`).join("") || `<div class="empty">No files yet</div>`;
+    $("dlg-files").querySelectorAll("button").forEach((b) => {
+      b.setAttribute("aria-current", String(!!current && b.dataset.path === current.dataset.path));
+      b.addEventListener("click", () => show(job, b.dataset.path));
+    });
+  }
+
+  function fillActions(job) {
+    openStage = job.stage;
+    $("dlg-acts").innerHTML = actions(job);
+    $("dlg-acts").querySelectorAll("button[data-cmd]").forEach((b) => b.addEventListener("click", () => send(job, b.dataset.cmd)));
+    lockButtons();
   }
 
   function open(id) {
     const job = (board.jobs || []).find((j) => j.id === id); if (!job) return;
-    openJob = id;
-    $("dlg-id").textContent = `${job.id} · ${job.stage}`;
-    $("dlg-title").textContent = job.title || job.id;
-    $("dlg-reason").textContent = job.reason || "";
-    const files = job.files || [];
-    $("dlg-files").innerHTML = files.map((f) => `<button data-path="${esc(f)}">${esc(f)}</button>`).join("") || `<div class="empty">No files yet</div>`;
-    $("dlg-files").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => show(job, b.dataset.path)));
-    $("dlg-acts").innerHTML = actions(job);
-    $("dlg-acts").querySelectorAll("button[data-cmd]").forEach((b) => b.addEventListener("click", () => send(job, b.dataset.cmd)));
+    openJob = id; pending = false; sending = false;
+    fillHeader(job);
     $("dlg-doc").innerHTML = "";
+    $("dlg-cmds").innerHTML = "";
+    fillFiles(job);
+    fillActions(job);
+    const files = job.files || [];
     const first = ["decision.md", "spec.md"].find((f) => files.includes(f)) || files[0];
     if (first) show(job, first);
     if (!$("dlg").open) $("dlg").showModal();
+    loadCommands(id);
+  }
+
+  // The open dialog follows the board: header always, files and actions only when they changed, so a
+  // half-written rework note survives every refresh that doesn't move the job.
+  function followOpen() {
+    const job = (board.jobs || []).find((j) => j.id === openJob); if (!job) return;
+    fillHeader(job);
+    if ((job.files || []).join("\n") !== openFiles) fillFiles(job);
+    if (job.stage !== openStage) fillActions(job);
+    loadCommands(job.id);
   }
 
   $("dlg-close").addEventListener("click", () => $("dlg").close());
@@ -237,13 +306,14 @@
     try {
       board = await (await api("/board.json")).json();
       render();
+      if (openJob) followOpen();
     } catch (e) {
       $("meta").innerHTML = `<span class="error">${esc(e.message)}</span>`;
     }
   }
   if (!token) { $("meta").innerHTML = `<span class="error">Open the URL the server printed; it carries the token.</span>`; return; }
   refresh();
-  setInterval(() => { if (!openJob) refresh(); }, 3000);
+  setInterval(refresh, 3000);
 })();
 </script>
 </body>

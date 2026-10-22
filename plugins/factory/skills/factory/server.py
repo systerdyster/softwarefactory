@@ -21,7 +21,7 @@ from urllib.parse import parse_qs, urlparse
 sys.path.insert(0, str(Path(__file__).resolve().parent / "bin"))
 
 from fx import actions, jobs  # noqa: E402
-from fx.errors import FactoryError  # noqa: E402
+from fx.errors import Conflict, FactoryError  # noqa: E402
 from fx.paths import Paths  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
@@ -75,6 +75,13 @@ def make_handler(paths, token, port):
             if url.path == "/file":
                 q = parse_qs(url.query)
                 return self._file(q.get("job", [""])[0], q.get("path", [""])[0])
+            if url.path == "/commands":
+                job_id = parse_qs(url.query).get("job", [""])[0]
+                try:
+                    jobs.check_id(job_id)
+                except FactoryError as e:
+                    return self._json(400, {"error": str(e)})
+                return self._json(200, {"commands": actions.job_commands(paths, job_id)})
             return self._json(404, {"error": "not found"})
 
         def _file(self, job_id, rel):
@@ -107,6 +114,8 @@ def make_handler(paths, token, port):
                                                str(body.get("text", ""))[:4000], str(body.get("by", ""))[:200])
             except (json.JSONDecodeError, AttributeError):
                 return self._json(400, {"error": "invalid JSON"})
+            except Conflict as e:
+                return self._json(409, {"error": str(e)})
             except FactoryError as e:
                 return self._json(400, {"error": str(e)})
             return self._json(202, result)

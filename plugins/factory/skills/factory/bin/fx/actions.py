@@ -6,7 +6,7 @@ import os
 import subprocess
 
 from . import gitutil, jobs, queue, state as state_mod, testfiles, workspace
-from .errors import FactoryError
+from .errors import Conflict, FactoryError
 from .paths import branch_name
 
 
@@ -293,6 +293,8 @@ def write_command(paths, command, job_id, text, by):
     jobs.check_id(job_id)
     if command == "rework" and not (text or "").strip():
         raise FactoryError("rework needs a note")
+    if any(c.get("command") == command and c.get("job") == job_id for c in inbox_list(paths)):
+        raise Conflict(f"a {command} for {job_id} is already queued; the orchestrator has not run it yet")
     paths.inbox.mkdir(parents=True, exist_ok=True)
     name = f"{jobs.now().replace(':', '')}-{command}-{job_id}.json"
     payload = {"command": command, "job": job_id, "text": text or "", "by": by or "", "at": jobs.now()}
@@ -328,14 +330,29 @@ def inbox_watch(paths, interval=2.0, out=None):
         seen = current
 
 
-def inbox_done(paths, name, outcome):
+def inbox_done(paths, name, outcome, refused=False):
     src = paths.inbox / os.path.basename(name)
     if not src.exists():
         raise FactoryError(f"no inbox file {name}")
     paths.inbox_done.mkdir(parents=True, exist_ok=True)
     data = jobs.read_json(src) or {}
     data["outcome"] = outcome
+    data["status"] = "refused" if refused else "applied"
     data["done_at"] = jobs.now()
     jobs.write_json(paths.inbox_done / src.name, data)
     src.unlink()
     return {"done": src.name}
+
+
+def job_commands(paths, job_id, limit=5):
+    """One job's latest inbox commands, oldest first, each queued, applied or refused. Files marked
+    done before `status` existed read as refused when their outcome says so."""
+    done = []
+    if paths.inbox_done.exists():
+        for f in paths.inbox_done.glob("*.json"):
+            data = jobs.read_json(f) or {}
+            if data.get("job") == job_id:
+                refused = (data.get("outcome") or "").lower().startswith("refused")
+                done.append({**data, "status": data.get("status") or ("refused" if refused else "applied")})
+    queued = [{**c, "status": "queued"} for c in inbox_list(paths) if c.get("job") == job_id]
+    return sorted(done + queued, key=lambda c: c.get("at") or "")[-limit:]

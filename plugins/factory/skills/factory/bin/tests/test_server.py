@@ -57,6 +57,40 @@ class ServerTest(SandboxTest):
         pending = actions.inbox_list(self.paths)
         self.assertEqual((pending[0]["command"], pending[0]["text"]), ("rework", "Use the cache"))
 
+    def post(self, command, text=""):
+        body = json.dumps({"command": command, "job": self.job, "text": text, "by": "dashboard"})
+        return self.request("POST", "/command", body, {"Content-Type": "application/json"})
+
+    def commands(self):
+        status, data = self.request("GET", f"/commands?job={self.job}")
+        self.assertEqual(status, 200)
+        return json.loads(data)["commands"]
+
+    def test_a_second_identical_command_is_refused_while_the_first_waits(self):
+        self.assertEqual(self.post("approve")[0], 202)
+        status, data = self.post("approve")
+        self.assertEqual(status, 409)
+        self.assertIn("already queued", json.loads(data)["error"])
+        self.assertEqual(len(actions.inbox_list(self.paths)), 1)
+
+    def test_a_command_reads_as_queued_then_applied(self):
+        name = json.loads(self.post("approve")[1])["queued"]
+        self.assertEqual([(c["command"], c["status"]) for c in self.commands()], [("approve", "queued")])
+        actions.inbox_done(self.paths, name, "approved at head abc")
+        latest = self.commands()[-1]
+        self.assertEqual((latest["status"], latest["outcome"]), ("applied", "approved at head abc"))
+
+    def test_a_refused_command_reads_as_refused_and_frees_the_slot(self):
+        name = json.loads(self.post("approve")[1])["queued"]
+        actions.inbox_done(self.paths, name, "already approved; PR 63 is open", refused=True)
+        self.assertEqual(self.commands()[-1]["status"], "refused")
+        self.assertEqual(self.post("approve")[0], 202)
+
+    def test_commands_lists_only_the_asked_job(self):
+        self.post("approve")
+        actions.write_command(self.paths, "approve", "002-other", "", "terminal")
+        self.assertEqual([c["job"] for c in self.commands()], [self.job])
+
     def test_commands_refuse_forms_cross_origin_and_unknown_verbs(self):
         body = json.dumps({"command": "approve", "job": self.job})
         self.assertEqual(self.request("POST", "/command", body, {"Content-Type": "text/plain"})[0], 415)

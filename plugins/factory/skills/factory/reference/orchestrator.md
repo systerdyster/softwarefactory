@@ -106,8 +106,9 @@ commands", `timeout_ms` 1800000, re-armed on every expiry for as long as the run
 line names a file; `F inbox list` shows all pending ones.
 
 Run each command **exactly like its terminal form** (below), then `F inbox done <file> --outcome
-"<one line>"`. A command that is refused (wrong stage, unknown job) is still marked done, with the
-refusal as its outcome.
+"<one line>"`. A command that is refused (wrong stage, unknown job, already done) is still marked
+done, with `--refused` and the reason as its outcome — the dashboard shows applied and refused apart.
+The inbox refuses a second identical command for a job while the first is still pending.
 
 ## Commands, as the orchestrator runs them
 
