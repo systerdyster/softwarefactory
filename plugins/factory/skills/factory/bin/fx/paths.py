@@ -1,6 +1,6 @@
 """Where everything lives. The factory runs as a plugin, so its code is not inside the project: the
 repo root comes from FACTORY_ROOT (used by the tests), else CLAUDE_PROJECT_DIR, else the git
-repository the command runs in. Runtime state is under <root>/factory/, which is gitignored."""
+repository the command runs in. Runtime state is under <root>/factory/, which git ignores."""
 
 import json
 import os

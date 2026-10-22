@@ -38,8 +38,9 @@ plugins/factory/
                                           performance,stability,platform,ux,ui}, codex-fallback
 ```
 
-In a project the factory leaves only `factory/` (gitignored runtime state) and the allowlist that
-`/factory init` adds to `.claude/settings.json`.
+A personal tool: in a project the factory changes no committed file. It leaves only `factory/`
+(runtime state, ignored through `.git/info/exclude`) and the allowlist that `/factory init` adds to
+`.claude/settings.local.json`.
 
 Run the tests with `python3 -m unittest discover -s plugins/factory/skills/factory/bin/tests` from
 the repo root (or `-s tests` from `skills/factory/bin`).
@@ -98,7 +99,8 @@ the installed CLI (0.153.4).
 
 ## Gotchas
 
-- The workspace is a full repo copy at `factory/workspace/` inside the checkout. Tools that don't read
-  `.gitignore` (some watchers, linters, test globs, IDE indexers) will see it; init checks for this.
+- The workspace is a full repo copy at `factory/workspace/` inside the checkout. Tools that read
+  `.gitignore` themselves, or no ignore file at all (some watchers, linters, test globs, IDE indexers),
+  don't see `.git/info/exclude` and will see it; init checks for this and reports it.
 - `workspace_setup` output (node_modules, copied `.env`) must be gitignored in the project, or the
   workspace never reads as clean.

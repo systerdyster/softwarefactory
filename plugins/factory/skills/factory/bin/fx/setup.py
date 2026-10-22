@@ -2,9 +2,9 @@
 writing project.md is judgement and stays with the session running init."""
 
 import json
-import re
+from pathlib import Path
 
-from . import jobs
+from . import gitutil, jobs
 from .errors import FactoryError
 
 READ_GIT = ["status", "diff", "log", "show", "merge-base", "rev-parse", "ls-files", "blame", "grep", "cat-file"]
@@ -33,14 +33,14 @@ def init_files(paths):
         paths.backlog.write_text("# Backlog\n\nApproved jobs, oldest first. Written only through `factory.py queue`.\n\n",
                                  encoding="utf-8")
         created.append(paths.relative(paths.backlog))
-    gitignore = paths.root / ".gitignore"
-    text = gitignore.read_text(encoding="utf-8") if gitignore.exists() else ""
-    ignored = bool(re.search(r"^/?factory/?\s*$", text, re.M))
-    if not ignored:
-        gitignore.write_text(text.rstrip("\n") + ("\n\n" if text.strip() else "")
-                             + "# Software factory runtime state: jobs, workspace, board. Never committed.\n/factory/\n",
-                             encoding="utf-8")
-        created.append(".gitignore: /factory/")
+    if not gitutil.ok(["check-ignore", "-q", "factory/"], paths.root):
+        exclude = Path(paths.root, gitutil.out(["rev-parse", "--git-path", "info/exclude"], paths.root))
+        exclude.parent.mkdir(parents=True, exist_ok=True)
+        text = exclude.read_text(encoding="utf-8") if exclude.exists() else ""
+        exclude.write_text(text.rstrip("\n") + ("\n\n" if text.strip() else "")
+                           + "# Software factory runtime state: jobs, workspace, board.\n/factory/\n",
+                           encoding="utf-8")
+        created.append(".git/info/exclude: /factory/")
     return {"created": created, "project": paths.relative(paths.project)}
 
 
@@ -51,17 +51,23 @@ def proposed_rules():
     return allow
 
 
+def _read_settings(path, paths):
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        raise FactoryError(f"{paths.relative(path)} is not valid JSON: {e}")
+
+
 def allowlist(paths, cfg, write=False):
-    settings_file = paths.root / ".claude" / "settings.json"
-    settings = {}
-    if settings_file.exists():
-        try:
-            settings = json.loads(settings_file.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as e:
-            raise FactoryError(f".claude/settings.json is not valid JSON: {e}")
+    shared = _read_settings(paths.root / ".claude" / "settings.json", paths)
+    settings_file = paths.root / ".claude" / "settings.local.json"
+    settings = _read_settings(settings_file, paths)
     rules = proposed_rules()
     current = settings.get("permissions", {}).get("allow", [])
-    missing = [r for r in rules if r not in current]
+    present = current + shared.get("permissions", {}).get("allow", [])
+    missing = [r for r in rules if r not in present]
     result = {"file": paths.relative(settings_file), "add": missing, "already_present": len(rules) - len(missing),
               "note": "git push is deliberately absent: only the orchestrator pushes, through factory.py pr."}
     if write and missing:

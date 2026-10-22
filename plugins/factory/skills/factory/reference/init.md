@@ -18,8 +18,8 @@ and add it.
 ## 1. Create the runtime folder
 
 `F init-files` creates `factory/` (jobs, inbox, logs), a `project.md` from the template, `backlog.md`,
-and adds `/factory/` to `.gitignore`. Tell the human the `.gitignore` line is a committed change they
-should review and commit.
+and, unless git already ignores it, adds `/factory/` to `.git/info/exclude`. Nothing committed
+changes: the factory is the developer's own tool, not the team's.
 
 ## 2. Inspect the repo and fill in project.md
 
@@ -71,10 +71,11 @@ establish, one question at a time with a recommendation.
 
 ## 3. Propose the allowlist
 
-`F allowlist` prints the permission rules the agents need in `.claude/settings.json`: the factory
-script (through which agents run the project's build, lint and test commands) and the git commands
-agents use in the workspace. `git push` is deliberately absent; only the orchestrator pushes, through
-the script. Show the list, and on the human's yes run `F allowlist --write`. It is a committed change.
+`F allowlist` prints the permission rules the agents need in `.claude/settings.local.json`: the
+factory script (through which agents run the project's build, lint and test commands) and the git
+commands agents use in the workspace. Rules already in the shared `.claude/settings.json` count as
+present. `git push` is deliberately absent; only the orchestrator pushes, through the script. Show the
+list, and on the human's yes run `F allowlist --write`. Local settings are not committed.
 
 The per-command limits (no shell operators, no switching or pushing, the builder never touching
 test-writer's files, reviewers writing only their review) are enforced by the plugin's PreToolUse
@@ -90,9 +91,10 @@ hook, which recognises each factory agent by name, not by the allowlist.
 start on a red target; fixing it is human work that comes first. If setup fails, report which step and
 its output.
 
-Check that the project's tooling ignores `factory/` (watchers, linters, test globs, IDE indexers that
-don't read `.gitignore`), since the workspace is a full copy of the repo inside the checkout; add
-ignore entries where needed and say so.
+Check that the project's tooling ignores `factory/` (watchers, linters, test globs, IDE indexers),
+since the workspace is a full copy of the repo inside the checkout. Tools that read `.gitignore`
+themselves don't see `.git/info/exclude`. Where one would scan `factory/`, tell the human which tool
+and what it would take — don't edit the project's committed config on your own.
 
 ## Done means
 

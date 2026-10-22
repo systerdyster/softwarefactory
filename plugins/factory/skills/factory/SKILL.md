@@ -44,9 +44,9 @@ the dashboard does, and the orchestrator runs it on its next step (or on its nex
 
 - **The project's own rules win** — CLAUDE.md, AGENTS.md, PROJECT-RULES.md and committed skills — over
   the factory's defaults, for intake and for every agent.
-- **Nothing personal in the repo.** The factory's code lives in the plugin; the repo holds only
-  `factory/` (gitignored runtime state) and the allowlist in `.claude/settings.json`. Never write a
-  personal path into a committed file.
+- **Nothing in the repo's committed files.** The factory is the developer's own tool. Its code lives
+  in the plugin; the project gets only `factory/` (runtime state, ignored through `.git/info/exclude`)
+  and the allowlist in `.claude/settings.local.json`.
 - **The developer's own checkout is never touched.** All code work happens in `factory/workspace/`, a
   persistent git worktree that switches branch only from a clean state.
 - **The suite is green on the target branch, or the factory stops.** It never works around red tests;

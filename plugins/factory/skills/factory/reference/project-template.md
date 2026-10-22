@@ -7,8 +7,8 @@ metadata:
 # Factory project configuration
 
 Written by `/factory init` and reviewed by a human. The agents read the prose sections; the scripts
-read only the `ini` block under **Configuration**. Lives in `factory/` (gitignored), so it is per
-machine — keep a copy wherever the team keeps setup notes if more than one person runs the factory.
+read only the `ini` block under **Configuration**. Lives in `factory/`, which git ignores, so it is
+per machine.
 
 ## Stack
 

@@ -294,7 +294,7 @@ def parser():
     sp.add_argument("job")
     sp.add_argument("event")
     sp.add_argument("--detail")
-    add("init-files", cmd_init_files, "create factory/, project.md template, backlog.md, .gitignore entry")
+    add("init-files", cmd_init_files, "create factory/, project.md template, backlog.md, local exclude entry")
     add("allowlist", cmd_allowlist, "propose (or --write) the permission allowlist").add_argument("--write", action="store_true")
     add("guard", cmd_guard, "PreToolUse hook for factory agents").add_argument("role")
     return ap
