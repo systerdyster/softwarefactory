@@ -361,15 +361,28 @@ def next_job(paths, cfg, lease):
 WAIT_SECONDS = 540
 
 
+def _woken(paths):
+    """Why the orchestrator should look again now: a command in the inbox, a stop, or a job it can take."""
+    if inbox_list(paths):
+        return "inbox"
+    if paths.stop_flag.exists():
+        return "stop"
+    statuses = {e["id"]: e["status"] for e in queue.entries(paths)}
+    if any(s == "queued" and not queue.blocked_by(paths, i, statuses) for i, s in statuses.items()):
+        return "queued"
+    return None
+
+
 def wait(paths, timeout=WAIT_SECONDS, interval=2.0):
-    """Blocks until an inbox command is pending or the timeout passes: how the orchestrator waits for a
-    human's approval while no job can be built, and still polls open PRs every few minutes."""
+    """Blocks until there is something to do — an inbox command, a stop, a job that can be taken — or
+    the timeout passes: how the orchestrator waits while no job can be built, still polling open PRs
+    every few minutes."""
     import time
     deadline = time.monotonic() + timeout
     while True:
-        pending = inbox_list(paths)
-        if pending or time.monotonic() >= deadline:
-            return {"inbox": len(pending), "timed_out": not pending}
+        why = _woken(paths)
+        if why or time.monotonic() >= deadline:
+            return {"woken_by": why or "timeout"}
         time.sleep(interval)
 
 

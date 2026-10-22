@@ -170,8 +170,8 @@ the repo root (or `-s tests` from `skills/factory/bin`).
 - **The run ends when the queue is empty and every job is finished**, not when nothing can be built:
   only the orchestrator runs inbox commands and polls PRs, so a run that ended on a job waiting for
   approval left the dashboard's approve unread until the next `/factory run`. `next` now says `wait`
-  while jobs wait for a human or a PR, and the orchestrator blocks in `F wait` until an inbox command
-  arrives or nine minutes pass (under Bash's ten-minute limit, so PRs are still polled).
+  while jobs wait for a human or a PR, and the orchestrator blocks in `F wait` until an inbox command,
+  a stop or a takeable job arrives, or nine minutes pass (under Bash's ten-minute limit, so PRs are still polled).
 - **The dashboard computes the board when it is asked** (at most every two seconds), from the job
   folders, runs and git, instead of reading `board.json`: the orchestrator writes that only between
   its steps, so a job showed "building" for as long as an agent worked. Each job is a pipeline —
