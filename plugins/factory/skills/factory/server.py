@@ -4,9 +4,13 @@
     factory-dashboard [--port N]        (the plugin puts factory-dashboard on PATH)
 
 Binds to 127.0.0.1 only and prints a URL with a random token; every request must carry that token
-(the page sends it as a header). Serves dashboard.html, factory/board.json and the markdown files in
-job folders, and accepts approve, rework and cancel by writing a command file to factory/inbox/,
-which the orchestrator runs exactly like its terminal form. It never changes a job itself."""
+(the page sends it as a header). Serves dashboard.html, the board and the markdown files in job
+folders, and accepts approve, rework and cancel by writing a command file to factory/inbox/, which
+the orchestrator runs exactly like its terminal form. It never changes a job itself.
+
+The board is computed from the job folders, runs and git when the page asks, at most every
+BOARD_MAX_AGE seconds — not read from factory/board.json, which the orchestrator writes only between
+its steps and so stands still while an agent works."""
 
 import argparse
 import hmac
@@ -14,23 +18,44 @@ import json
 import os
 import secrets
 import sys
+import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "bin"))
 
-from fx import actions, jobs  # noqa: E402
+from fx import actions, board, config, jobs  # noqa: E402
 from fx.errors import Conflict, FactoryError  # noqa: E402
 from fx.paths import Paths  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 MAX_BODY = 16 * 1024
 READABLE = (".md", ".json")
+BOARD_MAX_AGE = 2.0
+
+
+def live_board(paths):
+    """Returns a function giving the current board as JSON bytes, or None before there is one."""
+    lock = threading.Lock()
+    cache = {"at": None, "data": None}
+
+    def current():
+        with lock:
+            if cache["at"] is None or time.monotonic() - cache["at"] >= BOARD_MAX_AGE:
+                try:
+                    cache["data"] = json.dumps(board.build(paths, config.load(paths), write=False)).encode()
+                except FactoryError:
+                    cache["data"] = paths.board.read_bytes() if paths.board.exists() else None
+                cache["at"] = time.monotonic()
+            return cache["data"]
+    return current
 
 
 def make_handler(paths, token, port):
     allowed_hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
+    current_board = live_board(paths)
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "factory"
@@ -68,10 +93,11 @@ def make_handler(paths, token, port):
             if url.path == "/":
                 return self._send(200, (HERE / "dashboard.html").read_bytes(), "text/html; charset=utf-8")
             if url.path == "/board.json":
-                if not paths.board.exists():
+                data = current_board()
+                if data is None:
                     return self._json(200, {"jobs": [], "stages": [], "updated_at": None,
-                                            "note": "no board yet: the orchestrator writes it"})
-                return self._send(200, paths.board.read_bytes())
+                                            "note": "no board yet: run /factory init"})
+                return self._send(200, data)
             if url.path == "/file":
                 q = parse_qs(url.query)
                 return self._file(q.get("job", [""])[0], q.get("path", [""])[0])

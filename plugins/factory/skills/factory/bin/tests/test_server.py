@@ -41,6 +41,13 @@ class ServerTest(SandboxTest):
         self.assertEqual(self.request("GET", "/?token=t0ken", token=None)[0], 200)
         self.assertEqual(self.request("GET", "/board.json")[0], 200)
 
+    def test_the_board_is_read_from_the_jobs_not_from_the_orchestrators_last_write(self):
+        self.assertFalse(self.paths.board.exists())
+        status, text = self.request("GET", "/board.json")
+        card = json.loads(text)["jobs"][0]
+        self.assertEqual((status, card["id"], card["stage"]), (200, self.job, "queued"))
+        self.assertEqual([s["key"] for s in card["pipeline"]], ["start", "build", "verify", "tidy", "review", "approve", "pr"])
+
     def test_a_foreign_host_header_is_refused(self):
         self.assertEqual(self.request("GET", "/", headers={"Host": "evil.example"})[0], 403)
 

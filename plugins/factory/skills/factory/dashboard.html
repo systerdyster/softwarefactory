@@ -28,27 +28,50 @@
   header .meta { color: var(--muted); font-size: 12.5px; }
   .stopping { color: var(--human); font-weight: 600; }
   main { padding: 0 16px 32px; }
-  .attention { margin-bottom: 18px; }
-  .lanes { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; align-items: start; }
-  .lane h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
-             margin: 0 0 8px; font-weight: 600; display: flex; justify-content: space-between; }
+  .group { margin-bottom: 20px; }
+  .group h2, .group summary { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+                              margin: 0 0 8px; font-weight: 600; }
+  .group summary { cursor: pointer; }
   .card { width: 100%; text-align: left; background: var(--surface); color: inherit; border: 1px solid var(--line);
-          border-radius: var(--radius); box-shadow: var(--shadow); padding: 10px 12px; margin: 0 0 8px;
+          border-radius: var(--radius); box-shadow: var(--shadow); padding: 12px 14px; margin: 0 0 8px;
           cursor: pointer; font: inherit; display: block; }
   .card:hover { border-color: var(--accent); }
-  .card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .card.human { border-color: var(--human); background: var(--human-bg); }
+  .card.human { border-color: var(--human); }
+  .card.compact { padding: 8px 14px; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+  .card .head { display: flex; flex-wrap: wrap; gap: 2px 10px; align-items: baseline; }
   .card .id { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
-  .card .title { font-weight: 600; margin: 2px 0 6px; overflow-wrap: anywhere; }
-  .card .reason { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+  .card .title { font: inherit; font-weight: 600; overflow-wrap: anywhere; color: inherit; background: none; border: 0;
+                 padding: 0; text-align: left; cursor: pointer; }
+  .card .title:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+  .card .reason { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; margin-top: 8px; }
   .card.human .reason { color: var(--human); }
-  .rounds { display: grid; gap: 4px; margin: 6px 0; }
-  .round { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
-  .round .n { font-size: 11px; color: var(--muted); width: 22px; }
-  .chip { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--pending-bg); color: var(--pending); }
+  .pipe { list-style: none; margin: 10px 0 0; padding: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+  @media (max-width: 640px) { .pipe { grid-template-columns: repeat(4, minmax(0, 1fr)); row-gap: 10px; } }
+  .step { min-width: 0; font-size: 12px; }
+  .step .bar { display: block; height: 6px; border-radius: 3px; background: var(--line); margin-bottom: 5px; }
+  .step .label { display: block; font-weight: 600; color: var(--muted); }
+  .step .detail { display: block; font-size: 11.5px; color: var(--muted); overflow-wrap: anywhere; }
+  .step.done .bar { background: var(--pass); }
+  .step.active .bar { background: var(--accent); }
+  .step.active .label { color: var(--accent); }
+  .step.waiting .bar { background: var(--human); }
+  .step.waiting .label, .step.waiting .detail { color: var(--human); }
+  .step.blocked .bar { background: var(--changes); }
+  .step.blocked .label { color: var(--changes); }
+  .step.skipped .bar { background: repeating-linear-gradient(90deg, var(--line) 0 6px, transparent 6px 10px); }
+  .step.pending .label { font-weight: 400; }
+  .revs { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
+  .chip { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--pending-bg); color: var(--pending);
+          white-space: nowrap; }
   .chip.PASS { background: var(--pass-bg); color: var(--pass); }
   .chip.CHANGES { background: var(--changes-bg); color: var(--changes); }
+  .chip.running { background: var(--accent); color: var(--surface); }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .empty { color: var(--muted); font-size: 12.5px; padding: 6px 0; }
+  @media (prefers-reduced-motion: no-preference) {
+    .step.active .bar { animation: pulse 1.6s ease-in-out infinite; }
+    @keyframes pulse { 50% { opacity: .45; } }
+  }
   dialog { width: min(880px, calc(100vw - 32px)); max-height: calc(100vh - 48px); border: 1px solid var(--line);
            border-radius: 14px; padding: 0; background: var(--surface); color: var(--ink); }
   dialog::backdrop { background: rgb(0 0 0 / .35); }
@@ -91,8 +114,7 @@
   <span class="meta" id="meta">Loading…</span>
 </header>
 <main>
-  <section class="attention" id="attention" aria-label="Needs a human"></section>
-  <div class="lanes" id="lanes"></div>
+  <div id="groups"></div>
 </main>
 
 <dialog id="dlg" aria-labelledby="dlg-title">
@@ -117,11 +139,13 @@
     else token = sessionStorage.getItem("factory-token");
   } catch (e) { /* storage unavailable: keep the token in memory only */ }
 
-  const LANES = [
-    ["Queued", ["queued", "starting"]], ["Building", ["building"]], ["Review", ["reviewing"]],
-    ["Merge", ["rebasing", "merging"]],
-    ["PR open", ["pr-open"]], ["Done", ["merged", "done", "cancelled"]],
+  const GROUPS = [
+    ["Needs you", ["needs-human"]], ["Working", ["starting", "building", "reviewing", "rebasing", "merging"]],
+    ["Waiting for merge", ["pr-open"]], ["Queued", ["queued"]],
   ];
+  const FINISHED = ["merged", "done", "cancelled", "unknown"];
+  const STATUS_TEXT = { done: "done", active: "in progress", waiting: "waiting", blocked: "stopped",
+                        skipped: "skipped", pending: "not started" };
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   let board = { jobs: [] }, openJob = null, openStage = null, openFiles = "", sending = false, pending = false;
@@ -132,34 +156,51 @@
     return res;
   }
 
-  function rounds(job) {
-    const entries = Object.entries(job.verdicts || {});
-    if (!entries.length) return "";
-    return `<div class="rounds">${entries.slice(-3).map(([n, v]) =>
-      `<div class="round"><span class="n">R${esc(n)}</span>${Object.entries(v).map(([name, verdict]) =>
-        `<span class="chip ${esc(verdict || "")}" title="${esc(name)}: ${esc(verdict || "pending")}">${esc(name)}</span>`).join("")}</div>`).join("")}</div>`;
+  function ago(iso) {
+    const min = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+    return min < 60 ? `${min} min` : `${Math.floor(min / 60)} h ${min % 60} min`;
   }
 
+  function step(st) {
+    const detail = [st.detail, st.since ? ago(st.since) : ""].filter(Boolean).join(" · ");
+    const revs = (st.reviewers || []).map((r) =>
+      `<span class="chip ${esc(r.status)}" title="${esc(r.name)}: ${esc(r.status)}">${esc(r.name)}`
+      + `${r.status === "running" && r.since ? ` · ${esc(ago(r.since))}` : ""}</span>`).join("");
+    const current = ["active", "waiting", "blocked"].includes(st.status);
+    return `<li class="step ${esc(st.status)}"${current ? ` aria-current="step"` : ""}><span class="bar"></span>`
+      + `<span class="label">${esc(st.label)}<span class="sr"> — ${esc(STATUS_TEXT[st.status] || st.status)}</span></span>`
+      + (detail ? `<span class="detail">${esc(detail)}</span>` : "")
+      + (revs ? `<span class="revs">${revs}</span>` : "") + `</li>`;
+  }
+
+  // A card is an article with one button, the title, that opens the job; a click anywhere on the card
+  // does the same. A button may hold only text, so the pipeline sits beside it, not inside it.
   function card(job) {
     const human = job.stage === "needs-human";
-    const why = human ? job.reason : (job.next && job.next.action !== "none" ? `${job.next.action}` : job.reason || "");
-    return `<button class="card ${human ? "human" : ""}" data-id="${esc(job.id)}">
-      <div class="id">${esc(job.id)}${job.round ? ` · round ${esc(job.round)}` : ""}</div>
-      <div class="title">${esc(job.title || job.id)}</div>
-      ${rounds(job)}
-      <div class="reason">${esc(why)}</div></button>`;
+    return `<article class="card ${human ? "human" : ""}" data-id="${esc(job.id)}">
+      <div class="head"><button class="title" data-open="${esc(job.id)}">${esc(job.title || job.id)}</button>
+        <span class="id">${esc(job.id)}${job.round ? ` · round ${esc(job.round)}` : ""}</span></div>
+      <ol class="pipe" aria-label="Progress">${(job.pipeline || []).map(step).join("")}</ol>
+      ${job.reason ? `<div class="reason">${esc(job.reason)}</div>` : ""}</article>`;
+  }
+
+  function compact(job) {
+    return `<article class="card compact" data-id="${esc(job.id)}"><button class="title" data-open="${esc(job.id)}">`
+      + `${esc(job.title || job.id)}</button><span class="id">${esc(job.id)} · ${esc(job.stage)}</span></article>`;
   }
 
   function render() {
     const jobs = board.jobs || [];
-    const human = jobs.filter((j) => j.stage === "needs-human");
-    $("attention").innerHTML = human.length
-      ? `<div class="lane"><h2><span>Needs a human</span><span>${human.length}</span></h2>${human.map(card).join("")}</div>` : "";
-    $("lanes").innerHTML = LANES.map(([label, stages]) => {
+    const finished = jobs.filter((j) => FINISHED.includes(j.stage));
+    const finishedOpen = !!document.querySelector("details.group[open]");
+    $("groups").innerHTML = GROUPS.map(([label, stages]) => {
       const items = jobs.filter((j) => stages.includes(j.stage));
-      return `<section class="lane"><h2><span>${label}</span><span>${items.length}</span></h2>
-        ${items.length ? items.map(card).join("") : `<div class="empty">—</div>`}</section>`;
-    }).join("");
+      if (!items.length) return "";
+      const draw = stages.includes("queued") ? compact : card;
+      return `<section class="group"><h2>${label} · ${items.length}</h2>${items.map(draw).join("")}</section>`;
+    }).join("")
+      + (finished.length ? `<details class="group"${finishedOpen ? " open" : ""}><summary>Finished · ${finished.length}</summary>${finished.map(compact).join("")}</details>` : "")
+      + (jobs.length ? "" : `<div class="empty">No jobs yet. Queue one with /factory add.</div>`);
     const when = board.updated_at ? new Date(board.updated_at).toLocaleTimeString() : "never";
     $("meta").innerHTML = `${esc(board.target || "")} · ${esc(board.merge_mode || "")} · updated ${esc(when)}`
       + (board.stopping ? ` · <span class="stopping">stopping after the current job</span>` : "")

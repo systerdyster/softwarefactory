@@ -445,6 +445,9 @@ def state(paths, cfg, job_id):
                                    **{name: v["verdict"] for name, v in r["reviews"].items()}}
                           for n, r in sorted(f["rounds"].items())}
     result["fallback_used"] = any(v.get("fallback") for r in f["rounds"].values() for v in r["reviews"].values())
+    result["runs"] = [{"role": r["role"], "round": r["round"], "status": r["status"],
+                       "since": r.get("started_at") or r["created_at"]} for r in f["live_runs"]]
+    result["tidy"] = (f["rounds"].get(1) or {}).get("tidy")
     result["pr"] = f["pr"]
     result["jira_todo"] = jira_todo(f, result)
     result["backlog"] = f["backlog"]

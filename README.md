@@ -165,6 +165,12 @@ the repo root (or `-s tests` from `skills/factory/bin`).
   rounds are small. Its scope is the whole touched files (the PR may carry some cleanup of older code,
   listed in tidy.md) plus anything the change orphaned. Anything short of clean and green is
   discarded rather than repaired: the builder never fixes the tidy pass's mistakes.
+- **The dashboard computes the board when it is asked** (at most every two seconds), from the job
+  folders, runs and git, instead of reading `board.json`: the orchestrator writes that only between
+  its steps, so a job showed "building" for as long as an agent worked. Each job is a pipeline —
+  start, build, verify, tidy, review (each reviewer running, waiting or done), approve, PR — with the
+  running agent's time. Every git call runs with `GIT_OPTIONAL_LOCKS=0`, so these reads never take
+  `index.lock` from under an agent's commit.
 
 ## Proven, and not yet
 
