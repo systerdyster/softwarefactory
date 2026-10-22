@@ -26,6 +26,51 @@ standard library only. It was first built from a blueprint prompt; this repo is 
 Approve, answer, rework and cancel work from any session and from the dashboard: they wait in
 `factory/inbox/` until the orchestrator runs them.
 
+## Architecture
+
+The orchestrator is the Claude Code session itself, following `SKILL.md`. It decides nothing
+mechanical: every step is `factory-cli` (`factory.py` and `fx/`), which reads and writes the project's
+`factory/` folder, prints JSON and says what to do next. Agents are fresh sub-agents spawned from a
+brief the CLI wrote; a plugin hook confines each one to its own run.
+
+```mermaid
+flowchart LR
+    Dev([developer])
+    subgraph CC[Claude Code session]
+        SK["/factory skill<br/>orchestrator"]
+        AG["agents<br/>builder · tidy · reviewers"]
+    end
+    CLI["factory-cli<br/>factory.py + fx/"]
+    HK["PreToolUse / PostToolUse hook<br/>guard + run binding"]
+    subgraph ST["factory/ in the project (git-ignored)"]
+        Q[queue · jobs · runs]
+        WS[workspaces<br/>one worktree per job]
+        IN[inbox]
+    end
+    DB["dashboard<br/>server.py + dashboard.html<br/>127.0.0.1 + token"]
+    EXT[("git remote · PR tool<br/>Jira · Codex")]
+
+    Dev -->|/factory ...| SK
+    SK -->|state · brief · verify · pr| CLI
+    CLI <--> ST
+    SK -->|spawns with brief| AG
+    AG -->|tool calls| HK
+    HK -->|allow or refuse| AG
+    HK -.->|reads runs| ST
+    AG -->|edit in| WS
+    CLI --> EXT
+    Dev -->|approve · answer · rework| DB
+    DB -->|reads board| ST
+    DB -->|queues command| IN
+    IN -->|watched by| SK
+```
+
+- **State lives on disk**, in `factory/`; nothing is held in the session, so a restart resumes where the
+  folders say it stopped.
+- **One orchestrator** holds a lease; the dashboard never changes a job, it only queues commands.
+- **Agents never compose their own prompt or choose their own files**: `F brief` writes the prompt from
+  state, and the hook allows a write only inside that run's job and role.
+
 ## How it works
 
 ### From case to pull request
@@ -104,6 +149,14 @@ architecture and component pages) are rules every brief lists.
 
 ### The dashboard
 
+![The dashboard: the village above, job cards in three columns, the queue and finished jobs to the right](docs/images/dashboard.png)
+
+Opening a job shows what happened round by round, what you decide, and only the buttons that fit:
+
+![A job ready for approval: its story, the summary, diff size, the reviewer's confidence and least-sure list, and the spec](docs/images/job.png)
+
+*Screenshots show invented demo jobs, not a real project.*
+
 `/factory run` starts it and gives its URL (127.0.0.1, with a token); one runs per project, and a
 second start links to it. Each job is a card in one of three columns — needs you, in progress,
 waiting for merge — with its status, the running agent's time, and the agents working on it drawn as
@@ -159,6 +212,9 @@ drawn in code in `dashboard.html`; there are no image files. The main reviewer e
   that needed conflict resolution goes back through the builder and review and needs approval again.
 
 ## Install
+
+Needs Claude Code, Python 3 (standard library only) and git. Optional: `gh` or `az` for pull requests,
+the Codex CLI for the `codex` review.
 
 Once per developer, from this repo as a local marketplace:
 
