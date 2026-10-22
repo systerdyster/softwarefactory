@@ -35,7 +35,8 @@ class PrTest(SandboxTest):
         self.sb.write("pr-body.md", "## Answer\n\nThe answer is 42.\n\n🤖 Generated with [Claude Code](https://x)\n",
                       base=self.jd)
         with self.assertRaises(FactoryError):
-            pr.final_body(self.paths, self.cfg, self.job)
+            pr.open_or_update(self.paths, self.cfg, self.job)
+        self.assertEqual(git(self.sb.origin, "branch", "--list", "factory/001-answer"), "")
 
     def test_agents_get_the_default_commit_convention_unless_the_project_has_one(self):
         self.assertIn("Subject imperative", self.cfg.commits)

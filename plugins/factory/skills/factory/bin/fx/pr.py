@@ -188,8 +188,8 @@ def open_or_update(paths, cfg, job_id):
     jd = paths.job(job_id)
     meta = jobs.meta(jd)
     existing = jobs.read_json(jd / "pr.json")
-    head = _push(paths, cfg, job_id)
     text = final_body(paths, cfg, job_id)
+    head = _push(paths, cfg, job_id)
     title = title_for(cfg, meta)
     branch = branch_name(paths, job_id)
     tool = cfg.pr_tool
