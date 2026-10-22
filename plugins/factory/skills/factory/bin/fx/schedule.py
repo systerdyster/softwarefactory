@@ -1,15 +1,15 @@
 """`schedule <job-id>`: decides which reviewers run in the current round and writes
 round-N/scheduled.md.
 
-Round 1 of a cycle: every enabled reviewer. Later rounds: security, code and codex (if enabled)
-whenever code changed; every reviewer whose latest verdict is CHANGES; and every reviewer whose
-path patterns in project.md match a file changed since the previous round."""
+Round 1 of a cycle: the main reviewer (code), plus each specialist with a concrete reason to look —
+named in plan.md's `Specialists:` line, or one of its path patterns in project.md matches the change.
+Later rounds check the fixes: only the reviewers whose latest verdict is CHANGES."""
 
 import fnmatch
 import re
 
 from . import gitutil, jobs
-from .config import ALWAYS_ON_CODE_CHANGE
+from .config import REQUIRED_REVIEWERS
 from .errors import FactoryError
 from .paths import branch_name
 
@@ -62,30 +62,33 @@ def previous_head(paths, job_id, before_round, from_round):
     return None
 
 
-def decide(enabled, first_round, changed_files, diff_text, verdicts, patterns):
-    if first_round:
-        return {name: "first round" for name in enabled}
-    chosen = {}
-    if changed_files:
-        for name in ALWAYS_ON_CODE_CHANGE:
-            if name in enabled:
-                chosen[name] = "code changed"
-    for name in enabled:
-        if name not in chosen and verdicts.get(name) == "CHANGES":
-            chosen[name] = "said CHANGES"
-        elif name not in chosen and name not in verdicts:
-            chosen[name] = "has not reviewed this cycle"
-    for name in enabled:
-        if name in chosen:
-            continue
-        hit = next((f"{p} matches {f}" for p in patterns.get(name, []) for f in changed_files
-                    if not p.startswith("re:") and matches(p, f)), None)
-        if not hit:
-            hit = next((f"{p} matches the diff" for p in patterns.get(name, [])
+def _pattern_hit(patterns, changed_files, diff_text):
+    hit = next((f"{p} matches {f}" for p in patterns for f in changed_files
+                if not p.startswith("re:") and matches(p, f)), None)
+    return hit or next((f"{p} matches the diff" for p in patterns
                         if p.startswith("re:") and matches(p, "", diff_text)), None)
-        if hit:
-            chosen[name] = hit
-    return {name: chosen[name] for name in enabled if name in chosen}
+
+
+def decide(available, first_round, changed_files, diff_text, verdicts, patterns, named=()):
+    if not first_round:
+        chosen = {name: "said CHANGES" for name in available if verdicts.get(name) == "CHANGES"}
+        return chosen or {name: "nothing open; re-confirming" for name in REQUIRED_REVIEWERS}
+    chosen = {}
+    for name in available:
+        if name in REQUIRED_REVIEWERS:
+            chosen[name] = "main review"
+        elif name in named:
+            chosen[name] = "named in plan.md"
+        else:
+            hit = _pattern_hit(patterns.get(name, []), changed_files, diff_text)
+            if hit:
+                chosen[name] = hit
+    return chosen
+
+
+def named_specialists(paths, job_id):
+    value = jobs.field(jobs.read(paths.job(job_id) / "plan.md"), "Specialists") or ""
+    return [n.strip().lower() for n in re.split(r"[,\s]+", value) if n.strip() and n.strip().lower() != "none"]
 
 
 def schedule(paths, cfg, job_id, round_number, cycle_start):
@@ -98,15 +101,13 @@ def schedule(paths, cfg, job_id, round_number, cycle_start):
     prev = None if first else previous_head(paths, job_id, round_number, cycle_start)
     if not first and not prev:
         first = True
-    changed, diff_text = [], ""
-    if prev:
-        changed = gitutil.changed_files(prev, head, paths.root)
-        diff_text = gitutil.out(["diff", prev, head], paths.root) if changed else ""
+    since = base if first else prev
+    changed = gitutil.changed_files(since, head, paths.root)
+    diff_text = gitutil.out(["diff", since, head], paths.root) if changed and first else ""
     verdicts = latest_verdicts(paths, job_id, round_number - 1, cycle_start)
     patterns = {name: cfg.path_patterns(name) for name in cfg.enabled_reviewers}
-    chosen = decide(cfg.enabled_reviewers, first, changed, diff_text, verdicts, patterns)
-    if not chosen:
-        chosen = {name: "nothing changed; re-confirming open verdicts" for name in ["code"]}
+    chosen = decide(cfg.enabled_reviewers, first, changed, diff_text, verdicts, patterns,
+                    named_specialists(paths, job_id))
     lines = [
         f"# Round {round_number} — scheduled reviewers",
         "",

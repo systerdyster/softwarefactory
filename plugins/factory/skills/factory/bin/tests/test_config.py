@@ -17,11 +17,16 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(cfg.merge_mode, "pr")
         self.assertEqual(cfg.max_rounds, 3)
         self.assertEqual(cfg.base_ref, "origin/main")
-        self.assertEqual(cfg.enabled_reviewers, ["security", "code", "performance", "stability"])
+        self.assertEqual(cfg.enabled_reviewers, ["code", "security", "performance", "stability"])
+        self.assertEqual((cfg.reviewer_commands, cfg.docs), ([], []))
 
     def test_optional_reviewers_keep_a_fixed_order_and_codex_is_off_unless_listed(self):
         cfg = parse("[reviewers]\nenabled = codex, ui")
-        self.assertEqual(cfg.enabled_reviewers, ["security", "code", "performance", "stability", "ui", "codex"])
+        self.assertEqual(cfg.enabled_reviewers, ["code", "security", "performance", "stability", "ui", "codex"])
+
+    def test_docs_and_reviewer_commands(self):
+        cfg = parse("[rules]\ndocs = Wiki/*.md, docs/adr/**\n\n[reviewers]\ncommands = test-components")
+        self.assertEqual((cfg.docs, cfg.reviewer_commands), (["Wiki/*.md", "docs/adr/**"], ["test-components"]))
 
     def test_unknown_reviewer_is_refused(self):
         with self.assertRaises(FactoryError):

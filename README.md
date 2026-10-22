@@ -1,9 +1,26 @@
 # Software factory
 
 A Claude Code plugin that turns an approved case into a PR: `/factory add` frames a case with the
-developer into a spec and a plan, and `/factory run` builds queued jobs with fresh test-writer,
-builder, reviewer and approver agents. Python standard library only. Built from the blueprint in
-`~/Brain/library/claude-code/blueprint-software-factory.md`; this repo is now the source.
+developer into a spec and a plan, and `/factory run` builds queued jobs: a fresh builder writes the
+tests first and then the change, a main reviewer checks it (with specialists where the change calls
+for them), and the developer approves before the PR. Python standard library only. Built from the
+blueprint in `~/Brain/library/claude-code/blueprint-software-factory.md`; this repo is now the source.
+
+## The flow
+
+1. **Builder**, round 1: the plan's tests in the branch's first commit, listed in tests.md, then the
+   change. **red-check** runs those tests on that first commit and requires them to fail.
+2. **verify** — the full suite; red sends the builder back within the round.
+3. **Review**: the main reviewer (`code`) always; a specialist (security, performance, stability, ui,
+   ux, platform, codex) when plan.md's `Specialists:` line names it or its `[paths]` pattern matches.
+   The factory reads each verdict from the findings — CHANGES only for a BLOCKING one — and merges all
+   findings into one `findings.md`, same `path:line` = one item.
+4. **Fix rounds** rerun only the reviewers that blocked, on the diff since their last look.
+5. **Needs-human, ready** — every job stops for the developer's approval, with the diff size against
+   `max_diff` and the main review's least-sure list. Then rebase, suite, PR.
+
+spec.md's `## Decided` is settled for every agent; project.md's `[rules] docs` (a wiki's
+architecture and component pages) are rules every brief lists.
 
 ## Install
 
@@ -34,8 +51,8 @@ plugins/factory/
     bin/factory.py, hook.py, fx/          every mechanical step; prints JSON, exits non-zero on failure
     bin/tests/                            unittest, real temp git repos with a bare origin
     server.py, dashboard.html             dashboard + inbox, 127.0.0.1 with a token
-  agents/factory-*.md                     test-writer, builder, approver, review-{security,code,
-                                          performance,stability,platform,ux,ui}, codex-fallback
+  agents/factory-*.md                     builder, review-code (main), review-{security,performance,
+                                          stability,platform,ux,ui}, codex-fallback
 ```
 
 A personal tool: in a project the factory changes no committed file. It leaves only `factory/`
@@ -50,8 +67,9 @@ the repo root (or `-s tests` from `skills/factory/bin`).
 - **One plugin-level PreToolUse hook** (`hook.py`) enforces the per-role limits. Plugins ignore
   `hooks` in agent frontmatter, so the hook runs for every matching tool call in every session,
   returns at once unless `agent_type` is a `factory:` agent, and fails closed for an unknown factory
-  agent name. Reviewers: read-only git plus their own review file. Builder: never a tests.md file,
-  never push/switch/rebase/amend/`--no-verify`. No agent may edit the plugin's files or spawn agents.
+  agent name. Reviewers: read-only git, the project commands `[reviewers] commands` lists, and their
+  own review file. Builder: the workspace, build.md and tests.md, never push/switch/rebase/amend/
+  `--no-verify`. No agent may edit the plugin's files or spawn agents.
   Shell operators are refused, so every command matches the allowlist plainly. `workspace check`
   after review stays as the second line of defence.
 - **Agents run project commands through `factory-cli ws run <name>`**, named in project.md's
@@ -66,8 +84,7 @@ the repo root (or `-s tests` from `skills/factory/bin`).
   verify reruns the builder in the same round (max 3 attempts), not a new review round.
 - **Stuck detection**: an agent spawned three times for the same head without progress goes to
   needs-human instead of looping.
-- **Rebase conflicts stay in progress** and are routed file by file: test-writer's files to
-  test-writer, the rest to the builder; `rebase --continue` is the script's. A clean green rebase keeps
+- **Rebase conflicts stay in progress** and go to the builder; `rebase --continue` is the script's. A clean green rebase keeps
   the approval (heads are tracked as equivalent); anything an agent resolved is reviewed again.
 - **`auto-merge` = PR with auto-complete** (`gh pr merge --auto` / `az repos pr update --auto-complete`),
   so branch policies still apply. **`local-merge`** builds the `--no-ff` merge with plumbing and refuses
@@ -78,12 +95,21 @@ the repo root (or `-s tests` from `skills/factory/bin`).
 - **Jira is done by the orchestrator through the session's Jira tools**, not by scripts; `state`
   lists the pending transitions and the one hand-back comment, and `jira-log` makes them idempotent
   across restarts.
+- **Simplified after the first real job** (001-icon-ui-kit-sync, 2026-10-21: 19 agent starts, 13 of
+  them reviews, ~54 minutes). Gone: the separate test-writer and its objection loop (eight assertions
+  contradicted the approved design and cost a hand-off and a builder rerun for no code change), the
+  approver agent (its escalation was foreseen in the spec, and a human approves every job anyway), and
+  every-reviewer-every-round. Added: red-check, verdict from BLOCKING only (stability had returned
+  CHANGES for a finding it called non-blocking), the merged findings list (code and ui had reported the
+  same CSS; code and stability had given opposite advice on one helper), spec.md's `Decided`,
+  `[rules] docs` (the code reviewer had missed rules that live in the wiki) and render commands for ui
+  and ux (they had rendered nothing although the project has browser tests).
 
 ## Proven, and not yet
 
-Proven by the tests and by a scratch install: every script, the state machine (61 rule tests), one
-job end to end through the CLI (queue → tests → two builder rounds → review → approver → rebase onto a
-moved target → PR → merged → cleaned up), the guard against a real hook invocation, the dashboard's
+Proven by the tests and by a scratch install: every script, the state machine, one job end to end
+through the CLI (queue → tests first → red-check → two builder rounds → merged findings → review →
+human approval → rebase onto a moved target → PR → merged → cleaned up), the guard against a real hook invocation, the dashboard's
 token/host/origin/path checks, `init-files`, `allowlist`, and Codex detection against
 the installed CLI (0.153.4).
 

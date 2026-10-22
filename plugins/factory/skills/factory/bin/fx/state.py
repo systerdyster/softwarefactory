@@ -5,28 +5,27 @@ gather() collects facts; decide() is a pure function of those facts, so the rule
 without git. Network state (PR status) is read from pr.json, which `pr status` refreshes."""
 
 import json
+from pathlib import Path
 
-from . import gitutil, jobs, queue, testfiles
-from .config import ALWAYS_REVIEWERS
+from . import gitutil, jobs, queue
+from .config import REQUIRED_REVIEWERS
 from .paths import branch_name
 
 MAX_ATTEMPTS = 3
 STUCK_REPEATS = 3
 WAITING_STAGES = ("needs-human", "pr-open")
 FINAL_STAGES = ("done", "cancelled")
+READY = "every review passed; ready for your approval"
 
 
 def _round_facts(paths, job_id, n):
     d = paths.round_dir(job_id, n)
-    replies, rulings, verifies = {}, {}, {}
-    for f in d.glob("objection-reply-*.md"):
-        replies[int(f.stem.rsplit("-", 1)[1])] = jobs.response(f.read_text(encoding="utf-8"))
+    rulings, verifies = {}, {}
     for f in d.glob("ruling-*.md"):
         rulings[int(f.stem.rsplit("-", 1)[1])] = jobs.ruling(f.read_text(encoding="utf-8"))
     for f in d.glob("verify-*.json"):
         verifies[int(f.stem.rsplit("-", 1)[1])] = jobs.read_json(f)
-    return {"scheduled": jobs.scheduled(d), "reviews": jobs.reviews(d),
-            "replies": replies, "rulings": rulings, "verifies": verifies}
+    return {"scheduled": jobs.scheduled(d), "reviews": jobs.reviews(d), "rulings": rulings, "verifies": verifies}
 
 
 def gather(paths, cfg, job_id):
@@ -42,13 +41,6 @@ def gather(paths, cfg, job_id):
             ws["rebase"] = rebasing
             ws["dirty"] = [] if rebasing else gitutil.dirty_files(paths.workspace)
             ws["unmerged"] = gitutil.unmerged_files(paths.workspace) if rebasing else []
-    test_rows = testfiles.listed(paths, job_id)
-    recorded = testfiles.is_recorded(paths, job_id)
-    tests_ok, mismatches = None, []
-    if recorded and head and not ws.get("rebase"):
-        result = testfiles.check(paths, job_id)
-        tests_ok, mismatches = result["ok"], [m["path"] for m in result["mismatches"]]
-    tests_text = jobs.read(jd / "tests.md")
     decision_text = jobs.read(jd / "decision.md")
     human_text = jobs.read(jd / "human-approval.md")
     rounds = {n: _round_facts(paths, job_id, n) for n in jobs.rounds_on_disk(jd)}
@@ -63,16 +55,11 @@ def gather(paths, cfg, job_id):
         "target_head": gitutil.rev(cfg.base_ref, paths.root),
         "workspace": ws,
         "baseline": jobs.read_json(jd / "baseline.json"),
-        "tests_md": tests_text is not None,
-        "tests_status": (jobs.field(tests_text, "Status") or "").lower().split()[0] if tests_text and jobs.field(tests_text, "Status") else None,
-        "test_files": [r["path"] for r in test_rows],
-        "tests_recorded": recorded,
-        "tests_ok": tests_ok,
-        "test_mismatches": mismatches,
+        "red": jobs.read_json(jd / "red.json"),
         "build": jobs.build_sections(jobs.read(jd / "build.md")),
         "rounds": rounds,
         "reworks": jobs.reworks(jd),
-        "decision": {"verdict": jobs.decision(decision_text), "head": jobs.field(decision_text, "Head")} if decision_text else None,
+        "cancelled": jobs.decision(decision_text) == "CANCELLED" if decision_text else False,
         "human_approval": {"head": jobs.field(human_text, "Head")} if human_text else None,
         "rebase": jobs.read_json(jd / "rebase.json") or {"history": []},
         "pr": jobs.read_json(jd / "pr.json"),
@@ -81,7 +68,7 @@ def gather(paths, cfg, job_id):
         and gitutil.is_ancestor(head, cfg.target_branch, paths.root),
         "spawns": _spawn_log(jd),
         "jira_log": _jira_log(jd),
-        "enabled": cfg.enabled_reviewers,
+        "required": REQUIRED_REVIEWERS,
         "max_rounds": cfg.max_rounds,
         "merge_mode": cfg.merge_mode,
         "jira_enabled": cfg.jira_enabled and bool((jobs.read_json(jd / "job.json") or {}).get("jira")),
@@ -164,17 +151,8 @@ def _builder(f, stage, n, attempt, reason):
     return _out(f, stage, "spawn-builder", reason, round=n, attempt=attempt)
 
 
-def _test_writer(f, stage, mode, reason, n=None, attempt=None):
-    if _stuck(f, "test-writer", n):
-        return _out(f, "needs-human", "needs-human",
-                    f"test-writer spawned {STUCK_REPEATS} times ({mode}) without progress")
-    if not f["workspace"].get("on_branch"):
-        return _out(f, stage, "switch", reason)
-    return _out(f, stage, "spawn-test-writer", reason, mode=mode, round=n, attempt=attempt)
-
-
 def decide(f):
-    if (f["decision"] and f["decision"]["verdict"] == "CANCELLED") or f["backlog"] == "cancelled":
+    if f["cancelled"] or f["backlog"] == "cancelled":
         if f["branch_exists"]:
             return _out(f, "cancelled", "cancel", "cancelled; branch still exists")
         return _out(f, "cancelled", reason="cancelled")
@@ -201,11 +179,6 @@ def decide(f):
     if ws.get("on_branch") and ws.get("rebase"):
         return _rebase_in_progress(f)
 
-    if not f["tests_recorded"]:
-        if f["tests_md"] and f["tests_status"] == "red-confirmed":
-            return _out(f, "testing", "tests-record", "test-writer finished; pin the test files")
-        return _test_writer(f, "testing", "write", "write the failing tests the plan names", n=0)
-
     start = _cycle_start(f)
     rounds_done = [s["round"] for s in f["build"]]
     human = f["human_approval"] and f["human_approval"]["head"] in _equivalent_heads(f, f["head"])
@@ -220,7 +193,7 @@ def decide(f):
                 and not any(n >= rebase_round.get("round", 0) for n in rounds_done):
             return _builder(f, "building", rebase_round["round"], 1, f"rebase left the suite {rebase_round['result']}")
         if current is None:
-            return _builder(f, "building", start, 1, "first round")
+            return _builder(f, "building", start, 1, "first round: tests first, then the change")
         result = _round(f, current, start)
         if result is not None:
             return result
@@ -232,31 +205,32 @@ def _latest_rebase(f):
     return history[-1] if history else None
 
 
+def _red_gate(f, n, a):
+    """Round 1 of the first cycle proves the builder's tests fail without the change, once."""
+    red = f["red"]
+    if red and red.get("ok"):
+        return None
+    if red and red.get("head") == f["head"]:
+        return _builder(f, "building", n, a + 1, red.get("reason") or "red-check failed")
+    if not f["workspace"].get("on_branch"):
+        return _out(f, "building", "switch", "red-check runs in the workspace")
+    return _out(f, "building", "red-check", "prove the tests fail without the change", round=n, attempt=a)
+
+
 def _round(f, n, start):
     sections = _sections(f, n)
     last = sections[-1]
     a = last["attempt"]
-    facts = f["rounds"].get(n, {"scheduled": None, "reviews": {}, "replies": {}, "rulings": {}, "verifies": {}})
+    facts = f["rounds"].get(n, {"scheduled": None, "reviews": {}, "rulings": {}, "verifies": {}})
     ws = f["workspace"]
 
     if last["status"] is None:
         return _builder(f, "building", n, a + 1, "the previous builder attempt did not finish")
-    if f["tests_ok"] is False and not (last["status"] == "objection" and facts["replies"].get(a) == "AMENDED"):
-        return _out(f, "building", "tests-restore",
-                    f"test files changed outside test-writer: {', '.join(f['test_mismatches'])}", round=n)
 
     if last["status"] == "objection":
-        reply = facts["replies"].get(a)
         ruling = facts["rulings"].get(a)
-        if last["objection"] == "test" and reply is None:
-            return _test_writer(f, "building", "objection", "the builder disputes a test", n=n, attempt=a)
-        if reply == "AMENDED":
-            if f["tests_ok"] is False:
-                return _out(f, "building", "tests-record", "test-writer amended the disputed tests", round=n)
-            return _builder(f, "building", n, a + 1, "test-writer amended the disputed tests")
         if ruling is None:
-            return _out(f, "building", "judge-objection",
-                        "test-writer stands firm" if reply == "STANDS" else "the builder reports a departure from the plan",
+            return _out(f, "building", "judge-objection", "the builder reports a departure from the plan",
                         round=n, attempt=a)
         if ruling == "NEEDS-HUMAN":
             return _out(f, "needs-human", "needs-human",
@@ -265,6 +239,10 @@ def _round(f, n, start):
 
     if ws.get("on_branch") and ws.get("dirty"):
         return _builder(f, "building", n, a + 1, "the builder left uncommitted changes")
+    if n == 1 and start == 1:
+        gate = _red_gate(f, n, a)
+        if gate is not None:
+            return gate
     heads = _equivalent_heads(f, f["head"])
     verify = facts["verifies"].get(a)
     if not verify or verify.get("head") not in heads:
@@ -294,31 +272,21 @@ def _round(f, n, start):
         return _out(f, "reviewing", "review-reset", "the workspace changed during review", round=n)
 
     verdicts = _effective_verdicts(f, n, start)
-    unreviewed = [r for r in f["enabled"] if r not in verdicts]
+    unreviewed = [r for r in f["required"] if r not in verdicts]
     if unreviewed:
         return _out(f, "reviewing", "review-reset", f"reviewers never ran: {', '.join(unreviewed)}", round=n)
     changes = sorted(r for r, v in verdicts.items() if v == "CHANGES")
     if changes:
         if n - start + 1 >= f["max_rounds"]:
             return _out(f, "needs-human", "needs-human",
-                        f"CHANGES from {', '.join(changes)} after {f['max_rounds']} rounds")
-        return _builder(f, "building", n + 1, 1, f"CHANGES from {', '.join(changes)}")
+                        f"blocking findings from {', '.join(changes)} after {f['max_rounds']} rounds")
+        return _builder(f, "building", n + 1, 1, f"blocking findings from {', '.join(changes)}")
     return None
 
 
 def _approval(f, human):
-    heads = _equivalent_heads(f, f["head"])
-    d = f["decision"]
-    approved = human or (d and d["verdict"] == "APPROVE" and d["head"] in heads)
-    if not approved:
-        if d and d["verdict"] == "ESCALATE" and d["head"] in heads:
-            return _out(f, "needs-human", "needs-human", "the approver escalated; see decision.md")
-        if _stuck(f, "approver", None):
-            return _out(f, "needs-human", "needs-human",
-                        f"the approver ran {STUCK_REPEATS} times without a decision for the current head")
-        if not f["workspace"].get("on_branch"):
-            return _out(f, "approving", "switch", "the approver reads the workspace")
-        return _out(f, "approving", "spawn-approver", "every reviewer passed")
+    if not human:
+        return _out(f, "needs-human", "needs-human", READY, ready=True)
 
     pr = f["pr"]
     last = _latest_rebase(f)
@@ -341,17 +309,21 @@ def _approval(f, human):
 
 def _rebase_in_progress(f):
     unmerged = f["workspace"].get("unmerged", [])
-    tests = [p for p in unmerged if p in f["test_files"]]
-    other = [p for p in unmerged if p not in f["test_files"]]
     last = _latest_rebase(f) or {}
     n = last.get("round") or (max([s["round"] for s in f["build"]], default=0) + 1)
-    if tests:
-        return _test_writer(f, "rebasing", "rebase-conflict",
-                            f"rebase conflicts in test-writer's files: {', '.join(tests)}", n=n)
-    if other:
+    if unmerged:
         attempt = max([s["attempt"] for s in _sections(f, n)], default=0) + 1
-        return _builder(f, "rebasing", n, attempt, f"rebase conflicts: {', '.join(other)}")
+        return _builder(f, "rebasing", n, attempt, f"rebase conflicts: {', '.join(unmerged)}")
     return _out(f, "rebasing", "rebase-continue", "conflicts resolved; continue the rebase")
+
+
+def checks(paths, cfg, head):
+    """The facts a human weighs before approving, computed rather than judged."""
+    base = gitutil.merge_base(cfg.base_ref, head, paths.root)
+    changed = gitutil.changed_files(base, head, paths.root)
+    return {"diff_lines": gitutil.diff_size(base, head, paths.root), "max_diff": cfg.max_diff,
+            "files": len(changed),
+            "lockfiles": [c for c in changed if c in cfg.lockfiles or Path(c).name in cfg.lockfiles]}
 
 
 def jira_todo(f, result):
@@ -359,9 +331,9 @@ def jira_todo(f, result):
         return []
     todo = []
     stage = result["stage"]
-    status_stage = {"building": "building", "testing": "building", "reviewing": "building", "approving": "building",
-                    "rebasing": "building", "merging": "building", "needs-human": "needs-human",
-                    "pr-open": "pr-open", "merged": "merged", "done": "merged", "cancelled": "cancelled"}.get(stage)
+    status_stage = {"building": "building", "reviewing": "building", "rebasing": "building", "merging": "building",
+                    "needs-human": "needs-human", "pr-open": "pr-open", "merged": "merged", "done": "merged",
+                    "cancelled": "cancelled"}.get(stage)
     log = f["jira_log"]
     last_status = next((e for e in reversed(log) if e.startswith("status:")), None)
     if status_stage and f["jira_map"].get(status_stage) and last_status != f"status:{status_stage}":
@@ -377,6 +349,12 @@ def state(paths, cfg, job_id):
     jobs.check_id(job_id)
     f = gather(paths, cfg, job_id)
     result = decide(f)
+    if result["next"].get("ready") and f["head"]:
+        c = checks(paths, cfg, f["head"])
+        result["checks"] = c
+        over = " — OVER" if c["diff_lines"] > c["max_diff"] else ""
+        result["reason"] = (f"{READY} · diff {c['diff_lines']} lines in {c['files']} files (max_diff "
+                            f"{c['max_diff']}{over})" + (f" · lockfiles: {', '.join(c['lockfiles'])}" if c["lockfiles"] else ""))
     result["round"] = max([s["round"] for s in f["build"]], default=0)
     result["head"] = f["head"]
     result["verdicts"] = {str(n): {**{name: None for name in (r["scheduled"] or {}).get("reviewers", [])},
@@ -389,4 +367,4 @@ def state(paths, cfg, job_id):
     return result
 
 
-__all__ = ["state", "gather", "decide", "ALWAYS_REVIEWERS"]
+__all__ = ["state", "gather", "decide", "checks"]

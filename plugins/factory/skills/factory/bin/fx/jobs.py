@@ -62,18 +62,24 @@ def field(text, key):
     return match.group(1) if match else None
 
 
+def section(text, heading):
+    m = re.search(rf"^##\s+{re.escape(heading)}\s*$(.*?)(?=^##\s|\Z)", text or "", re.S | re.M | re.I)
+    return m.group(1).strip() if m else ""
+
+
+_BLOCKING = re.compile(r"^\s*[-*]\s*(?:🔴\s*)?\**BLOCKING\b", re.M)
+
+
 def verdict(text):
-    match = re.match(r"^VERDICT:\s*(PASS|CHANGES)\b", first_line(text), re.I)
-    return match.group(1).upper() if match else None
+    """None until the review is finished (line 1 is a VERDICT line). Then CHANGES exactly when the
+    Findings section holds a BLOCKING finding — the verdict word the reviewer wrote does not decide."""
+    if not re.match(r"^VERDICT:\s*(PASS|CHANGES)\b", first_line(text), re.I):
+        return None
+    return "CHANGES" if _BLOCKING.search(section(text, "Findings")) else "PASS"
 
 
 def decision(text):
-    match = re.match(r"^\**(APPROVE|ESCALATE|CANCELLED)\b", first_line(text), re.I)
-    return match.group(1).upper() if match else None
-
-
-def response(text):
-    match = re.match(r"^RESPONSE:\s*(AMENDED|STANDS)\b", first_line(text), re.I)
+    match = re.match(r"^\**(CANCELLED)\b", first_line(text), re.I)
     return match.group(1).upper() if match else None
 
 
@@ -125,10 +131,12 @@ def scheduled(round_dir):
     if text is None:
         return None
     names = field(text, "Reviewers") or ""
+    previous = field(text, "Previous-Head")
     return {
         "reviewers": [n.strip() for n in names.split(",") if n.strip()],
         "head": field(text, "Head"),
         "base": field(text, "Base"),
+        "previous": previous if previous and previous != "-" else None,
     }
 
 

@@ -13,7 +13,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from fx import actions, board, brief, codex, config, guard, jobs, pr, queue, schedule, setup, testfiles, workspace  # noqa: E402
+from fx import actions, board, brief, codex, config, findings, guard, jobs, pr, queue, schedule, setup, testfiles, workspace  # noqa: E402
 from fx import state as state_mod  # noqa: E402
 from fx.errors import Fallback, FactoryError  # noqa: E402
 from fx.paths import Paths  # noqa: E402
@@ -48,15 +48,17 @@ def cmd_schedule(a, p):
     return schedule.schedule(p, cfg, a.job, n, max(starts) if starts else 1)
 
 
-def cmd_tests(a, p):
-    if a.action == "record":
-        return testfiles.record(p, a.job)
-    if a.action == "check":
-        result = testfiles.check(p, a.job)
-        if not result["ok"]:
-            raise FactoryError("test files differ from their recorded hashes", **result)
-        return result
-    return testfiles.restore(p, a.job)
+def cmd_red_check(a, p):
+    cfg = _cfg(p)
+    s = state_mod.state(p, cfg, a.job)
+    if s["next"]["action"] != "red-check":
+        raise FactoryError(f"state says {s['next']['action']}, not red-check", state=s)
+    return testfiles.red_check(p, cfg, a.job)
+
+
+def cmd_findings(a, p):
+    s, n = _state_round(p, _cfg(p), a.job)
+    return findings.write(p, a.job, a.round or n)
 
 
 def cmd_queue(a, p):
@@ -224,9 +226,10 @@ def parser():
     add("state", cmd_state, "where a job stands and the next action").add_argument("job")
     add("board", cmd_board, "rebuild board.json from job folders and git").add_argument("--print", action="store_true")
     add("schedule", cmd_schedule, "write round-N/scheduled.md").add_argument("job")
-    sp = add("tests", cmd_tests, "record|check|restore test-writer's file hashes")
-    sp.add_argument("action", choices=["record", "check", "restore"])
+    add("red-check", cmd_red_check, "run the builder's first-commit tests and require them to fail").add_argument("job")
+    sp = add("findings", cmd_findings, "write a round's merged findings list (default: the current round)")
     sp.add_argument("job")
+    sp.add_argument("--round", type=int)
     sp = add("queue", cmd_queue, "add|take|mark|list|next-id on backlog.md, under a lock")
     qs = sp.add_subparsers(dest="action", required=True)
     q = qs.add_parser("add")

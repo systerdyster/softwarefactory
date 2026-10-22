@@ -6,9 +6,9 @@ import re
 
 from .errors import FactoryError
 
-ALWAYS_REVIEWERS = ["security", "code", "performance", "stability"]
+REQUIRED_REVIEWERS = ["code"]
+SPECIALISTS = ["security", "performance", "stability"]
 OPTIONAL_REVIEWERS = ["platform", "ux", "ui", "codex"]
-ALWAYS_ON_CODE_CHANGE = ["security", "code", "codex"]
 MERGE_MODES = ["pr", "local-merge", "auto-merge"]
 PR_TOOLS = ["gh", "az", "other"]
 JIRA_LINKS = ["title", "body", "both", "none"]
@@ -111,11 +111,23 @@ class Config:
 
     @property
     def enabled_reviewers(self):
-        optional = [r for r in self.getlist("reviewers", "enabled") if r in OPTIONAL_REVIEWERS]
-        unknown = [r for r in self.getlist("reviewers", "enabled") if r not in OPTIONAL_REVIEWERS + ALWAYS_REVIEWERS]
+        """Every reviewer that may run: the main reviewer, the specialists, and the optional ones the
+        project enabled. Which of them a round runs is schedule's call."""
+        listed = self.getlist("reviewers", "enabled")
+        unknown = [r for r in listed if r not in REQUIRED_REVIEWERS + SPECIALISTS + OPTIONAL_REVIEWERS]
         if unknown:
             raise FactoryError(f"project.md: unknown reviewers in [reviewers] enabled: {unknown}")
-        return ALWAYS_REVIEWERS + [r for r in OPTIONAL_REVIEWERS if r in optional]
+        return REQUIRED_REVIEWERS + SPECIALISTS + [r for r in OPTIONAL_REVIEWERS if r in listed]
+
+    @property
+    def reviewer_commands(self):
+        """Project commands reviewers may run, e.g. the browser tests that render components."""
+        return self.getlist("reviewers", "commands")
+
+    @property
+    def docs(self):
+        """Globs of the project's written rules beyond CLAUDE.md/AGENTS.md, e.g. Wiki/*.md."""
+        return self.getlist("rules", "docs")
 
     def path_patterns(self, reviewer):
         return self.getlist("paths", reviewer)

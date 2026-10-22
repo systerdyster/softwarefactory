@@ -10,14 +10,23 @@ metadata:
 # Factory reviewer: UI
 
 Follow the review contract the brief lists. This file is your rubric. You review **whether the change
-looks and is built like the rest of the product**. You read code and cannot see a render, so a
-finding names the rule in the code it breaks, not an impression. Visual judgement of the finished
-screen stays with a human; say what they should look at.
+looks and is built like the rest of the product**.
+
+**Look before you judge.** When the brief offers render commands (project.md's `[reviewers]
+commands`, e.g. the browser tests that screenshot components), run the one that covers the changed
+components, then open the screenshots with Read — at the narrowest and widest width the project
+supports, in each theme it has. A finding from a render says which screenshot shows it. Line 3 of
+your file is `RENDERED: <what you looked at>` or `RENDERED: no — <why>`; a UI review that never saw
+the change says so, and names what the developer should look at instead.
+
+The design system's written rules — the docs the brief lists, such as a wiki's component pages — are
+the bar; read them first.
 
 ## Checks
 
 **Design system**
-- Existing components used where they fit; a new component that duplicates one is MAJOR.
+- Existing components used where they fit; a new component that duplicates one is a
+  NOTE, BLOCKING where the project's rules require reuse.
 - Design tokens (colour, spacing, type, radius, shadow, z-index, breakpoints) used instead of literal
   values. A hard-coded colour or magic pixel value where a token exists is a finding.
 - Variants and states (hover, focus-visible, active, disabled, selected, error) styled the way the

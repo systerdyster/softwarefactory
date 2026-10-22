@@ -54,16 +54,25 @@ test =
 setup =
 lockfiles =
 
+[rules]
+; globs of the project's written rules beyond CLAUDE.md/AGENTS.md, read by every agent (e.g. Wiki/*.md)
+docs =
+
 [reviewers]
+; code (main) runs on every job; security, performance, stability are specialists everywhere
 ; optional: platform, ux, ui, codex (codex sends code to OpenAI: check the client agreement first)
 enabled =
+; project commands ui/ux reviewers may run to see the change (screenshots must be ignored by git)
+commands =
 
 [paths]
-; per reviewer: globs, or re:<regex> matched against the diff text
-ui =
-ux =
+; a specialist joins a job's first round when one of these matches the change (or the plan names it)
+; globs, or re:<regex> matched against the diff text
+security =
 performance =
 stability =
+ui =
+ux =
 platform =
 
 [handoff]

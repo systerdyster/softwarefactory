@@ -1,10 +1,11 @@
 """`guard <role>`: the per-role limits behind the plugin's PreToolUse hook (hook.py), which maps the
 calling agent to its role. Agent frontmatter can grant or withhold a whole tool, but not a single
-Bash command or a single path, so this enforces the per-role limits mechanically. Exit 0 allows the call; exit 2 blocks it with the reason on
-stderr, which the agent sees.
+Bash command or a single path, so this enforces the per-role limits mechanically. Exit 0 allows the
+call; exit 2 blocks it with the reason on stderr, which the agent sees.
 
-Roles: builder, test-writer, approver, and review-<name> for reviewers (review-codex for the
-codex fallback)."""
+Roles: builder, and review-<name> for reviewers (review-codex for the codex fallback). Reviewers may
+run the project commands project.md lists under [reviewers] commands, e.g. the browser tests that
+render components; nothing else that executes."""
 
 import json
 import re
@@ -12,7 +13,8 @@ import shlex
 import sys
 from pathlib import Path
 
-from . import gitutil, testfiles
+from . import config, gitutil
+from .errors import FactoryError
 from .paths import Paths, job_for_branch
 
 READ_GIT = {"status", "diff", "log", "show", "merge-base", "rev-parse", "ls-files", "blame", "grep", "cat-file"}
@@ -20,7 +22,7 @@ WRITE_GIT = {"add", "rm", "mv", "commit", "restore"}
 BANNED_FLAGS = {"--output", "--no-verify", "--amend", "-w", "--ext-diff", "--textconv"}
 METACHARS = re.compile(r"[;&|`<>\n]|\$\(")
 FACTORY_CLI = "factory-cli"
-READ_FACTORY = {"state", "tests", "board"}
+READ_FACTORY = {"state", "board"}
 
 
 class Blocked(Exception):
@@ -48,20 +50,21 @@ def _resolve(paths, raw):
     return (p if p.is_absolute() else paths.root / p).resolve()
 
 
-def _usage(role):
+def _usage(role, review_commands):
     lines = ["Allowed shell commands for this role (one plain command per call, no ; && | > or $()):",
              "  git -C factory/workspace " + "|".join(sorted(READ_GIT)) + " ..."]
-    if role in ("builder", "test-writer"):
+    if role == "builder":
         lines.append("  git -C factory/workspace " + "|".join(sorted(WRITE_GIT)) + " ...")
-    if role in ("builder", "test-writer", "approver"):
         lines.append(f"  {FACTORY_CLI} ws run <command-name> [args]   (names are [commands] in project.md)")
-    lines.append(f"  {FACTORY_CLI} state|tests check <job-id>")
+    elif review_commands:
+        lines.append(f"  {FACTORY_CLI} ws run {'|'.join(review_commands)} [args]   ([reviewers] commands in project.md)")
+    lines.append(f"  {FACTORY_CLI} state <job-id>")
     return "\n".join(lines)
 
 
-def check_bash(paths, role, command, job_id, test_files):
+def check_bash(paths, role, command, review_commands=()):
     if METACHARS.search(command):
-        raise Blocked("shell operators are not allowed.\n" + _usage(role))
+        raise Blocked("shell operators are not allowed.\n" + _usage(role, review_commands))
     try:
         argv = shlex.split(command)
     except ValueError as e:
@@ -69,40 +72,36 @@ def check_bash(paths, role, command, job_id, test_files):
     if not argv:
         raise Blocked("empty command")
     if argv[0] == "git":
-        return _check_git(paths, role, argv, test_files)
+        return _check_git(paths, role, argv, review_commands)
     if argv[0] == FACTORY_CLI and len(argv) >= 2:
         sub = argv[1]
-        if sub in READ_FACTORY and not (sub == "tests" and len(argv) > 2 and argv[2] != "check"):
+        if sub in READ_FACTORY:
             return
-        if sub == "ws" and len(argv) >= 3 and argv[2] == "run" and role in ("builder", "test-writer", "approver"):
-            return
-        raise Blocked(f"`{FACTORY_CLI} {sub}` is for the orchestrator.\n" + _usage(role))
+        if sub == "ws" and len(argv) >= 4 and argv[2] == "run":
+            if role == "builder" or argv[3] in review_commands:
+                return
+        raise Blocked(f"`{' '.join(argv[:4])}` is not available to the {role}.\n" + _usage(role, review_commands))
     if argv[0] in ("ls", "pwd", "wc"):
         return
-    raise Blocked(f"`{argv[0]}` is not available to the {role}.\n" + _usage(role))
+    raise Blocked(f"`{argv[0]}` is not available to the {role}.\n" + _usage(role, review_commands))
 
 
-def _check_git(paths, role, argv, test_files):
+def _check_git(paths, role, argv, review_commands):
     if len(argv) < 4 or argv[1] != "-C" or _resolve(paths, argv[2]) != paths.workspace.resolve():
-        raise Blocked("git must run as `git -C factory/workspace <command>`.\n" + _usage(role))
+        raise Blocked("git must run as `git -C factory/workspace <command>`.\n" + _usage(role, review_commands))
     sub, rest = argv[3], argv[4:]
     banned = [a for a in rest if a.split("=", 1)[0] in BANNED_FLAGS]
     if banned:
         raise Blocked(f"git flag {banned[0]} is not allowed")
     if sub in READ_GIT:
         return
-    if sub in WRITE_GIT and role in ("builder", "test-writer"):
-        if role == "builder" and sub in ("rm", "mv", "restore"):
-            touched = [a for a in rest if not a.startswith("-") and a in test_files]
-            if touched:
-                raise Blocked(f"{touched[0]} belongs to test-writer (tests.md); the builder never changes it. "
-                              "Write an objection in build.md instead.")
+    if sub in WRITE_GIT and role == "builder":
         return
     raise Blocked(f"`git {sub}` is not available to the {role}. Only the orchestrator switches, rebases or pushes.\n"
-                  + _usage(role))
+                  + _usage(role, review_commands))
 
 
-def check_write(paths, role, raw_path, job_id, test_files):
+def check_write(paths, role, raw_path, job_id):
     if not raw_path:
         raise Blocked("no file path given")
     target = _resolve(paths, raw_path)
@@ -116,23 +115,20 @@ def check_write(paths, role, raw_path, job_id, test_files):
                                                        str(target.relative_to(jd))):
             return
         raise Blocked(f"a reviewer writes only its own review file: factory/jobs/<id>/round-N/review-{name}.md")
-    if role == "approver":
-        if jd and target == jd / "decision.md":
-            return
-        raise Blocked("the approver writes only factory/jobs/<id>/decision.md")
     if _inside(target, ws) and not _inside(target, ws / ".git"):
-        rel = str(target.relative_to(ws))
-        if role == "builder" and rel in test_files:
-            raise Blocked(f"{rel} belongs to test-writer (tests.md); the builder never changes it. "
-                          "If you believe the test is wrong, write an objection in build.md and stop.")
         return
-    if jd and role == "builder" and target == jd / "build.md":
+    if jd and target in (jd / "build.md", jd / "tests.md"):
         return
-    if jd and role == "test-writer" and (target == jd / "tests.md" or
-                                         re.fullmatch(r"round-\d+/objection-reply-\d+\.md",
-                                                      str(target.relative_to(jd)) if _inside(target, jd) else "")):
-        return
-    raise Blocked(f"the {role} may write only inside factory/workspace/ and its own job files")
+    raise Blocked(f"the {role} may write only inside factory/workspace/ and build.md and tests.md in its job folder")
+
+
+def _review_commands(paths, role):
+    if not role.startswith("review-"):
+        return []
+    try:
+        return config.load(paths).reviewer_commands
+    except FactoryError:
+        return []
 
 
 def run(role, stream=None, paths=None):
@@ -145,13 +141,12 @@ def run(role, stream=None, paths=None):
         return 2
     tool = event.get("tool_name", "")
     tool_input = event.get("tool_input") or {}
-    job_id = _current_job(paths)
-    test_files = {r["path"] for r in testfiles.listed(paths, job_id)} if job_id else set()
     try:
         if tool == "Bash":
-            check_bash(paths, role, tool_input.get("command", ""), job_id, test_files)
+            check_bash(paths, role, tool_input.get("command", ""), _review_commands(paths, role))
         elif tool in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
-            check_write(paths, role, tool_input.get("file_path") or tool_input.get("notebook_path"), job_id, test_files)
+            check_write(paths, role, tool_input.get("file_path") or tool_input.get("notebook_path"),
+                        _current_job(paths))
         elif tool in ("Agent", "Task"):
             raise Blocked("factory agents do not spawn agents")
     except Blocked as e:

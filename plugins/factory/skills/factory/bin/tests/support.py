@@ -49,8 +49,14 @@ enabled = false
 ```
 """
 
-CHECK = """import os, sys
-sys.exit(1 if os.path.exists("BROKEN") else 0)
+CHECK = """import os, runpy, sys
+if os.path.exists("BROKEN"):
+    sys.exit(1)
+for test in sys.argv[1:]:
+    try:
+        runpy.run_path(test)
+    except Exception:
+        sys.exit(1)
 """
 
 
@@ -75,7 +81,7 @@ class Sandbox:
         self.write("check.py", CHECK)
         self.write("src/app.py", "def answer():\n    return 41\n")
         self.write("deps.lock", "v1\n")
-        self.write(".gitignore", "/factory/\nsetup.log\n")
+        self.write(".gitignore", "/factory/\nsetup.log\n__pycache__/\n")
         self.commit("Initial")
         git(self.root, "remote", "add", "origin", str(self.origin))
         git(self.root, "push", "-u", "origin", "main")

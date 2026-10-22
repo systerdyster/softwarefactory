@@ -4,7 +4,7 @@ import unittest
 
 from support import SandboxTest
 
-from fx import guard, testfiles, workspace
+from fx import guard, workspace
 
 
 class GuardTest(SandboxTest):
@@ -13,11 +13,6 @@ class GuardTest(SandboxTest):
         self.sb.create_workspace()
         self.job = self.sb.queue_job()
         workspace.switch(self.paths, self.cfg, self.job)
-        self.sb.write("tests/test_answer.py", "assert 1\n", base=self.sb.ws)
-        self.sb.commit("Tests", cwd=self.sb.ws)
-        self.sb.write("tests.md", "| File | Hash |\n|---|---|\n| `tests/test_answer.py` | |\n\nStatus: red-confirmed\n",
-                      base=self.paths.job(self.job))
-        testfiles.record(self.paths, self.job)
         self.jd = self.paths.job(self.job)
 
     def call(self, role, tool, **tool_input):
@@ -35,7 +30,13 @@ class GuardTest(SandboxTest):
         self.assertEqual(self.bash("review-security", "git -C factory/workspace log --oneline -5"), 0)
         self.assertEqual(self.bash("review-security", "git -C factory/workspace commit -m x"), 2)
         self.assertEqual(self.bash("review-security", "git -C factory/workspace diff --output=/tmp/x"), 2)
-        self.assertEqual(self.bash("review-security", "factory-cli ws run suite"), 2)
+
+    def test_reviewers_run_only_the_commands_project_md_lists_for_them(self):
+        self.assertEqual(self.bash("review-ui", "factory-cli ws run suite"), 2)
+        self.sb.write("project.md", self.paths.project.read_text().replace(
+            "[reviewers]\n", "[reviewers]\ncommands = echo\n"), base=self.paths.factory)
+        self.assertEqual(self.bash("review-ui", "factory-cli ws run echo src/components"), 0)
+        self.assertEqual(self.bash("review-ui", "factory-cli ws run suite"), 2)
 
     def test_reviewers_write_only_their_own_review_file(self):
         self.assertEqual(self.write("review-code", self.jd / "round-1" / "review-code.md"), 0)
@@ -60,29 +61,17 @@ class GuardTest(SandboxTest):
         self.assertEqual(self.bash("builder", "git -C factory/workspace commit --amend -m x"), 2)
         self.assertEqual(self.bash("builder", "git -C factory/workspace commit --no-verify -m x"), 2)
 
-    def test_builder_never_touches_test_writer_files(self):
+    def test_builder_owns_code_tests_and_its_two_job_files(self):
         self.assertEqual(self.write("builder", self.sb.ws / "src" / "app.py"), 0)
-        self.assertEqual(self.write("builder", self.sb.ws / "tests" / "test_answer.py"), 2)
-        self.assertEqual(self.bash("builder", "git -C factory/workspace rm tests/test_answer.py"), 2)
-        self.assertEqual(self.bash("builder", "git -C factory/workspace restore --source=HEAD~1 tests/test_answer.py"), 2)
-        self.assertEqual(self.write("builder", self.jd / "tests.md"), 2)
+        self.assertEqual(self.write("builder", self.sb.ws / "tests" / "test_answer.py"), 0)
+        self.assertEqual(self.write("builder", self.jd / "tests.md"), 0)
         self.assertEqual(self.write("builder", self.jd / "build.md"), 0)
         self.assertEqual(self.write("builder", self.jd / "spec.md"), 2)
+        self.assertEqual(self.write("builder", self.jd / "red.json"), 2)
 
     def test_no_job_edits_the_factory_itself(self):
         self.assertEqual(self.write("builder", self.paths.plugin / "skills/factory/bin/fx/guard.py"), 2)
-        self.assertEqual(self.write("test-writer", self.paths.plugin / "agents/factory-builder.md"), 2)
         self.assertEqual(self.write("builder", self.sb.ws / ".claude/settings.json"), 0)
-
-    def test_test_writer_owns_tests_and_its_job_files(self):
-        self.assertEqual(self.write("test-writer", self.sb.ws / "tests" / "test_answer.py"), 0)
-        self.assertEqual(self.write("test-writer", self.jd / "tests.md"), 0)
-        self.assertEqual(self.write("test-writer", self.jd / "round-2" / "objection-reply-1.md"), 0)
-        self.assertEqual(self.write("test-writer", self.jd / "build.md"), 2)
-
-    def test_approver_writes_only_the_decision(self):
-        self.assertEqual(self.write("approver", self.jd / "decision.md"), 0)
-        self.assertEqual(self.write("approver", self.sb.ws / "src" / "app.py"), 2)
 
     def test_agents_do_not_spawn_agents(self):
         self.assertEqual(self.call("builder", "Agent", prompt="x"), 2)

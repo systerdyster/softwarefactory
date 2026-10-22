@@ -11,6 +11,8 @@ from support import SandboxTest, git
 
 import factory
 
+TEST = "import sys\nsys.path.insert(0, 'src')\nfrom app import answer\nassert answer() == 42\n"
+
 
 class FlowTest(SandboxTest):
     def setUp(self):
@@ -32,78 +34,69 @@ class FlowTest(SandboxTest):
         text = out.getvalue()
         return text if args[0] == "brief" else json.loads(text)
 
-    def next_action(self):
-        return self.cli("state", self.job)["next"]
-
     def expect(self, action):
-        nxt = self.next_action()
+        nxt = self.cli("state", self.job)["next"]
         self.assertEqual(nxt["action"], action, nxt)
         return nxt
 
-    def review_all(self, n, verdicts):
-        nxt = self.expect("spawn-reviewers")
-        for name in nxt["reviewers"]:
-            self.assertIn(f"review-{name}.md", self.cli("brief", self.job, "reviewer", "--reviewer", name))
-            verdict = verdicts.get(name, "PASS")
-            self.sb.write(f"round-{n}/review-{name}.md", f"VERDICT: {verdict}\n\n- MAJOR src/app.py:2 — off by one\n"
-                          if verdict == "CHANGES" else f"VERDICT: PASS\n", base=self.jd)
-        return nxt["reviewers"]
+    def log(self, section):
+        old = (self.jd / "build.md").read_text() if (self.jd / "build.md").exists() else "# Build log\n"
+        self.sb.write("build.md", old + f"\n{section}\nStatus: done\n", base=self.jd)
 
-    def builder_round(self, n, value):
-        brief = self.cli("brief", self.job, "builder")
-        self.assertIn(f"## Round {n}", brief)
-        self.sb.write("src/app.py", f"def answer():\n    return {value}\n", base=self.sb.ws)
-        self.sb.commit(f"Round {n}", cwd=self.sb.ws)
-        log = (self.jd / "build.md").read_text() if (self.jd / "build.md").exists() else "# Build log\n"
-        self.sb.write("build.md", log + f"\n## Round {n}\nSet answer to {value}.\nStatus: done\n", base=self.jd)
-        self.expect("verify")
-        self.cli("verify", self.job)
-        self.expect("schedule")
-        return self.cli("schedule", self.job)
+    def review(self, n, name, findings=""):
+        self.assertIn(f"review-{name}.md", self.cli("brief", self.job, "reviewer", "--reviewer", name))
+        self.sb.write(f"round-{n}/review-{name}.md", f"VERDICT: PASS\n\n## Findings\n{findings}\n", base=self.jd)
 
     def test_one_job_from_queue_to_merged(self):
-        taken = self.cli("next")
-        self.assertEqual(taken["job"], self.job)
+        self.assertEqual(self.cli("next")["job"], self.job)
         self.expect("start")
         self.cli("start", self.job)
 
-        self.expect("spawn-test-writer")
-        self.assertIn("Mode: write", self.cli("brief", self.job, "test-writer"))
-        self.sb.write("tests/test_answer.py", "from src.app import answer\nassert answer() == 42\n", base=self.sb.ws)
-        self.sb.commit("Add failing tests for the answer", cwd=self.sb.ws)
-        self.sb.write("tests.md", "# Tests\n\n| File | Hash |\n|---|---|\n| `tests/test_answer.py` | |\n\n"
-                      "## Exemptions\n\nNone.\n\nStatus: red-confirmed\n", base=self.jd)
-        self.expect("tests-record")
-        self.cli("tests", "record", self.job)
-
         self.expect("spawn-builder")
-        first = self.builder_round(1, 43)
-        self.assertEqual(first["reviewers"], ["security", "code", "performance", "stability"])
-        self.review_all(1, {"code": "CHANGES"})
+        self.assertIn("write the plan's tests first", self.cli("brief", self.job, "builder"))
+        self.sb.write("tests/test_answer.py", TEST, base=self.sb.ws)
+        self.sb.commit("Add failing tests for the answer", cwd=self.sb.ws)
+        self.sb.write("src/app.py", "def answer():\n    return 43\n", base=self.sb.ws)
+        self.sb.commit("Answer", cwd=self.sb.ws)
+        self.sb.write("tests.md", "| File |\n|---|\n| `tests/test_answer.py` |\n", base=self.jd)
+        self.log("## Round 1")
 
-        nxt = self.expect("spawn-builder")
-        self.assertEqual(nxt["round"], 2)
-        self.assertIn("review-code.md", self.cli("brief", self.job, "builder"))
-        self.sb.write("src/app.py", "def answer():\n    return 42\n", base=self.sb.ws)
-        self.sb.commit("Fix the answer", cwd=self.sb.ws)
-        self.sb.write("build.md", (self.jd / "build.md").read_text() + "\n## Round 2\nFixed.\nStatus: done\n", base=self.jd)
+        self.expect("red-check")
+        self.assertTrue(self.cli("red-check", self.job)["ok"])
         self.expect("verify")
         self.cli("verify", self.job)
         self.expect("schedule")
-        second = self.cli("schedule", self.job)
-        self.assertEqual(second["reviewers"], ["security", "code"])
-        self.review_all(2, {})
+        self.assertEqual(self.cli("schedule", self.job)["reviewers"], ["code"])
+        self.expect("spawn-reviewers")
+        self.review(1, "code", "- 🔴 BLOCKING `src/app.py:2` — returns 43; AC1 asks for 42.\n"
+                               "- 🟡 NOTE `src/app.py:1` — a docstring would not hurt.")
 
-        self.expect("spawn-approver")
-        brief = self.cli("brief", self.job, "approver")
-        head = self.cli("state", self.job)["head"]
-        self.assertIn(f"Head: {head}", brief)
-        self.sb.write("decision.md", f"APPROVE\nHead: {head}\n\n## Least sure\n\nNothing named.\n", base=self.jd)
+        nxt = self.expect("spawn-builder")
+        self.assertEqual(nxt["round"], 2)
+        brief = self.cli("brief", self.job, "builder")
+        self.assertIn("1 blocking item(s)", brief)
+        self.assertIn("returns 43", (self.jd / "round-1" / "findings.md").read_text())
+        self.sb.write("src/app.py", "def answer():\n    return 42\n", base=self.sb.ws)
+        self.sb.commit("Fix the answer", cwd=self.sb.ws)
+        self.log("## Round 2")
+        self.expect("verify")
+        self.cli("verify", self.job)
+        self.expect("schedule")
+        self.assertEqual(self.cli("schedule", self.job)["reviewers"], ["code"])
+        self.assertIn("This round checks the fixes", self.cli("brief", self.job, "reviewer", "--reviewer", "code"))
+        self.review(2, "code")
+
+        s = self.cli("state", self.job)
+        self.assertEqual((s["stage"], s["next"]["action"]), ("needs-human", "needs-human"))
+        self.assertIn("ready for your approval", s["reason"])
+        self.assertIn("max_diff 400", s["reason"])
+        self.cli("approve", self.job, "--by", "Fredrik")
 
         self.sb.push_target_change("README.md", "Someone else's change\n")
         self.expect("rebase")
         self.assertEqual(self.cli("rebase", self.job)["result"], "green")
         self.expect("pr")
+        self.assertIn("Approved by Fredrik", self.cli("pr", "body", self.job)["body"])
         self.assertEqual(self.cli("pr", "open", self.job)["state"], "MANUAL")
         s = self.cli("state", self.job)
         self.assertEqual((s["stage"], s["waiting"]), ("pr-open", True))
@@ -113,32 +106,35 @@ class FlowTest(SandboxTest):
         self.assertEqual(self.cli("pr", "status", self.job)["state"], "MERGED")
         self.expect("finish")
         self.cli("finish", self.job)
-        final = self.cli("state", self.job)
-        self.assertEqual(final["stage"], "done")
+        self.assertEqual(self.cli("state", self.job)["stage"], "done")
         self.assertEqual(git(self.sb.root, "branch", "--list", "factory/*"), "")
         self.assertIsNone(self.cli("workspace", "check")["branch"])
         self.assertEqual(self.cli("board")["jobs"], 1)
 
-    def test_a_builder_that_edits_a_test_is_caught_and_reverted(self):
+    def test_tests_that_pass_before_the_change_send_the_builder_back(self):
         self.cli("next")
         self.cli("start", self.job)
-        self.sb.write("tests/test_answer.py", "assert 42 == 42\n", base=self.sb.ws)
-        self.sb.commit("Tests", cwd=self.sb.ws)
-        self.sb.write("tests.md", "| File | Hash |\n|---|---|\n| `tests/test_answer.py` | |\n\nStatus: red-confirmed\n",
-                      base=self.jd)
-        self.cli("tests", "record", self.job)
         self.sb.write("tests/test_answer.py", "assert True\n", base=self.sb.ws)
-        self.sb.commit("Make it pass the easy way", cwd=self.sb.ws)
-        self.sb.write("build.md", "## Round 1\nStatus: done\n", base=self.jd)
-        self.cli("tests", "check", self.job, expect=1)
-        self.expect("tests-restore")
-        self.cli("tests", "restore", self.job)
-        self.assertEqual((self.sb.ws / "tests/test_answer.py").read_text(), "assert 42 == 42\n")
-        self.expect("verify")
+        self.sb.commit("Tests", cwd=self.sb.ws)
+        self.sb.write("tests.md", "| File |\n|---|\n| `tests/test_answer.py` |\n", base=self.jd)
+        self.log("## Round 1")
+        self.expect("red-check")
+        self.assertFalse(self.cli("red-check", self.job)["ok"])
+        nxt = self.expect("spawn-builder")
+        self.assertEqual(nxt["attempt"], 2)
+        self.assertIn("prove nothing", self.cli("brief", self.job, "builder"))
+
+    def test_every_brief_lists_the_projects_written_rules(self):
+        self.sb.push_target_change("Wiki/Components.md", "# Components\n\nA modifier only reassigns private variables.\n")
+        self.sb.write("project.md", self.paths.project.read_text().replace(
+            "[reviewers]\n", "[rules]\ndocs = Wiki/*.md\n\n[reviewers]\n"), base=self.paths.factory)
+        self.cli("next")
+        self.cli("start", self.job)
+        self.assertIn(str(self.sb.ws / "Wiki/Components.md"), self.cli("brief", self.job, "builder"))
 
     def test_brief_refuses_an_agent_state_did_not_ask_for(self):
         self.cli("next")
-        self.cli("brief", self.job, "approver", expect=1)
+        self.cli("brief", self.job, "reviewer", "--reviewer", "code", expect=1)
 
 
 if __name__ == "__main__":

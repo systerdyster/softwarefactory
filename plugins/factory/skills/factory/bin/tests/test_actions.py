@@ -2,7 +2,7 @@ import unittest
 
 from support import SandboxTest, git
 
-from fx import actions, jobs, pr, queue, state, testfiles, workspace
+from fx import actions, jobs, pr, queue, state, workspace
 from fx.errors import FactoryError
 
 
@@ -17,9 +17,7 @@ class ActionsTest(SandboxTest):
         actions.start(self.paths, self.cfg, self.job)
         self.sb.write("tests/test_answer.py", "assert 1\n", base=self.sb.ws)
         self.sb.commit("Tests", cwd=self.sb.ws)
-        self.sb.write("tests.md", "| File | Hash |\n|---|---|\n| `tests/test_answer.py` | |\n\nStatus: red-confirmed\n",
-                      base=self.paths.job(self.job))
-        testfiles.record(self.paths, self.job)
+        self.sb.write("tests.md", "| File |\n|---|\n| `tests/test_answer.py` |\n", base=self.paths.job(self.job))
 
     def test_start_records_a_green_baseline(self):
         result = actions.start(self.paths, self.cfg, self.job)
@@ -45,18 +43,11 @@ class ActionsTest(SandboxTest):
         self.assertEqual(state.state(self.paths, self.cfg, self.job)["next"]["action"], "start")
         self.assertTrue(actions.start(self.paths, self.cfg, self.job)["baseline"]["green"])
 
-    def test_a_conflict_in_a_test_file_goes_to_test_writer_and_its_resolution_is_re_recorded(self):
+    def test_a_conflict_in_a_test_file_goes_to_the_builder(self):
         self.started_with_tests()
         self.sb.push_target_change("tests/test_answer.py", "assert 2\n")
         self.assertEqual(actions.rebase(self.paths, self.cfg, self.job)["result"], "conflict")
-        s = state.state(self.paths, self.cfg, self.job)
-        self.assertEqual((s["next"]["action"], s["next"]["mode"]), ("spawn-test-writer", "rebase-conflict"))
-        self.sb.write("tests/test_answer.py", "assert 1\nassert 2\n", base=self.sb.ws)
-        git(self.sb.ws, "add", "tests/test_answer.py")
-        actions.rebase(self.paths, self.cfg, self.job, continue_=True)
-        self.assertTrue(testfiles.check(self.paths, self.job)["ok"])
-        self.assertEqual(testfiles.listed(self.paths, self.job)[0]["hash"],
-                         git(self.sb.ws, "rev-parse", "HEAD:tests/test_answer.py"))
+        self.assertEqual(state.state(self.paths, self.cfg, self.job)["next"]["action"], "spawn-builder")
 
     def test_rebase_onto_an_unrelated_change_is_green(self):
         self.started_with_tests()
@@ -66,7 +57,6 @@ class ActionsTest(SandboxTest):
         self.assertEqual(entry["result"], "green")
         self.assertEqual(entry["before"], before)
         self.assertNotEqual(entry["after"], before)
-        self.assertTrue(testfiles.check(self.paths, self.job)["ok"])
 
     def test_rebase_conflict_is_left_in_progress_and_continue_finishes_it(self):
         self.started_with_tests()

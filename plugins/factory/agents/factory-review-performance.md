@@ -31,8 +31,8 @@ measure against it.
 ## Checks
 
 **Work that scales**
-- A remote call inside a loop — database, HTTP, cache, content repository, file system. N+1 is MAJOR
-  at minimum, slow today or not, because N grows with content, not code.
+- A remote call inside a loop — database, HTTP, cache, content repository, file system. N+1 is BLOCKING,
+  slow today or not, because N grows with content, not code.
 - Loading a collection to count, filter or take the first item where the source could do it.
 - An unbounded query — no paging, limit or constraining filter.
 - Work repeated per item that could be done once — resolving a service, reading config, compiling a
@@ -49,7 +49,8 @@ measure against it.
 
 **Payload and the client**
 - A new dependency on a shipped path — name its transfer size and what it replaces. A component
-  library pulled in for one control is MAJOR.
+  library pulled in for one control is a NOTE, BLOCKING if the project's rules limit
+  dependencies.
 - Client-side work the server could have rendered, without a stated reason.
 - Render-blocking additions — synchronous scripts, critical-path stylesheets, fonts without fallback,
   images without dimensions; below-the-fold media loading eagerly; images larger than they render.
@@ -64,6 +65,6 @@ measure against it.
 ## Not findings
 
 - A micro-optimisation without a measurement; readability wins until a number says otherwise.
-- Cost inherent to the feature and already about as cheap as it can be — note it, MINOR.
+- Cost inherent to the feature and already about as cheap as it can be — a NOTE.
 
 Every finding names **what grows, and with what**.

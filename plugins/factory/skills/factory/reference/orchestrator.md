@@ -44,23 +44,20 @@ Repeat:
 |---|---|
 | `start` | `F start <id>`. It switches the workspace to the job's new branch from the target, reruns setup if a lockfile differs, and runs the full suite. **Red: the target is broken.** Report the failing tests from the log, `F stop`, and end the run — fixing it is human work. |
 | `switch` | `F workspace switch <id>` (refuses unless the workspace is clean). |
-| `spawn-test-writer` | Spawn `factory-test-writer` with `F brief <id> test-writer` as its prompt, verbatim. |
-| `tests-record` | `F tests record <id>`. On failure it marks tests.md so state sends test-writer back; continue the loop. |
-| `spawn-builder` | Spawn `factory-builder` with `F brief <id> builder`. When it returns, run `F tests check <id>`. |
-| `tests-restore` | `F tests restore <id>`. This is a violation: the builder changed test-writer's files. Note it for the report. |
+| `spawn-builder` | Spawn `factory-builder` with `F brief <id> builder` as its prompt, verbatim. |
+| `red-check` | `F red-check <id>` — runs the builder's tests on the branch's first commit and requires them to fail. A failed check is not an error to handle: state sends the builder back with the reason. |
 | `verify` | `F verify <id>` — the full suite on the builder's result. Red is not an error to handle: state sends the builder back. |
 | `schedule` | `F schedule <id>` — writes round-N/scheduled.md. |
 | `spawn-reviewers` | See **Reviewers**. |
 | `review-reset` | `F review-reset <id>` — discards the round's reviews (and any workspace change a reviewer made), so the round reruns. |
 | `judge-objection` | See **Objections**. |
-| `spawn-approver` | Spawn `factory-approver` with `F brief <id> approver`. |
-| `rebase` | `F rebase <id>` — fetch, rebase on the target, re-record test hashes, full suite. Conflicts leave the rebase in progress; state routes them. |
+| `rebase` | `F rebase <id>` — fetch, rebase on the target, full suite. Conflicts leave the rebase in progress; state sends the builder to resolve them. |
 | `rebase-continue` | `F rebase <id> --continue`. |
-| `pr` | First write the description: `F pr body <id>` prints the facts (summary, verdicts, test exemptions, the approver's least-sure list). Write `factory/jobs/<id>/pr-body.md` from them in project.md's `[handoff] language`, following `pr_template` when it is set (fill its sections; leave none empty without saying why). Keep every fact; add none. Then `F pr open <id>` — pushes the branch and opens or updates the PR with that body, the title, draft state, reviewers and links from `[handoff]` (enables auto-merge in `auto-merge` mode). |
+| `pr` | First write the description: `F pr body <id>` prints the facts (summary, verdicts, test exemptions, the main review's least-sure list, who approved). Write `factory/jobs/<id>/pr-body.md` from them in project.md's `[handoff] language`, following `pr_template` when it is set (fill its sections; leave none empty without saying why). Keep every fact; add none. Then `F pr open <id>` — pushes the branch and opens or updates the PR with that body, the title, draft state, reviewers and links from `[handoff]` (enables auto-merge in `auto-merge` mode). |
 | `merge-local` | `F merge <id>`. |
 | `finish` | `F finish <id>` — removes the branches, returns the workspace to the target, marks `[x]`. |
 | `cancel` | `F cancel <id> --reason "<reason>"` (a cancelled job whose branch still exists). |
-| `needs-human` | Nothing to do; the job waits for `/factory approve`, `rework` or `cancel`. Report its reason. |
+| `needs-human` | Nothing to do; the job waits for `/factory approve`, `rework` or `cancel`. Report its reason. With `next.ready` every review passed and the job waits for the developer's approval — that approval is always a human's; never approve a job yourself. |
 | `wait-pr` | Nothing; the job is waiting on its PR. |
 
 Every agent is spawned **fresh** with the Agent tool, `subagent_type` = `factory:` + the agent's name (plugin agents are scoped by the plugin, e.g. `factory:factory-builder`), and the
@@ -70,8 +67,10 @@ again. Agents return one line; don't act on it — ask state.
 
 ### Reviewers
 
-`next.reviewers` lists who is still missing this round. **Spawn all of them in one message, in
-parallel**, then wait until every one has finished:
+`next.reviewers` lists who is still missing this round — in round 1 the main reviewer (`code`) plus
+any specialist the plan names or the change's paths call for; in later rounds only those whose
+findings blocked. **Spawn all of them in one message, in parallel**, then wait until every one has
+finished:
 
 - For each name except `codex`: `F brief <id> reviewer --reviewer <name>` → spawn
   `factory-review-<name>` with it. Generate every brief before spawning any.
@@ -79,15 +78,16 @@ parallel**, then wait until every one has finished:
   in, flags changed, failed): spawn `factory-codex-fallback` with `F brief <id> codex-fallback`.
 
 **A round is done only when every scheduled reviewer's file exists** — never start the builder
-mid-round. Then `F workspace check`: if the workspace changed, state says `review-reset`.
+mid-round. Then `F workspace check`: if the workspace changed, state says `review-reset`. The factory
+reads each review's verdict from its findings — CHANGES only for a BLOCKING one — and the builder's
+next brief carries one merged list (`round-N/findings.md`), not the individual reviews.
 
 ### Objections
 
-When the builder stops on an objection, state routes it: a disputed test goes to test-writer first;
-if test-writer amends, the builder continues. If test-writer stands firm, or the builder reports a
-departure from the plan, state says `judge-objection` — your one judgement call.
+When the builder stops because the plan can't be followed, state says `judge-objection` — your one
+judgement call.
 
-Read the objection (build.md, the round's section), test-writer's reply if any, spec.md and plan.md.
+Read the objection (build.md, the round's section), spec.md and plan.md.
 Decide against **what was approved**, nothing else:
 
 - **The answer is unambiguous within the approved spec and plan** → write
@@ -116,7 +116,7 @@ The inbox refuses a second identical command for a job while the first is still 
   through rebase, the full suite and `merge_mode`.
 - **rework `<id>` `<note>`** — for a needs-human or open-PR job: `F rework <id> --note "<note>" --by
   "<who>"`. It records the note (and the PR's comments), starts a fresh round budget, and state runs a
-  builder round, review and the approver again; the same PR is updated. If the job isn't the active
+  builder round and review again, and the job comes back for approval; the same PR is updated. If the job isn't the active
   one, it is picked up when the active job finishes or waits.
 - **cancel `<id>` `[reason]`** — first stop the job's running agents (TaskStop on each background agent
   of that job), then `F cancel <id> --reason "<reason>"`: it closes an open PR, removes the branches,
@@ -139,5 +139,5 @@ criteria. No code, no branch names, no review details. No other comments, ever.
 ## Report
 
 At the end of a run, and whenever a job reaches needs-human or opens a PR: per job, one line — id,
-title, stage, and the PR link or the needs-human reason. List test-file violations and codex
-fallbacks. Keep it short; the board has the detail.
+title, stage, and the PR link or the needs-human reason. List failed red-checks and codex fallbacks.
+Keep it short; the board has the detail.

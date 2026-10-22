@@ -118,8 +118,8 @@
   } catch (e) { /* storage unavailable: keep the token in memory only */ }
 
   const LANES = [
-    ["Queued", ["queued", "starting"]], ["Tests", ["testing"]], ["Building", ["building"]],
-    ["Review", ["reviewing"]], ["Approval", ["approving"]], ["Merge", ["rebasing", "merging"]],
+    ["Queued", ["queued", "starting"]], ["Building", ["building"]], ["Review", ["reviewing"]],
+    ["Merge", ["rebasing", "merging"]],
     ["PR open", ["pr-open"]], ["Done", ["merged", "done", "cancelled"]],
   ];
   const $ = (id) => document.getElementById(id);

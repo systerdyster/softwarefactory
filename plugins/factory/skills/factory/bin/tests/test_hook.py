@@ -22,8 +22,6 @@ def event(agent_type=None, **tool):
 class RoleTest(unittest.TestCase):
     def test_factory_agents_map_to_their_roles(self):
         self.assertEqual(hook.role_for("factory:factory-builder"), "builder")
-        self.assertEqual(hook.role_for("factory:factory-test-writer"), "test-writer")
-        self.assertEqual(hook.role_for("factory:factory-approver"), "approver")
         self.assertEqual(hook.role_for("factory:factory-codex-fallback"), "review-codex")
         self.assertEqual(hook.role_for("factory:factory-review-security"), "review-security")
 
@@ -35,6 +33,7 @@ class RoleTest(unittest.TestCase):
 
     def test_an_unknown_factory_agent_fails_closed(self):
         self.assertEqual(hook.role_for("factory:factory-renamed"), "unknown")
+        self.assertEqual(hook.role_for("factory:factory-test-writer"), "unknown")
         self.assertEqual(hook.main(stream=event("factory:factory-renamed")), 2)
 
 

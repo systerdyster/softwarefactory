@@ -4,8 +4,8 @@ state of its own, so it is safe to run at any time; the dashboard reads it."""
 from . import jobs, queue, state as state_mod
 from .errors import FactoryError
 
-STAGE_ORDER = ["queued", "starting", "testing", "building", "reviewing", "approving", "rebasing",
-               "merging", "needs-human", "pr-open", "merged", "done", "cancelled", "unknown"]
+STAGE_ORDER = ["queued", "starting", "building", "reviewing", "rebasing", "merging", "needs-human", "pr-open",
+               "merged", "done", "cancelled", "unknown"]
 
 
 def build(paths, cfg, write=True):

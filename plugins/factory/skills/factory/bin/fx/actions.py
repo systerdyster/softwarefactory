@@ -5,7 +5,7 @@ import json
 import os
 import subprocess
 
-from . import gitutil, jobs, queue, state as state_mod, testfiles, workspace
+from . import gitutil, jobs, queue, state as state_mod, workspace
 from .errors import Conflict, FactoryError
 from .paths import branch_name
 
@@ -99,7 +99,6 @@ def _rebase_cmd(args, cwd):
 
 def _finish_rebase(paths, cfg, job_id, data, entry, resolved):
     entry["after"] = gitutil.rev("HEAD", paths.workspace)
-    testfiles.record(paths, job_id)
     if resolved:
         entry["result"] = "resolved"
     else:
@@ -136,10 +135,6 @@ def rebase(paths, cfg, job_id, continue_=False):
     ws = _require_on_branch(paths, job_id)
     if ws["dirty"]:
         raise FactoryError("the workspace is not clean", dirty=ws["dirty"])
-    check = testfiles.check(paths, job_id)
-    if not check["ok"]:
-        raise FactoryError("test files differ from their recorded hashes; run `tests restore` first",
-                           mismatches=check["mismatches"])
     workspace.fetch(paths, cfg)
     target = gitutil.rev(cfg.base_ref, paths.root)
     built = jobs.build_sections(jobs.read(paths.job(job_id) / "build.md"))

@@ -13,8 +13,6 @@ import sys
 PREFIX = "factory:"
 ROLES = {
     "factory-builder": "builder",
-    "factory-test-writer": "test-writer",
-    "factory-approver": "approver",
     "factory-codex-fallback": "review-codex",
 }
 REVIEWER_PREFIX = "factory-review-"

@@ -14,7 +14,7 @@ the builder's. Codex could not run this round, so you stand in. You run on a dif
 builder; use that — don't re-derive the builder's reasoning from build.md before forming your own view.
 
 Follow the review contract the brief lists, with one addition: **line 2 of your file is exactly
-`FALLBACK: claude`.** The factory reports in decision.md and the PR that the fallback was used.
+`FALLBACK: claude`.** The factory reports in the PR that the fallback was used.
 
 ## Brief
 

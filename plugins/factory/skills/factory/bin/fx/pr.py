@@ -42,9 +42,10 @@ def body(paths, cfg, job_id):
     meta = jobs.read_json(jd / "job.json") or {}
     spec = jobs.read(jd / "spec.md") or ""
     tests = jobs.read(jd / "tests.md") or ""
-    decision = jobs.read(jd / "decision.md") or ""
     human = jobs.read(jd / "human-approval.md")
     rounds = jobs.rounds_on_disk(jd)
+    main_reviews = [jobs.read(paths.round_dir(job_id, n) / "review-code.md") for n in rounds]
+    least = next((_section(t, "Least sure") for t in reversed(main_reviews) if _section(t, "Least sure")), "")
     verdicts = schedule.latest_verdicts(paths, job_id, max(rounds, default=0))
     fallback = any(r.get("fallback") for n in rounds for r in jobs.reviews(paths.round_dir(job_id, n)).values())
     lines = [f"## {meta.get('title', job_id)}", ""]
@@ -59,11 +60,10 @@ def body(paths, cfg, job_id):
                       "(FALLBACK: claude).**"]
     exemptions = _section(tests, "Exemptions")
     lines += ["", "### Test exemptions", "", exemptions or "None."]
-    lines += ["", "### Approver", "", jobs.first_line(decision) or "—"]
-    least = _section(decision, "Least sure")
-    lines += ["", "**Least sure is correct:**", "", least or "Nothing named."]
+    lines += ["", "### Least sure is correct", "", least or "Nothing named."]
     if human:
-        lines += ["", f"**Approved by a human over the factory's verdict:** {jobs.field(human, 'Was') or ''}"]
+        lines += ["", f"Approved by {jobs.field(human, 'Approved-By') or 'a human'} at "
+                      f"`{(jobs.field(human, 'Head') or '')[:12]}`."]
     lines += ["", f"_Built by the software factory, job `{job_id}`._"]
     return "\n".join(lines) + "\n"
 

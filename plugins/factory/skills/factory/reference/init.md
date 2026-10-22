@@ -37,14 +37,25 @@ section of `factory/project.md`:
   copying gitignored local config from the main checkout (`.env`, `appsettings.Development.json`,
   user-secrets…). Use `$FACTORY_REPO_ROOT` for the main checkout's root, never an absolute path.
   List the `lockfiles` whose change means setup must rerun.
-- **Reviewers** — the optional ones that fit (`platform` for a CMS or framework with traps, `ux` and
-  `ui` for user-facing front ends). Leave `codex` off and say why: it sends code to OpenAI, so the
-  client agreement must allow it, and each developer needs the Codex CLI and their own OpenAI access.
-- **Path patterns** per reviewer — globs (`src/components/**`, `*.scss`) or `re:` patterns matched
-  against the diff text (`re:\bIMemoryCache\b`), so later rounds pull a reviewer back in when its area
-  changes.
+- **Written rules** — `[rules] docs`: globs of the project's own rule pages beyond CLAUDE.md and
+  AGENTS.md — a wiki's architecture and component pages, ADRs, a styleguide (`Wiki/*.md`,
+  `docs/adr/**`). Every agent's brief lists them as rules. Look for them; ask which count as rules.
+- **Reviewers** — every job gets the main review (`code`); security, performance and stability are
+  specialists available everywhere. Enable the optional ones that fit (`platform` for a CMS or
+  framework with traps, `ux` and `ui` for user-facing front ends). Leave `codex` off and say why: it
+  sends code to OpenAI, so the client agreement must allow it, and each developer needs the Codex CLI
+  and their own OpenAI access.
+- **Path patterns** per specialist — globs (`src/components/**`, `*.scss`) or `re:` patterns matched
+  against the diff text (`re:\bIMemoryCache\b`). A specialist runs in a job's first round when the plan
+  names it or one of its patterns matches the change, so set patterns for security (auth, endpoints,
+  data access), performance and stability too.
+- **Render commands** — `[reviewers] commands`: the project commands the ui and ux reviewers may run
+  to see the change, e.g. a browser test project that screenshots components (Playwright, Vitest
+  browser mode). Say in project.md what each one renders and where its screenshots land; their output
+  must be ignored by git, or the workspace check discards the round. Without one the reviewers can
+  only read code, and say so.
 - **Platform** — for the platform reviewer: the platform, version, and any project-specific traps.
-- `max_rounds` (default 3), `max_diff` (changed lines that force escalation; default 800), remote,
+- `max_rounds` (default 3), `max_diff` (changed lines flagged to the approving developer; default 800), remote,
   PR tool (`gh`, `az` or `other`, from the remote URL).
 - **Hand-off** — how a finished job reaches the team. These are the team's choices, not facts in the
   repo, so **ask about each one** even when you have a good guess; propose the guess as the
@@ -77,8 +88,8 @@ commands agents use in the workspace. Rules already in the shared `.claude/setti
 present. `git push` is deliberately absent; only the orchestrator pushes, through the script. Show the
 list, and on the human's yes run `F allowlist --write`. Local settings are not committed.
 
-The per-command limits (no shell operators, no switching or pushing, the builder never touching
-test-writer's files, reviewers writing only their review) are enforced by the plugin's PreToolUse
+The per-command limits (no shell operators, no switching or pushing, reviewers running only their
+listed commands and writing only their review) are enforced by the plugin's PreToolUse
 hook, which recognises each factory agent by name, not by the allowlist.
 
 ## 4. Create and prove the workspace

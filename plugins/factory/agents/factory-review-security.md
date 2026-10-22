@@ -78,7 +78,7 @@ is a result.
 
 ## Not findings
 
-- A theoretical weakness with no reachable path — state the path, or grade it MINOR and say the path
+- A theoretical weakness with no reachable path — state the path, or make it a NOTE and say the path
   is unproven.
 - A risk the project has deliberately accepted and recorded. An unrecorded absence is the finding.
 

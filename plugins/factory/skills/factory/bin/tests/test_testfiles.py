@@ -2,56 +2,59 @@ import unittest
 
 from support import SandboxTest, git
 
-from fx import testfiles, workspace
-from fx.errors import FactoryError
+from fx import jobs, testfiles, workspace
+
+TESTS_MD = "# Tests\n\n| File |\n|---|\n| `tests/test_answer.py` |\n\n## Coverage\n- AC1 — the answer\n"
+RED = "import sys\nsys.path.insert(0, 'src')\nfrom app import answer\nassert answer() == 42\n"
 
 
-class TestFilesTest(SandboxTest):
+class RedCheckTest(SandboxTest):
     def setUp(self):
         super().setUp()
         self.sb.create_workspace()
         self.job = self.sb.queue_job()
+        self.jd = self.paths.job(self.job)
         workspace.switch(self.paths, self.cfg, self.job)
-        self.sb.write("tests/test_answer.py", "assert answer() == 42\n", base=self.sb.ws)
-        self.sb.commit("Add failing tests", cwd=self.sb.ws)
-        self.sb.write("tests.md", "# Tests\n\n| File | Hash |\n|---|---|\n| `tests/test_answer.py` | |\n\n"
-                      "Status: red-confirmed\n", base=self.paths.job(self.job))
 
-    def test_record_fills_hashes_from_the_committed_blob(self):
-        result = testfiles.record(self.paths, self.job)
-        self.assertEqual(result["files"], ["tests/test_answer.py"])
-        rows = testfiles.listed(self.paths, self.job)
-        self.assertEqual(rows[0]["hash"], git(self.sb.ws, "rev-parse", "HEAD:tests/test_answer.py"))
-        self.assertTrue(testfiles.is_recorded(self.paths, self.job))
+    def tests_first(self, test_text=RED):
+        self.sb.write("tests/test_answer.py", test_text, base=self.sb.ws)
+        self.sb.commit("Add failing tests for the answer", cwd=self.sb.ws)
+        self.sb.write("tests.md", TESTS_MD, base=self.jd)
 
-    def test_record_refuses_uncommitted_test_files(self):
-        self.sb.write("tests/test_answer.py", "assert True\n", base=self.sb.ws)
-        with self.assertRaises(FactoryError):
-            testfiles.record(self.paths, self.job)
-        self.assertIn("Status: record-failed", (self.paths.job(self.job) / "tests.md").read_text())
+    def build(self):
+        self.sb.write("src/app.py", "def answer():\n    return 42\n", base=self.sb.ws)
+        return self.sb.commit("Answer 42", cwd=self.sb.ws)
 
-    def test_check_catches_an_uncommitted_edit_and_a_committed_one(self):
-        testfiles.record(self.paths, self.job)
-        self.sb.write("tests/test_answer.py", "assert True\n", base=self.sb.ws)
-        self.assertFalse(testfiles.check(self.paths, self.job)["ok"])
-        self.sb.commit("Weaken test", cwd=self.sb.ws)
-        self.assertFalse(testfiles.check(self.paths, self.job)["ok"])
+    def test_tests_that_fail_on_their_own_commit_pass_the_check(self):
+        self.tests_first()
+        head = self.build()
+        record = testfiles.red_check(self.paths, self.cfg, self.job)
+        self.assertEqual((record["ok"], record["head"]), (True, head))
+        self.assertEqual(jobs.read_json(self.jd / "red.json")["ok"], True)
+        self.assertEqual(git(self.sb.ws, "rev-parse", "HEAD"), head)
 
-    def test_restore_puts_back_the_recorded_content_and_commits(self):
-        testfiles.record(self.paths, self.job)
-        (self.sb.ws / "tests/test_answer.py").unlink()
-        self.sb.commit("Delete test", cwd=self.sb.ws)
-        result = testfiles.restore(self.paths, self.job)
-        self.assertEqual(result["restored"], ["tests/test_answer.py"])
-        self.assertEqual((self.sb.ws / "tests/test_answer.py").read_text(), "assert answer() == 42\n")
-        self.assertTrue(testfiles.check(self.paths, self.job)["ok"])
-        self.assertIn("Restore factory-owned test files", git(self.sb.ws, "log", "-1", "--format=%s"))
+    def test_tests_that_already_pass_prove_nothing(self):
+        self.tests_first("assert True\n")
+        self.build()
+        record = testfiles.red_check(self.paths, self.cfg, self.job)
+        self.assertFalse(record["ok"])
+        self.assertIn("prove nothing", record["reason"])
 
-    def test_hashes_survive_a_rebase_because_they_are_on_content(self):
-        testfiles.record(self.paths, self.job)
-        self.sb.push_target_change("README.md", "upstream\n")
-        git(self.sb.ws, "rebase", "origin/main")
-        self.assertTrue(testfiles.check(self.paths, self.job)["ok"])
+    def test_tests_committed_after_the_code_are_refused(self):
+        self.build()
+        self.tests_first()
+        record = testfiles.red_check(self.paths, self.cfg, self.job)
+        self.assertFalse(record["ok"])
+        self.assertIn("first commit", record["reason"])
+
+    def test_an_exempted_job_without_tests_passes(self):
+        self.build()
+        self.sb.write("tests.md", "# Tests\n\n## Exemptions\n- AC1 — copy change only, approved in the plan\n", base=self.jd)
+        self.assertTrue(testfiles.red_check(self.paths, self.cfg, self.job)["ok"])
+
+    def test_listed_reads_the_file_column(self):
+        self.sb.write("tests.md", "| File | Hash |\n|---|---|\n| `a.py` | |\n| b.py |\n", base=self.jd)
+        self.assertEqual(testfiles.listed(self.paths, self.job), ["a.py", "b.py"])
 
 
 if __name__ == "__main__":

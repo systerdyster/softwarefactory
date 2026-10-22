@@ -62,10 +62,20 @@ existing tests before naming them; never plan against an imagined API. Each task
 - the files it changes or creates,
 - the change,
 - **the test that proves it** — file, test name, and what it asserts — following the test conventions
-  in project.md. These are the tests test-writer will write first.
+  in project.md. The builder writes these first, and the factory checks they fail before the change.
 
 Flag every task that can't be cleanly test-driven, with the reason. Those are test exemptions;
 approving the plan approves them.
+
+**Specialist reviewers.** Every job gets the main review. Decide with the developer which specialists
+this case needs — security (auth, data access, input reaching an interpreter, personal data),
+performance (queries, loops over remote calls, payload), stability (jobs, subscriptions, external
+calls), and ui, ux, platform where project.md enables them — and name them on the plan's
+`Specialists:` line, or `none`. project.md's `[paths]` patterns add more when the change touches them.
+
+**Settled decisions.** Everything the developer decided during intake and grill goes in spec.md's
+`## Decided`, including outcomes they expect — "the diff will exceed max_diff", "no test for the
+Wiki task". Reviewers don't reopen what is there without a new circumstance.
 
 ## 6. Checkpoint: approval
 
@@ -104,14 +114,18 @@ Tell the developer the job is queued, its id, and that `/factory run` (in its ow
 ## Affected areas
 ## Acceptance criteria
 - AC1 …
-## Decisions and open questions
-<from the grill: decisions with their why; informed dismissals; non-blocking open questions>
+## Decided
+<from intake and the grill: each decision with its why, informed dismissals, expected outcomes>
+## Open questions
+<non-blocking only>
 ```
 
 ## plan.md
 
 ```markdown
 # Plan — <Title>
+
+Specialists: security, ui   (or "none")
 
 ## Task 1 — <name>
 - Files: …

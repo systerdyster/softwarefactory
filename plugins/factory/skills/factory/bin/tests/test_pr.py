@@ -21,10 +21,12 @@ class PrTest(SandboxTest):
         self.sb.write("tests.md", "## Exemptions\n\n- Logging: no observable output.\n", base=self.jd)
         self.sb.write("round-1/review-security.md", "VERDICT: PASS\n", base=self.jd)
         self.sb.write("round-1/review-codex.md", "VERDICT: PASS\nFALLBACK: claude\n", base=self.jd)
-        self.sb.write("decision.md", "APPROVE\nHead: x\n\n## Least sure\n\n1. The rounding in app.py:2.\n", base=self.jd)
+        self.sb.write("round-1/review-code.md", "VERDICT: PASS\n\n## Least sure\n\n1. The rounding in app.py:2.\n",
+                      base=self.jd)
+        self.sb.write("human-approval.md", "Head: 0123456789abcdef\nApproved-By: Fredrik\n", base=self.jd)
         text = pr.body(self.paths, self.cfg, self.job)
         for expected in ("The answer is 42.", "| security | PASS |", "Logging: no observable output.",
-                         "The rounding in app.py:2.", "FALLBACK: claude"):
+                         "The rounding in app.py:2.", "FALLBACK: claude", "Approved by Fredrik at `0123456789ab`"):
             self.assertIn(expected, text)
 
     def test_other_tool_pushes_and_leaves_the_pr_to_a_human(self):

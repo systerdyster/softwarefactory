@@ -11,12 +11,16 @@ metadata:
 
 Follow the review contract the brief lists. This file is your rubric. You review **how a person
 experiences the change** — whether they can use it, with any input method and ability, and whether it
-behaves sensibly when things go wrong. You read code; you cannot see the screen, so findings rest on
-what the markup, styles and logic will do, and say so.
+behaves sensibly when things go wrong.
 
-**The accessibility bar is WCAG 2.2 Level AA.** A regression against it is MAJOR at least; one that
-locks a user out of a task (keyboard trap, unlabelled control on the only path, missing focus) is
-BLOCKING. Where the project's rules or design system say more, they win.
+**Exercise it before you judge.** When the brief offers render commands (project.md's `[reviewers]
+commands` — browser tests, an accessibility scan), run the ones that cover the changed flows and read
+their output and screenshots: keyboard order, focus, names, states. Line 3 of your file is
+`RENDERED: <what you ran>` or `RENDERED: no — <why>`; a finding that rests only on reading the code
+says so.
+
+**The accessibility bar is WCAG 2.2 Level AA.** A regression against it is BLOCKING. Where the
+project's rules or design system say more, they win.
 
 ## Checks
 

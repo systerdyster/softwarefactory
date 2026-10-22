@@ -4,34 +4,31 @@ from support import SandboxTest, git
 
 from fx import jobs, schedule, workspace
 
-ENABLED = ["security", "code", "performance", "stability", "ui", "codex"]
+AVAILABLE = ["code", "security", "performance", "stability", "ui", "codex"]
 
 
 class DecideTest(unittest.TestCase):
-    def test_first_round_runs_every_enabled_reviewer(self):
-        self.assertEqual(list(schedule.decide(ENABLED, True, [], "", {}, {})), ENABLED)
+    def test_first_round_is_the_main_reviewer_alone_without_a_reason_for_more(self):
+        self.assertEqual(list(schedule.decide(AVAILABLE, True, ["src/app.py"], "", {}, {})), ["code"])
 
-    def test_code_change_reruns_security_code_and_codex_plus_those_that_said_changes(self):
-        verdicts = {n: "PASS" for n in ENABLED} | {"performance": "CHANGES"}
-        chosen = schedule.decide(ENABLED, False, ["src/app.py"], "", verdicts, {})
-        self.assertEqual(list(chosen), ["security", "code", "performance", "codex"])
+    def test_a_specialist_named_in_the_plan_joins_the_first_round(self):
+        chosen = schedule.decide(AVAILABLE, True, [], "", {}, {}, named=["security"])
+        self.assertEqual(chosen, {"code": "main review", "security": "named in plan.md"})
 
-    def test_path_patterns_pull_in_a_passed_reviewer(self):
-        verdicts = {n: "PASS" for n in ENABLED}
-        chosen = schedule.decide(ENABLED, False, ["src/components/Button.tsx"], "", verdicts,
-                                 {"ui": ["src/components/**"]})
+    def test_path_patterns_pull_in_a_specialist(self):
+        chosen = schedule.decide(AVAILABLE, True, ["src/components/Button.tsx"], "", {}, {"ui": ["src/components/**"]})
         self.assertIn("ui", chosen)
         self.assertNotIn("stability", chosen)
 
     def test_content_pattern_matches_the_diff_text(self):
-        verdicts = {n: "PASS" for n in ENABLED}
-        chosen = schedule.decide(ENABLED, False, ["src/repo.py"], "+ q = 'SELECT * FROM t'", verdicts,
+        chosen = schedule.decide(AVAILABLE, True, ["src/repo.py"], "+ q = 'SELECT * FROM t'", {},
                                  {"performance": ["re:SELECT"]})
         self.assertIn("performance", chosen)
 
-    def test_a_reviewer_with_no_verdict_this_cycle_is_scheduled(self):
-        verdicts = {n: "PASS" for n in ENABLED if n != "ui"}
-        self.assertIn("ui", schedule.decide(ENABLED, False, [], "", verdicts, {}))
+    def test_later_rounds_rerun_only_those_that_said_changes(self):
+        verdicts = {n: "PASS" for n in AVAILABLE} | {"ui": "CHANGES"}
+        self.assertEqual(list(schedule.decide(AVAILABLE, False, ["src/app.py"], "", verdicts,
+                                              {"ui": ["src/**"]})), ["ui"])
 
     def test_globs(self):
         self.assertTrue(schedule.matches("*.scss", "src/a/b/site.scss"))
@@ -43,16 +40,17 @@ class DecideTest(unittest.TestCase):
 class ScheduleFileTest(SandboxTest):
     enabled = "ui"
 
-    def test_writes_scheduled_md_with_head_and_base(self):
+    def test_writes_scheduled_md_with_head_base_and_the_plans_specialists(self):
         self.sb.create_workspace()
         job = self.sb.queue_job()
+        self.sb.write("plan.md", "# Plan\n\nSpecialists: security\n", base=self.paths.job(job))
         workspace.switch(self.paths, self.cfg, job)
-        self.sb.write("src/app.py", "def answer():\n    return 42\n", base=self.sb.ws)
+        self.sb.write("src/components/answer.py", "ANSWER = 42\n", base=self.sb.ws)
         head = self.sb.commit("Answer", cwd=self.sb.ws)
         result = schedule.schedule(self.paths, self.cfg, job, 1, 1)
-        self.assertEqual(result["reviewers"], ["security", "code", "performance", "stability", "ui"])
+        self.assertEqual(result["reviewers"], ["code", "security", "ui"])
         sched = jobs.scheduled(self.paths.round_dir(job, 1))
-        self.assertEqual(sched["head"], head)
+        self.assertEqual((sched["head"], sched["previous"]), (head, None))
         self.assertEqual(sched["base"], git(self.sb.root, "rev-parse", "origin/main"))
 
 
