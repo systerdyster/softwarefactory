@@ -67,15 +67,52 @@ def section(text, heading):
     return m.group(1).strip() if m else ""
 
 
-_BLOCKING = re.compile(r"^\s*[-*]\s*(?:🔴\s*)?\**BLOCKING\b", re.M)
+_ITEM = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+(.*)$")
+_BLOCKING = re.compile(r"^(?:🔴\s*)?\**\s*BLOCKING\b")
+_LEADS_WITH_BLOCKING = re.compile(r"^\s*(?:#+\s*)?(?:(?:[-*+]|\d+[.)])\s*)?(?:🔴\s*)?\**\s*BLOCKING\b")
+_FORMAT = "`- 🔴 BLOCKING \\`path:line\\` — …` or `- 🟡 NOTE \\`path:line\\` — …` under `## Findings`"
+
+
+def finding_items(text):
+    """The bullets and numbered items under a review's "## Findings", with continuation lines joined."""
+    items = []
+    for line in section(text, "Findings").splitlines():
+        m = _ITEM.match(line)
+        if m:
+            items.append(m.group(1).strip())
+        elif items and line.strip() and line[:1].isspace():
+            items[-1] = f"{items[-1]} {line.strip()}"
+    return items
+
+
+def is_blocking(item):
+    return bool(_BLOCKING.match(item))
+
+
+def review(text):
+    """{"verdict": PASS|CHANGES|None, "problem": why the file can't be read, or None}.
+
+    A BLOCKING finding makes CHANGES whatever line 1 says. A report the factory can't read safely —
+    no VERDICT line, CHANGES with no finding marked BLOCKING, or BLOCKING outside a finding item — has
+    no verdict and a problem, so the reviewer is asked to rewrite it; it never reads as PASS."""
+    m = re.match(r"^VERDICT:\s*(PASS|CHANGES)\b", first_line(text), re.I)
+    if not m:
+        return {"verdict": None, "problem": "line 1 must be `VERDICT: PASS` or `VERDICT: CHANGES`"}
+    items = finding_items(text)
+    blocking = [i for i in items if is_blocking(i)]
+    stray = [line.strip() for line in section(text, "Findings").splitlines()
+             if _LEADS_WITH_BLOCKING.match(line) and not (_ITEM.match(line) and is_blocking(_ITEM.match(line).group(1)))]
+    if stray:
+        return {"verdict": None, "problem": f"`{stray[0][:80]}` names BLOCKING but is not a finding item; write each "
+                                            f"finding as {_FORMAT}"}
+    if m.group(1).upper() == "CHANGES" and not blocking:
+        return {"verdict": None, "problem": "line 1 says CHANGES but no finding is marked BLOCKING; mark the finding "
+                                            f"that must change as {_FORMAT}, or write `VERDICT: PASS`"}
+    return {"verdict": "CHANGES" if blocking else "PASS", "problem": None}
 
 
 def verdict(text):
-    """None until the review is finished (line 1 is a VERDICT line). Then CHANGES exactly when the
-    Findings section holds a BLOCKING finding — the verdict word the reviewer wrote does not decide."""
-    if not re.match(r"^VERDICT:\s*(PASS|CHANGES)\b", first_line(text), re.I):
-        return None
-    return "CHANGES" if _BLOCKING.search(section(text, "Findings")) else "PASS"
+    return review(text)["verdict"]
 
 
 def decision(text):
@@ -119,10 +156,8 @@ def rounds_on_disk(job_dir):
 def reviews(round_dir):
     result = {}
     for f in Path(round_dir).glob("review-*.md"):
-        result[f.stem[len("review-"):]] = {
-            "verdict": verdict(f.read_text(encoding="utf-8")),
-            "fallback": "FALLBACK: claude" in f.read_text(encoding="utf-8"),
-        }
+        text = f.read_text(encoding="utf-8")
+        result[f.stem[len("review-"):]] = {**review(text), "fallback": "FALLBACK: claude" in text}
     return result
 
 

@@ -9,6 +9,7 @@ from support import SandboxTest
 from fx import state, workspace
 
 H1, H2, H3, T1, T2 = "a" * 40, "b" * 40, "c" * 40, "d" * 40, "e" * 40
+FP = "f" * 16
 
 
 def base_facts(**over):
@@ -16,7 +17,7 @@ def base_facts(**over):
         "id": "OPT-1", "meta": {"title": "T", "jira": "OPT-1"}, "has_spec": True, "backlog": "taken",
         "branch_exists": True, "head": H1, "target_head": T1,
         "workspace": {"exists": True, "on_branch": True, "dirty": [], "rebase": False, "unmerged": []},
-        "baseline": {"green": True}, "red": {"ok": True, "head": H1},
+        "baseline": {"green": True}, "verify_fingerprint": FP,
         "build": [], "rounds": {}, "reworks": [], "cancelled": False, "human_approval": None,
         "rebase": {"history": []}, "pr": None, "merge": None, "merged_locally": False, "spawns": [],
         "jira_log": [], "required": ["code"], "max_rounds": 3, "merge_mode": "pr",
@@ -30,8 +31,8 @@ def base_facts(**over):
 def rnd(reviews=None, scheduled=None, head=H1, verifies=None, rulings=None):
     names = list((reviews or {}).keys()) if scheduled is None else scheduled
     return {"scheduled": {"reviewers": names, "head": head, "base": T1} if names or scheduled == [] else None,
-            "reviews": {n: {"verdict": v, "fallback": False} for n, v in (reviews or {}).items()},
-            "verifies": verifies if verifies is not None else {1: {"head": head, "green": True}},
+            "reviews": {n: {"verdict": v, "problem": None, "fallback": False} for n, v in (reviews or {}).items()},
+            "verifies": verifies if verifies is not None else {1: {"head": head, "green": True, "fingerprint": FP}},
             "rulings": rulings or {}}
 
 
@@ -77,37 +78,48 @@ class LifecycleTest(unittest.TestCase):
         self.assertEqual(nxt(f), "switch")
 
     def test_the_builder_goes_first_with_no_test_writer(self):
-        r = state.decide(base_facts(red=None))
+        r = state.decide(base_facts())
         self.assertEqual((r["next"]["action"], r["next"]["round"], r["next"]["attempt"]), ("spawn-builder", 1, 1))
         self.assertEqual(r["stage"], "building")
 
 
-class RedCheckTest(unittest.TestCase):
-    def test_round_one_proves_the_tests_red_before_verify(self):
-        f = base_facts(red=None, build=[done(1)], rounds={1: rnd(verifies={})})
-        r = state.decide(f)
-        self.assertEqual((r["next"]["action"], r["next"]["round"]), ("red-check", 1))
-
-    def test_tests_that_prove_nothing_send_the_builder_back(self):
-        f = base_facts(red={"ok": False, "head": H1, "reason": "the tests pass before the change"},
-                       build=[done(1)], rounds={1: rnd(verifies={})})
-        r = state.decide(f)
-        self.assertEqual((r["next"]["action"], r["next"]["attempt"]), ("spawn-builder", 2))
-        self.assertIn("pass before the change", r["reason"])
-
-    def test_a_new_head_after_a_failed_check_is_checked_again(self):
-        f = base_facts(head=H2, red={"ok": False, "head": H1, "reason": "x"},
-                       build=[done(1), done(1, 2)], rounds={1: rnd(verifies={})})
-        self.assertEqual(nxt(f), "red-check")
-
-    def test_a_passed_check_lets_the_round_verify(self):
+class VerifyTest(unittest.TestCase):
+    def test_the_round_is_verified_after_the_builder(self):
         f = base_facts(build=[done(1)], rounds={1: rnd(verifies={})})
         self.assertEqual(nxt(f), "verify")
 
-    def test_later_rounds_and_rework_cycles_skip_the_check(self):
-        f = base_facts(red=None, build=[done(1), done(2)],
-                       rounds={1: rnd({"code": "CHANGES"}), 2: rnd(verifies={}, head=H1)})
+    def test_a_result_for_other_checks_is_not_reused(self):
+        f = base_facts(build=[done(1)], rounds={1: rnd()}, verify_fingerprint="0" * 16)
         self.assertEqual(nxt(f), "verify")
+
+    def test_a_result_for_other_code_is_not_reused(self):
+        f = base_facts(head=H2, build=[done(1)], rounds={1: rnd()})
+        self.assertEqual(nxt(f), "verify")
+
+    def test_the_red_check_is_named_to_the_builder(self):
+        f = base_facts(build=[done(1)], rounds={1: rnd(verifies={1: {"head": H1, "green": False, "log": "l",
+                                                                     "failed": "lint", "fingerprint": FP}})})
+        self.assertIn("lint is red", state.decide(f)["reason"])
+
+    def test_a_rebase_under_other_checks_is_run_again(self):
+        f = base_facts(build=[done(1)], rounds={1: rnd({"code": "PASS"})}, human_approval={"head": H1},
+                       rebase={"history": [{"before": H1, "after": H1, "result": "green", "target": T1,
+                                            "fingerprint": "0" * 16}]})
+        self.assertEqual(nxt(f), "rebase")
+
+
+class RejectedReviewTest(unittest.TestCase):
+    def test_an_unreadable_review_goes_back_to_its_reviewer_with_the_reason(self):
+        r1 = rnd({"code": None}, scheduled=["code"])
+        r1["reviews"]["code"]["problem"] = "line 1 says CHANGES but no finding is marked BLOCKING"
+        r = state.decide(base_facts(build=[done(1)], rounds={1: r1}))
+        self.assertEqual((r["next"]["action"], r["next"]["reviewers"]), ("spawn-reviewers", ["code"]))
+        self.assertIn("no finding is marked BLOCKING", r["reason"])
+
+    def test_it_never_counts_as_a_pass(self):
+        r1 = rnd({"code": None}, scheduled=["code"])
+        r1["reviews"]["code"]["problem"] = "x"
+        self.assertNotEqual(state.decide(base_facts(build=[done(1)], rounds={1: r1}))["stage"], "needs-human")
 
 
 class BuildRoundTest(unittest.TestCase):
@@ -124,7 +136,7 @@ class BuildRoundTest(unittest.TestCase):
         self.assertEqual(nxt(f), "spawn-builder")
 
     def test_red_verify_sends_the_builder_back_in_the_same_round(self):
-        f = base_facts(build=[done(1)], rounds={1: rnd(verifies={1: {"head": H1, "green": False, "log": "l"}})})
+        f = base_facts(build=[done(1)], rounds={1: rnd(verifies={1: {"head": H1, "green": False, "log": "l", "failed": "lint", "fingerprint": FP}})})
         r = state.decide(f)
         self.assertEqual((r["next"]["action"], r["next"]["round"], r["next"]["attempt"]), ("spawn-builder", 1, 2))
 
@@ -197,12 +209,12 @@ class ApprovalAndMergeTest(unittest.TestCase):
 
     def test_a_clean_green_rebase_keeps_the_approval_and_opens_the_pr(self):
         f = self.approved_facts(head=H2, rebase={"history": [{"before": H1, "after": H2, "result": "green",
-                                                               "target": T1, "round": 2}]})
+                                                               "target": T1, "round": 2, "fingerprint": FP}]})
         self.assertEqual(nxt(f), "pr")
 
     def test_a_moved_target_means_rebasing_again(self):
         f = self.approved_facts(head=H2, target_head=T2, rebase={"history": [
-            {"before": H1, "after": H2, "result": "green", "target": T1, "round": 2}]})
+            {"before": H1, "after": H2, "result": "green", "target": T1, "round": 2, "fingerprint": FP}]})
         self.assertEqual(nxt(f), "rebase")
 
     def test_a_red_rebase_starts_a_builder_round(self):
@@ -219,7 +231,7 @@ class ApprovalAndMergeTest(unittest.TestCase):
         self.assertEqual(nxt(f), "rebase-continue")
 
     def test_open_pr_is_waiting_and_merged_pr_finishes(self):
-        f = self.approved_facts(rebase={"history": [{"before": H1, "after": H1, "result": "green", "target": T1}]},
+        f = self.approved_facts(rebase={"history": [{"before": H1, "after": H1, "result": "green", "target": T1, "fingerprint": FP}]},
                                 pr={"state": "OPEN", "head": H1, "url": "u"})
         r = state.decide(f)
         self.assertEqual((r["stage"], r["waiting"]), ("pr-open", True))
@@ -228,7 +240,7 @@ class ApprovalAndMergeTest(unittest.TestCase):
 
     def test_local_merge_mode(self):
         f = self.approved_facts(merge_mode="local-merge",
-                                rebase={"history": [{"before": H1, "after": H1, "result": "green", "target": T1}]})
+                                rebase={"history": [{"before": H1, "after": H1, "result": "green", "target": T1, "fingerprint": FP}]})
         self.assertEqual(nxt(f), "merge-local")
         f["merge"] = {"merged": False, "head": H1, "blocked": "main is checked out"}
         self.assertEqual(state.decide(f)["stage"], "needs-human")

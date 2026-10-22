@@ -50,9 +50,10 @@ Reviewer: <name> · Round <n> · Head <sha>
   rule broken, an acceptance criterion not met, or a defect with a concrete failure — wrong output,
   crash, data loss, a security or accessibility regression, unbounded work per request. **NOTE** is
   everything else; the builder fixes notes where cheap, and the rest reach the developer with the PR.
-- **The factory derives the verdict from your findings**: CHANGES exactly when a BLOCKING finding
-  stands under Findings. Write the matching word on line 1, but a non-blocking finding never makes a
-  CHANGES — if you think something must change, it is BLOCKING and you say why.
+- **The factory derives the verdict from your findings**: CHANGES exactly when a finding item under
+  Findings (a `-` bullet or a numbered `1.` item) starts with BLOCKING. Write the matching word on
+  line 1. A report it can't read safely — CHANGES with no finding marked BLOCKING, or BLOCKING outside
+  a finding item such as a heading — is sent back to you to rewrite; it never counts as a pass.
 - Put every finding's location in backticks as `path:line`. The factory merges findings from different
   reviewers that name the same location into one item, so a duplicate costs nothing and a
   contradiction becomes visible.

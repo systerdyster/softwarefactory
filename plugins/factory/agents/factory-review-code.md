@@ -38,9 +38,20 @@ BLOCKING.
 - Low coupling: third-party libraries behind an adapter, no reaching across layers.
 - Nothing left behind — dead code, unused exports, debug output, commented-out blocks.
 
-**Tests** — the builder wrote them first; tests.md maps them to the criteria.
-- They test behaviour worth breaking, follow the project's conventions, and read well — no assertion
-  of a mock being called, no testing the framework.
+**Tests** — judge their quality; tests.md maps them to the criteria. The project's own test rules,
+levels and tools come first.
+- **Would they catch the fault they are there for?** Read the assertion against the behaviour: a test
+  that would still pass if the change were wrong protects nothing. A test that already passed before
+  the change can be right — it protects behaviour that must not move.
+- **Edge cases that matter here** — empty, missing, duplicate, boundary, the error path — covered where
+  breaking them would cost something.
+- **Missing coverage** of changed logic or a helper that could cleanly have a test is BLOCKING when the
+  behaviour matters; padding is a NOTE: getters, the framework's own behaviour, a mock being called,
+  implementation details a refactor would break.
+- **A bug fix** has a test that reproduces the bug, and tests.md's Reproduction says how it failed
+  before the fix. That failure must be the wrong behaviour — not a broken import, a timeout or a
+  broken test environment. Without a credible reproduction the fix is unproven: BLOCKING.
+- Readable, and one test file per source file unless the project does otherwise.
 - An exemption that is really "hard to test": a criterion with an observable effect can be tested.
 
 **Baseline security** — untrusted input reaching SQL, HTML, a path, a redirect or a shell without

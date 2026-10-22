@@ -1,23 +1,25 @@
 # Software factory
 
 A Claude Code plugin that turns an approved case into a PR: `/factory add` frames a case with the
-developer into a spec and a plan, and `/factory run` builds queued jobs: a fresh builder writes the
-tests first and then the change, a main reviewer checks it (with specialists where the change calls
-for them), and the developer approves before the PR. Python standard library only. Built from the
-blueprint in `~/Brain/library/claude-code/blueprint-software-factory.md`; this repo is now the source.
+developer into a spec and a plan, and `/factory run` builds queued jobs: a fresh builder makes the
+change with meaningful tests for the behaviour it changes, a main reviewer checks it (with specialists
+where the change calls for them), and the developer approves before the PR. Python standard library
+only. It was first built from a blueprint prompt; this repo is now the source.
 
 ## The flow
 
-1. **Builder**, round 1: the plan's tests in the branch's first commit, listed in tests.md, then the
-   change. **red-check** runs those tests on that first commit and requires them to fail.
-2. **verify** — the full suite; red sends the builder back within the round.
+1. **Builder** — the change, with tests where behaviour changes (logic and helpers above all), TDD
+   where it helps, and for a bug a test that reproduces it: tests.md records how it failed before the
+   fix. tests.md maps each acceptance criterion to its test. No commit order is imposed.
+2. **verify** — the project's tests, build and lint (`[factory] verify`, default lint, build, suite);
+   red sends the builder back within the round. A result counts only for the same head and commands.
 3. **Review**: the main reviewer (`code`) always; a specialist (security, performance, stability, ui,
    ux, platform, codex) when plan.md's `Specialists:` line names it or its `[paths]` pattern matches.
    The factory reads each verdict from the findings — CHANGES only for a BLOCKING one — and merges all
    findings into one `findings.md`, same `path:line` = one item.
 4. **Fix rounds** rerun only the reviewers that blocked, on the diff since their last look.
 5. **Needs-human, ready** — every job stops for the developer's approval, with the diff size against
-   `max_diff` and the main review's least-sure list. Then rebase, suite, PR.
+   `max_diff` and the main review's least-sure list. Then rebase, the project's checks, PR.
 
 spec.md's `## Decided` is settled for every agent; project.md's `[rules] docs` (a wiki's
 architecture and component pages) are rules every brief lists.
@@ -99,16 +101,23 @@ the repo root (or `-s tests` from `skills/factory/bin`).
   them reviews, ~54 minutes). Gone: the separate test-writer and its objection loop (eight assertions
   contradicted the approved design and cost a hand-off and a builder rerun for no code change), the
   approver agent (its escalation was foreseen in the spec, and a human approves every job anyway), and
-  every-reviewer-every-round. Added: red-check, verdict from BLOCKING only (stability had returned
-  CHANGES for a finding it called non-blocking), the merged findings list (code and ui had reported the
-  same CSS; code and stability had given opposite advice on one helper), spec.md's `Decided`,
-  `[rules] docs` (the code reviewer had missed rules that live in the wiki) and render commands for ui
-  and ux (they had rendered nothing although the project has browser tests).
+  every-reviewer-every-round. Added: verdict from BLOCKING only, the merged findings list (code and ui
+  had reported the same CSS; code and stability had given opposite advice on one helper), spec.md's
+  `Decided`, `[rules] docs` (the code reviewer had missed rules that live in the wiki) and render
+  commands for ui and ux (they had rendered nothing although the project has browser tests).
+- **Tests follow the developer's preference, not a ritual.** A first version required every test in
+  the branch's first commit and a red-check that they failed there; that made the order of work the
+  rule. Now behaviour must have meaningful tests, a bug fix records its reproduction, and the reviewer
+  judges test quality — a test that passed before the change can still protect behaviour. verify
+  runs the project's tests, build and lint, not only `suite`. A review report the parser can't read
+  safely (CHANGES with nothing marked BLOCKING, BLOCKING outside a finding item) goes back to its
+  reviewer instead of reading as PASS.
 
 ## Proven, and not yet
 
 Proven by the tests and by a scratch install: every script, the state machine, one job end to end
-through the CLI (queue → tests first → red-check → two builder rounds → merged findings → review →
+through the CLI (queue → builder → verify red on lint → builder → verify green → numbered BLOCKING
+review → merged findings → fix round → review →
 human approval → rebase onto a moved target → PR → merged → cleaned up), the guard against a real hook invocation, the dashboard's
 token/host/origin/path checks, `init-files`, `allowlist`, and Codex detection against
 the installed CLI (0.153.4).

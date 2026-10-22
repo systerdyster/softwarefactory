@@ -67,7 +67,7 @@ class GuardTest(SandboxTest):
         self.assertEqual(self.write("builder", self.jd / "tests.md"), 0)
         self.assertEqual(self.write("builder", self.jd / "build.md"), 0)
         self.assertEqual(self.write("builder", self.jd / "spec.md"), 2)
-        self.assertEqual(self.write("builder", self.jd / "red.json"), 2)
+        self.assertEqual(self.write("builder", self.jd / "baseline.json"), 2)
 
     def test_no_job_edits_the_factory_itself(self):
         self.assertEqual(self.write("builder", self.paths.plugin / "skills/factory/bin/fx/guard.py"), 2)

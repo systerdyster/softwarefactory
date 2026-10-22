@@ -7,7 +7,7 @@ without git. Network state (PR status) is read from pr.json, which `pr status` r
 import json
 from pathlib import Path
 
-from . import gitutil, jobs, queue
+from . import gitutil, jobs, queue, workspace
 from .config import REQUIRED_REVIEWERS
 from .paths import branch_name
 
@@ -55,7 +55,7 @@ def gather(paths, cfg, job_id):
         "target_head": gitutil.rev(cfg.base_ref, paths.root),
         "workspace": ws,
         "baseline": jobs.read_json(jd / "baseline.json"),
-        "red": jobs.read_json(jd / "red.json"),
+        "verify_fingerprint": workspace.fingerprint(cfg),
         "build": jobs.build_sections(jobs.read(jd / "build.md")),
         "rounds": rounds,
         "reworks": jobs.reworks(jd),
@@ -168,12 +168,13 @@ def decide(f):
     if f["backlog"] == "queued" and not f["baseline"]:
         return _out(f, "queued", "take", "waiting in the queue")
     if not f["baseline"] or not f["branch_exists"]:
-        return _out(f, "starting", "start", "switch from the target branch and prove the suite green")
+        return _out(f, "starting", "start", "switch from the target branch and prove its checks green")
     if not f["baseline"].get("green"):
         if f["baseline"].get("target") and f["baseline"].get("target") != f["target_head"]:
-            return _out(f, "starting", "start", "the target branch moved since its suite was red; try again")
+            return _out(f, "starting", "start", "the target branch moved since its checks were red; try again")
         return _out(f, "needs-human", "needs-human",
-                    f"the full suite is red on the target branch ({f['baseline'].get('log')}); fix it first")
+                    f"{f['baseline'].get('failed') or 'the suite'} is red on the target branch "
+                    f"({f['baseline'].get('log')}); fix it first")
 
     ws = f["workspace"]
     if ws.get("on_branch") and ws.get("rebase"):
@@ -191,9 +192,9 @@ def decide(f):
         rebase_round = _latest_rebase(f)
         if rebase_round and rebase_round.get("after") == f["head"] and rebase_round.get("result") in ("red", "resolved") \
                 and not any(n >= rebase_round.get("round", 0) for n in rounds_done):
-            return _builder(f, "building", rebase_round["round"], 1, f"rebase left the suite {rebase_round['result']}")
+            return _builder(f, "building", rebase_round["round"], 1, f"rebase left the checks {rebase_round['result']}")
         if current is None:
-            return _builder(f, "building", start, 1, "first round: tests first, then the change")
+            return _builder(f, "building", start, 1, "first round")
         result = _round(f, current, start)
         if result is not None:
             return result
@@ -205,16 +206,9 @@ def _latest_rebase(f):
     return history[-1] if history else None
 
 
-def _red_gate(f, n, a):
-    """Round 1 of the first cycle proves the builder's tests fail without the change, once."""
-    red = f["red"]
-    if red and red.get("ok"):
-        return None
-    if red and red.get("head") == f["head"]:
-        return _builder(f, "building", n, a + 1, red.get("reason") or "red-check failed")
-    if not f["workspace"].get("on_branch"):
-        return _out(f, "building", "switch", "red-check runs in the workspace")
-    return _out(f, "building", "red-check", "prove the tests fail without the change", round=n, attempt=a)
+def _verified(f, record, heads):
+    """A verify result counts only for the same code and the same checks."""
+    return bool(record) and record.get("head") in heads and record.get("fingerprint") == f["verify_fingerprint"]
 
 
 def _round(f, n, start):
@@ -239,18 +233,16 @@ def _round(f, n, start):
 
     if ws.get("on_branch") and ws.get("dirty"):
         return _builder(f, "building", n, a + 1, "the builder left uncommitted changes")
-    if n == 1 and start == 1:
-        gate = _red_gate(f, n, a)
-        if gate is not None:
-            return gate
     heads = _equivalent_heads(f, f["head"])
     verify = facts["verifies"].get(a)
-    if not verify or verify.get("head") not in heads:
+    if not _verified(f, verify, heads):
         if not ws.get("on_branch"):
             return _out(f, "building", "switch", "verify the round")
-        return _out(f, "building", "verify", "run the full suite on the builder's result", round=n, attempt=a)
+        return _out(f, "building", "verify", "run the project's tests, build and lint on the builder's result",
+                    round=n, attempt=a)
     if not verify.get("green"):
-        return _builder(f, "building", n, a + 1, f"the full suite is red after the builder ({verify.get('log')})")
+        return _builder(f, "building", n, a + 1,
+                        f"{verify.get('failed') or 'the checks'} is red after the builder ({verify.get('log')})")
 
     sched = facts["scheduled"]
     if not sched:
@@ -260,12 +252,19 @@ def _round(f, n, start):
                     "the branch moved after reviewers were scheduled; discard the round's reviews", round=n)
     missing = [r for r in sched["reviewers"] if not (facts["reviews"].get(r) or {}).get("verdict")]
     if missing:
+        rejected = {r: facts["reviews"][r]["problem"] for r in missing if (facts["reviews"].get(r) or {}).get("problem")}
         stuck = [r for r in missing if _stuck(f, f"review-{r}", n)]
         if stuck:
+            why = "; ".join(f"{r}: {rejected[r]}" for r in stuck if r in rejected)
             return _out(f, "needs-human", "needs-human",
-                        f"{', '.join(stuck)} spawned {STUCK_REPEATS} times in round {n} without writing a review")
+                        f"{', '.join(stuck)} spawned {STUCK_REPEATS} times in round {n} without a readable review"
+                        + (f" ({why})" if why else ""))
         if not ws.get("on_branch"):
             return _out(f, "reviewing", "switch", "reviewers read the workspace")
+        if rejected:
+            return _out(f, "reviewing", "spawn-reviewers",
+                        "rewrite rejected review: " + "; ".join(f"{r} — {p}" for r, p in rejected.items()),
+                        round=n, reviewers=missing)
         return _out(f, "reviewing", "spawn-reviewers", "waiting for every scheduled reviewer",
                     round=n, reviewers=missing)
     if ws.get("on_branch") and ws.get("dirty"):
@@ -290,7 +289,8 @@ def _approval(f, human):
 
     pr = f["pr"]
     last = _latest_rebase(f)
-    rebased = last and last.get("after") == f["head"] and last.get("result") == "green"
+    rebased = last and last.get("after") == f["head"] and last.get("result") == "green" \
+        and last.get("fingerprint") == f["verify_fingerprint"]
     if pr and pr.get("state") in ("OPEN", "MANUAL") and pr.get("head") == f["head"]:
         return _out(f, "pr-open", "wait-pr", f"PR open: {pr.get('url')}", url=pr.get("url"))
     if pr and pr.get("state") in ("CLOSED", "ABANDONED"):

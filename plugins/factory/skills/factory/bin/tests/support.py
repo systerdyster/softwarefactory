@@ -29,6 +29,7 @@ max_rounds = 3
 max_diff = 400
 
 [commands]
+lint = test ! -e LINT_ERROR
 suite = python3 check.py
 test = python3 check.py {{target}}
 echo = echo

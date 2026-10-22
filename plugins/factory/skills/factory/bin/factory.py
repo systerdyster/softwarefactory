@@ -13,7 +13,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from fx import actions, board, brief, codex, config, findings, guard, jobs, pr, queue, schedule, setup, testfiles, workspace  # noqa: E402
+from fx import actions, board, brief, codex, config, findings, guard, jobs, pr, queue, schedule, setup, workspace  # noqa: E402
 from fx import state as state_mod  # noqa: E402
 from fx.errors import Fallback, FactoryError  # noqa: E402
 from fx.paths import Paths  # noqa: E402
@@ -46,14 +46,6 @@ def cmd_schedule(a, p):
         raise FactoryError(f"state says {s['next']['action']}, not schedule", state=s)
     starts = [r["start_round"] for r in jobs.reworks(p.job(a.job)) if r["start_round"]]
     return schedule.schedule(p, cfg, a.job, n, max(starts) if starts else 1)
-
-
-def cmd_red_check(a, p):
-    cfg = _cfg(p)
-    s = state_mod.state(p, cfg, a.job)
-    if s["next"]["action"] != "red-check":
-        raise FactoryError(f"state says {s['next']['action']}, not red-check", state=s)
-    return testfiles.red_check(p, cfg, a.job)
 
 
 def cmd_findings(a, p):
@@ -99,9 +91,9 @@ def cmd_ws(a, p):
 
 
 def cmd_suite(a, p):
-    result = workspace.suite(p, _cfg(p))
+    result = workspace.verify(p, _cfg(p))
     if not result["green"]:
-        raise FactoryError("the full suite is red", **result)
+        raise FactoryError(f"{result['failed']} is red", **result)
     return result
 
 
@@ -116,7 +108,7 @@ def cmd_verify(a, p):
         raise FactoryError(f"state says {s['next']['action']}, not verify", state=s)
     result = actions.verify(p, cfg, a.job, n, s["next"]["attempt"])
     if not result["green"]:
-        raise FactoryError("the full suite is red after the builder", **result)
+        raise FactoryError(f"{result['failed']} is red after the builder", **result)
     return result
 
 
@@ -226,7 +218,6 @@ def parser():
     add("state", cmd_state, "where a job stands and the next action").add_argument("job")
     add("board", cmd_board, "rebuild board.json from job folders and git").add_argument("--print", action="store_true")
     add("schedule", cmd_schedule, "write round-N/scheduled.md").add_argument("job")
-    add("red-check", cmd_red_check, "run the builder's first-commit tests and require them to fail").add_argument("job")
     sp = add("findings", cmd_findings, "write a round's merged findings list (default: the current round)")
     sp.add_argument("job")
     sp.add_argument("--round", type=int)
@@ -252,9 +243,9 @@ def parser():
     sp.add_argument("run", choices=["run"])
     sp.add_argument("name")
     sp.add_argument("args", nargs=argparse.REMAINDER)
-    add("suite", cmd_suite, "run the full suite in the workspace")
-    add("start", cmd_start, "switch a taken job's branch from the target and prove the suite green").add_argument("job")
-    add("verify", cmd_verify, "run the full suite on the builder's round").add_argument("job")
+    add("suite", cmd_suite, "run the project's checks ([factory] verify: tests, build, lint) in the workspace")
+    add("start", cmd_start, "switch a taken job's branch from the target and prove its checks green").add_argument("job")
+    add("verify", cmd_verify, "run the project's checks on the builder's round").add_argument("job")
     add("review-reset", cmd_review_reset, "discard the current round's reviews and workspace changes").add_argument("job")
     add("codex-review", cmd_codex_review, "run Codex for the current round; exit 3 means spawn codex-fallback").add_argument("job")
     sp = add("brief", cmd_brief, "the prompt for a fresh agent, derived from state")

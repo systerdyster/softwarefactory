@@ -41,14 +41,15 @@ def start(paths, cfg, job_id):
         workspace.fetch(paths, cfg)
         if gitutil.is_ancestor("HEAD", cfg.base_ref, paths.workspace):
             gitutil.run(["merge", "--ff-only", cfg.base_ref], paths.workspace)
-    suite = workspace.suite(paths, cfg)
+    checks = workspace.verify(paths, cfg)
     base = gitutil.rev(cfg.base_ref, paths.root)
-    baseline = {"target": base, "head": suite["head"], "green": suite["green"], "log": suite["log"], "at": jobs.now()}
+    baseline = {"target": base, "head": checks["head"], "green": checks["green"], "failed": checks["failed"],
+                "log": checks["log"], "at": jobs.now()}
     jobs.write_json(paths.job(job_id) / "baseline.json", baseline)
     result = {"switched": switched, "baseline": baseline}
-    if not suite["green"]:
-        result["tail"] = suite["tail"]
-        raise FactoryError(f"the full suite is red on {cfg.base_ref}; the factory does not work around red tests",
+    if not checks["green"]:
+        result["tail"] = checks["tail"]
+        raise FactoryError(f"{checks['failed']} is red on {cfg.base_ref}; the factory does not work around red checks",
                            **result)
     return result
 
@@ -57,10 +58,11 @@ def verify(paths, cfg, job_id, round_number, attempt):
     ws = _require_on_branch(paths, job_id)
     if ws["dirty"]:
         raise FactoryError("the workspace has uncommitted changes; the builder must commit its work", dirty=ws["dirty"])
-    suite = workspace.suite(paths, cfg)
-    record = {"head": suite["head"], "green": suite["green"], "log": suite["log"], "at": jobs.now()}
+    checks = workspace.verify(paths, cfg)
+    record = {k: checks[k] for k in ("head", "green", "failed", "log", "steps", "fingerprint")}
+    record["at"] = jobs.now()
     jobs.write_json(paths.round_dir(job_id, round_number) / f"verify-{attempt}.json", record)
-    return {**record, "tail": suite["tail"] if not suite["green"] else ""}
+    return {**record, "tail": checks["tail"]}
 
 
 def review_reset(paths, job_id, round_number):
@@ -102,10 +104,11 @@ def _finish_rebase(paths, cfg, job_id, data, entry, resolved):
     if resolved:
         entry["result"] = "resolved"
     else:
-        suite = workspace.suite(paths, cfg)
-        entry["result"] = "green" if suite["green"] else "red"
-        entry["log"] = suite["log"]
-        entry["tail"] = suite["tail"] if not suite["green"] else ""
+        checks = workspace.verify(paths, cfg)
+        entry["result"] = "green" if checks["green"] else "red"
+        entry["log"] = checks["log"]
+        entry["tail"] = checks["tail"]
+        entry["fingerprint"] = checks["fingerprint"]
     entry["finished_at"] = jobs.now()
     _save_rebase(paths, job_id, data)
     return entry
@@ -197,7 +200,7 @@ def approve(paths, cfg, job_id, by):
     current = state_mod.state(paths, cfg, job_id)
     if current["stage"] != "needs-human":
         raise FactoryError(f"{job_id} is {current['stage']}, not needs-human; nothing to approve")
-    if "suite is red on the target" in (current.get("reason") or ""):
+    if "red on the target branch" in (current.get("reason") or ""):
         raise FactoryError("the target branch is red; approving a job does not fix that")
     if not current["head"]:
         raise FactoryError(f"{job_id} has no branch to approve")

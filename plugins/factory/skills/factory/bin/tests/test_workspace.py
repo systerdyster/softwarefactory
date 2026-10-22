@@ -58,6 +58,15 @@ class WorkspaceTest(SandboxTest):
         self.sb.write("BROKEN", "", base=self.sb.ws)
         self.assertFalse(workspace.suite(self.paths, self.cfg)["green"])
 
+    def test_verify_runs_every_check_and_stops_at_the_first_red_one(self):
+        green = workspace.verify(self.paths, self.cfg)
+        self.assertEqual(([s["name"] for s in green["steps"]], green["green"]), (["lint", "suite"], True))
+        self.sb.write("LINT_ERROR", "", base=self.sb.ws)
+        self.sb.write("BROKEN", "", base=self.sb.ws)
+        red = workspace.verify(self.paths, self.cfg)
+        self.assertEqual((red["green"], red["failed"], len(red["steps"])), (False, "lint", 1))
+        self.assertEqual(red["fingerprint"], green["fingerprint"])
+
     def test_detach_with_discard_throws_away_uncommitted_work(self):
         workspace.switch(self.paths, self.cfg, self.job)
         self.sb.write("new.txt", "x", base=self.sb.ws)

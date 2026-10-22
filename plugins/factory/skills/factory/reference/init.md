@@ -8,7 +8,7 @@ metadata:
 # /factory init
 
 **Goal:** a `factory/project.md` a human has reviewed, a permission allowlist so background agents
-never stall on a prompt, and a workspace proven to build and pass the full suite — before any job
+never stall on a prompt, and a workspace proven to pass the project's tests, build and lint — before any job
 starts. `F` is `factory-cli`, which the plugin puts on PATH.
 
 Re-running init on a configured repo is safe: show what exists, and change only what the human asks.
@@ -30,6 +30,11 @@ section of `factory/project.md`:
 - **Commands** — `build`, `lint`, `suite` (the full suite), `test` (a single test file or name, with
   `{target}` where the argument goes), plus any other the agents will need (`install`, `format`,
   `typecheck`). Run each once in the main checkout's terms to confirm it exists; don't guess flags.
+- **What verify runs** — `[factory] verify`: the command names that together run the project's tests,
+  build and lint. Without it the factory runs `lint`, `build` and `suite`, each where defined. Read the
+  scripts: when one command already runs another (a `test` script that lints first, a `build` that
+  type-checks), list only the covering one, so nothing runs twice; when something is in neither
+  (`typecheck`), add it.
 - **Test conventions** — read existing tests, at least three: runner, location, file naming, test
   naming, altitude (unit / component / integration / end-to-end, and what this project prefers for
   what), assertion style and libraries, fixtures and builders in use. Quote a short real example.
@@ -96,9 +101,9 @@ hook, which recognises each factory agent by name, not by the allowlist.
 
 1. `F workspace create` — the worktree at `factory/workspace/`, detached at the target branch, with
    workspace_setup run.
-2. `F suite` — the full suite once in the workspace.
+2. `F suite` — the project's checks (`[factory] verify`) once in the workspace.
 
-**If the suite is red, stop.** Report the failing tests from the log it names. The factory does not
+**If a check is red, stop.** Report the failing check and what failed from the log it names. The factory does not
 start on a red target; fixing it is human work that comes first. If setup fails, report which step and
 its output.
 

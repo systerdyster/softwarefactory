@@ -79,14 +79,9 @@ def builder(paths, cfg, job_id, s, nxt):
         reads.append(rework)
         lines += [f"A human asked for rework: {rework} is the brief for this round, on top of the approved plan.", ""]
     if n == 1 and not (jd / "build.md").exists():
-        lines += ["This is the job's first round: write the plan's tests first and commit them as the first commit "
-                  f"on the branch, list them in {jd / 'tests.md'}, then build. The factory runs those files on that "
-                  "first commit and requires them to fail.", ""]
-    red = jobs.read_json(jd / "red.json")
-    if red and not red.get("ok") and red.get("head") == s["head"]:
-        lines += [f"red-check failed: {red.get('reason')}.", ""]
-        if red.get("log"):
-            reads.append(paths.root / red["log"])
+        lines += [f"This is the job's first round. Map each acceptance criterion to the test that proves it in "
+                  f"{jd / 'tests.md'}; for a bug fix, record there the test that reproduced the bug, how it failed "
+                  "before the fix and that it passes after.", ""]
     prev = paths.round_dir(job_id, n - 1)
     if n > 1 and not rebasing and not starts_cycle and jobs.reviews(prev):
         listed = findings.write(paths, job_id, n - 1)
@@ -98,7 +93,8 @@ def builder(paths, cfg, job_id, s, nxt):
         v = jobs.read_json(f)
         if v and not v.get("green"):
             reads.append(paths.root / v["log"])
-            lines += [f"The full suite was red after attempt {f.stem.split('-')[1]}: see {paths.root / v['log']}.", ""]
+            lines += [f"{v.get('failed') or 'The checks'} was red after attempt {f.stem.split('-')[1]}: "
+                      f"see {paths.root / v['log']}.", ""]
     reads += sorted(rd.glob("ruling-*.md"))
     rebase = (jobs.read_json(jd / "rebase.json") or {}).get("history", [])
     if rebasing:
@@ -126,6 +122,10 @@ def reviewer(paths, cfg, job_id, s, nxt, name):
     sched = jobs.scheduled(rd)
     out = rd / f"review-{name}.md"
     lines = [f"## Reviewer: {name}, round {n}", ""]
+    rejected = (jobs.reviews(rd).get(name) or {}).get("problem")
+    if rejected:
+        lines += [f"Your review file {out} was rejected: {rejected}. Rewrite the whole file to the contract; "
+                  "the factory never reads an unclear report as a pass.", ""]
     reads = [paths.skill / "reference" / "review-contract.md", jd / "spec.md", jd / "plan.md",
              jd / "tests.md" if (jd / "tests.md").exists() else None, jd / "build.md", rd / "scheduled.md",
              paths.project]

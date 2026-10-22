@@ -41,6 +41,9 @@ pr_tool = gh
 max_rounds = 3
 max_diff = 800
 suite_timeout = 1800
+; [commands] names that together run the project's tests, build and lint, without running anything
+; twice (default: lint, build, suite — each where defined)
+verify =
 
 [commands]
 ; run in factory/workspace/; {target} is where a single test's argument goes

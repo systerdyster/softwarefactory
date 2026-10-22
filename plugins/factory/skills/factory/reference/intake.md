@@ -61,10 +61,13 @@ existing tests before naming them; never plan against an imagined API. Each task
 
 - the files it changes or creates,
 - the change,
-- **the test that proves it** — file, test name, and what it asserts — following the test conventions
-  in project.md. The builder writes these first, and the factory checks they fail before the change.
+- **the test that proves it**, where the behaviour changes — file, test name, and what it asserts —
+  following the project's test rules and project.md's conventions. Logic and helpers above all; no
+  tests for getters, framework behaviour or implementation details. An existing test that already
+  protects the behaviour can be named instead.
+- **For a bug**, the test that reproduces it: what it asserts, and the wrong result it shows today.
 
-Flag every task that can't be cleanly test-driven, with the reason. Those are test exemptions;
+Flag every behaviour change that can't be cleanly tested, with the reason. Those are test exemptions;
 approving the plan approves them.
 
 **Specialist reviewers.** Every job gets the main review. Decide with the developer which specialists

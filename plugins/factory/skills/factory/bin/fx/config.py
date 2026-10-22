@@ -102,6 +102,19 @@ class Config:
         return list(self._p.options("commands"))
 
     @property
+    def verify_commands(self):
+        """The [commands] names that together run the project's tests, build and lint. Set
+        [factory] verify when one command already covers another; the default runs lint, build and
+        suite, each where it is defined."""
+        names = self.getlist("factory", "verify") or [n for n in ("lint", "build", "suite") if self.command(n)]
+        missing = [n for n in names if not self.command(n)]
+        if missing:
+            raise FactoryError(f"project.md: [factory] verify names commands [commands] does not define: {missing}")
+        if not names:
+            raise FactoryError("project.md defines none of lint, build and suite, and no [factory] verify")
+        return names
+
+    @property
     def setup_commands(self):
         return self.getlines("workspace", "setup")
 

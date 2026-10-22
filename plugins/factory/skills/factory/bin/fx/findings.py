@@ -1,6 +1,6 @@
 """`findings`: one list of what a round's reviews ask for, so the builder answers each issue once.
 
-Every bullet under a review's "## Findings" is a finding: BLOCKING ones must be resolved, everything
+Every bullet or numbered item under a review's "## Findings" is a finding: BLOCKING ones must be resolved, everything
 else is a note. Findings from different reviewers that name the same `path:line` are one item, with
 each reviewer's words kept side by side, so a duplicate is fixed once and a contradiction is visible.
 The list is derived from the review files and rewritten whenever it is asked for."""
@@ -12,23 +12,9 @@ from . import jobs
 _LOCATION = re.compile(r"`([^`\s]+\.[A-Za-z0-9]+:\d[\d,\-–]*)`")
 
 
-def _bullets(text):
-    items, current = [], None
-    for line in jobs.section(text, "Findings").splitlines():
-        if re.match(r"^[-*]\s+", line):
-            current = re.sub(r"^[-*]\s+", "", line).strip()
-            items.append(current)
-        elif current is not None and line.strip() and line[:1].isspace():
-            items[-1] = f"{items[-1]} {line.strip()}"
-    return items
-
-
 def parse(text):
-    result = []
-    for item in _bullets(text):
-        blocking = bool(re.match(r"^(?:🔴\s*)?\**BLOCKING\b", item))
-        result.append({"blocking": blocking, "text": item, "locations": set(_LOCATION.findall(item))})
-    return result
+    return [{"blocking": jobs.is_blocking(item), "text": item, "locations": set(_LOCATION.findall(item))}
+            for item in jobs.finding_items(text)]
 
 
 def merge(by_reviewer):

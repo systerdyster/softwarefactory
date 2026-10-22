@@ -53,23 +53,31 @@ class FlowTest(SandboxTest):
         self.cli("start", self.job)
 
         self.expect("spawn-builder")
-        self.assertIn("write the plan's tests first", self.cli("brief", self.job, "builder"))
-        self.sb.write("tests/test_answer.py", TEST, base=self.sb.ws)
-        self.sb.commit("Add failing tests for the answer", cwd=self.sb.ws)
+        self.assertIn("Map each acceptance criterion", self.cli("brief", self.job, "builder"))
         self.sb.write("src/app.py", "def answer():\n    return 43\n", base=self.sb.ws)
-        self.sb.commit("Answer", cwd=self.sb.ws)
-        self.sb.write("tests.md", "| File |\n|---|\n| `tests/test_answer.py` |\n", base=self.jd)
+        self.sb.write("tests/test_answer.py", TEST, base=self.sb.ws)
+        self.sb.write("LINT_ERROR", "", base=self.sb.ws)
+        self.sb.commit("Answer, with its test", cwd=self.sb.ws)
+        self.sb.write("tests.md", "## Coverage\n- AC1 the answer is 42 — `tests/test_answer.py`\n", base=self.jd)
         self.log("## Round 1")
 
-        self.expect("red-check")
-        self.assertTrue(self.cli("red-check", self.job)["ok"])
         self.expect("verify")
-        self.cli("verify", self.job)
+        self.cli("verify", self.job, expect=1)
+        nxt = self.expect("spawn-builder")
+        self.assertEqual(nxt["attempt"], 2)
+        self.assertIn("lint was red", self.cli("brief", self.job, "builder"))
+        (self.sb.ws / "LINT_ERROR").unlink()
+        self.sb.commit("Fix lint", cwd=self.sb.ws)
+        self.log("## Round 1 (attempt 2)")
+        self.expect("verify")
+        self.assertEqual([s["name"] for s in self.cli("verify", self.job)["steps"]], ["lint", "suite"])
         self.expect("schedule")
         self.assertEqual(self.cli("schedule", self.job)["reviewers"], ["code"])
         self.expect("spawn-reviewers")
-        self.review(1, "code", "- 🔴 BLOCKING `src/app.py:2` — returns 43; AC1 asks for 42.\n"
-                               "- 🟡 NOTE `src/app.py:1` — a docstring would not hurt.")
+        self.cli("brief", self.job, "reviewer", "--reviewer", "code")
+        self.sb.write("round-1/review-code.md", "VERDICT: CHANGES\n\n## Findings\n"
+                      "1. BLOCKING `src/app.py:2` — returns 43; AC1 asks for 42.\n"
+                      "2. NOTE `src/app.py:1` — a docstring would not hurt.\n", base=self.jd)
 
         nxt = self.expect("spawn-builder")
         self.assertEqual(nxt["round"], 2)
@@ -111,18 +119,20 @@ class FlowTest(SandboxTest):
         self.assertIsNone(self.cli("workspace", "check")["branch"])
         self.assertEqual(self.cli("board")["jobs"], 1)
 
-    def test_tests_that_pass_before_the_change_send_the_builder_back(self):
+    def test_an_unreadable_review_goes_back_to_its_reviewer(self):
         self.cli("next")
         self.cli("start", self.job)
-        self.sb.write("tests/test_answer.py", "assert True\n", base=self.sb.ws)
-        self.sb.commit("Tests", cwd=self.sb.ws)
-        self.sb.write("tests.md", "| File |\n|---|\n| `tests/test_answer.py` |\n", base=self.jd)
+        self.sb.write("src/app.py", "def answer():\n    return 42\n", base=self.sb.ws)
+        self.sb.commit("Answer", cwd=self.sb.ws)
         self.log("## Round 1")
-        self.expect("red-check")
-        self.assertFalse(self.cli("red-check", self.job)["ok"])
-        nxt = self.expect("spawn-builder")
-        self.assertEqual(nxt["attempt"], 2)
-        self.assertIn("prove nothing", self.cli("brief", self.job, "builder"))
+        self.cli("verify", self.job)
+        self.cli("schedule", self.job)
+        self.cli("brief", self.job, "reviewer", "--reviewer", "code")
+        self.sb.write("round-1/review-code.md", "VERDICT: CHANGES\n\n## Findings\n### The total can drift (should fix)\n",
+                      base=self.jd)
+        s = self.cli("state", self.job)
+        self.assertEqual((s["next"]["action"], s["next"]["reviewers"]), ("spawn-reviewers", ["code"]))
+        self.assertIn("rejected", self.cli("brief", self.job, "reviewer", "--reviewer", "code"))
 
     def test_every_brief_lists_the_projects_written_rules(self):
         self.sb.push_target_change("Wiki/Components.md", "# Components\n\nA modifier only reassigns private variables.\n")

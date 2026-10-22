@@ -24,6 +24,18 @@ class ConfigTest(unittest.TestCase):
         cfg = parse("[reviewers]\nenabled = codex, ui")
         self.assertEqual(cfg.enabled_reviewers, ["code", "security", "performance", "stability", "ui", "codex"])
 
+    def test_verify_defaults_to_lint_build_and_suite_where_defined(self):
+        cfg = parse("[commands]\nsuite = make test\nlint = make lint\ntest = make test {target}")
+        self.assertEqual(cfg.verify_commands, ["lint", "suite"])
+
+    def test_verify_can_name_one_command_that_covers_the_rest(self):
+        cfg = parse("[factory]\nverify = check\n\n[commands]\ncheck = pnpm check\nsuite = pnpm test\nlint = pnpm lint")
+        self.assertEqual(cfg.verify_commands, ["check"])
+
+    def test_verify_naming_an_undefined_command_is_refused(self):
+        with self.assertRaises(FactoryError):
+            parse("[factory]\nverify = suite, lint\n\n[commands]\nsuite = make test").verify_commands
+
     def test_docs_and_reviewer_commands(self):
         cfg = parse("[rules]\ndocs = Wiki/*.md, docs/adr/**\n\n[reviewers]\ncommands = test-components")
         self.assertEqual((cfg.docs, cfg.reviewer_commands), (["Wiki/*.md", "docs/adr/**"], ["test-components"]))

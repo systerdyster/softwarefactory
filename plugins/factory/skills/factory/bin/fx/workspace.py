@@ -3,6 +3,7 @@
 It is detached at the target branch between jobs and on factory/<id> during one. It only changes
 branch from a clean state, and reruns workspace_setup when a listed lockfile differs."""
 
+import hashlib
 import os
 import shlex
 import subprocess
@@ -162,3 +163,26 @@ def suite(paths, cfg):
     result["green"] = result["exit_code"] == 0
     result["head"] = gitutil.rev("HEAD", paths.workspace)
     return result
+
+
+def fingerprint(cfg):
+    """Identifies what a verify ran: the command names and their exact command lines. A verify result
+    counts only for the same code and the same fingerprint."""
+    text = "\n".join(f"{name}={cfg.command(name)}" for name in cfg.verify_commands)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
+def verify(paths, cfg):
+    """The project's own checks — [factory] verify, by default lint, build and suite where defined — in
+    order, stopping at the first red one."""
+    _require(paths)
+    steps, result = [], None
+    for name in cfg.verify_commands:
+        result = _shell(cfg.command(name), paths, cfg.suite_timeout, f"verify-{name}")
+        steps.append({"name": name, "exit_code": result["exit_code"], "log": result["log"]})
+        if result["exit_code"] != 0:
+            break
+    green = all(s["exit_code"] == 0 for s in steps)
+    return {"green": green, "head": gitutil.rev("HEAD", paths.workspace), "steps": steps,
+            "failed": None if green else steps[-1]["name"], "log": result["log"],
+            "tail": "" if green else result["tail"], "fingerprint": fingerprint(cfg)}

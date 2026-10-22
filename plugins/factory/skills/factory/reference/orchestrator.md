@@ -42,16 +42,15 @@ Repeat:
 
 | next.action | Do |
 |---|---|
-| `start` | `F start <id>`. It switches the workspace to the job's new branch from the target, reruns setup if a lockfile differs, and runs the full suite. **Red: the target is broken.** Report the failing tests from the log, `F stop`, and end the run — fixing it is human work. |
+| `start` | `F start <id>`. It switches the workspace to the job's new branch from the target, reruns setup if a lockfile differs, and runs the project's checks (`[factory] verify`: tests, build, lint). **Red: the target is broken.** Report the failing check from the log, `F stop`, and end the run — fixing it is human work. |
 | `switch` | `F workspace switch <id>` (refuses unless the workspace is clean). |
 | `spawn-builder` | Spawn `factory-builder` with `F brief <id> builder` as its prompt, verbatim. |
-| `red-check` | `F red-check <id>` — runs the builder's tests on the branch's first commit and requires them to fail. A failed check is not an error to handle: state sends the builder back with the reason. |
-| `verify` | `F verify <id>` — the full suite on the builder's result. Red is not an error to handle: state sends the builder back. |
+| `verify` | `F verify <id>` — the project's tests, build and lint on the builder's result, in project.md's `[factory] verify` order, stopping at the first red one. Red is not an error to handle: state sends the builder back. A result is reused only for the same head and the same commands. |
 | `schedule` | `F schedule <id>` — writes round-N/scheduled.md. |
 | `spawn-reviewers` | See **Reviewers**. |
 | `review-reset` | `F review-reset <id>` — discards the round's reviews (and any workspace change a reviewer made), so the round reruns. |
 | `judge-objection` | See **Objections**. |
-| `rebase` | `F rebase <id>` — fetch, rebase on the target, full suite. Conflicts leave the rebase in progress; state sends the builder to resolve them. |
+| `rebase` | `F rebase <id>` — fetch, rebase on the target, the project's checks. Conflicts leave the rebase in progress; state sends the builder to resolve them. |
 | `rebase-continue` | `F rebase <id> --continue`. |
 | `pr` | First write the description: `F pr body <id>` prints the facts (summary, verdicts, test exemptions, the main review's least-sure list, who approved). Write `factory/jobs/<id>/pr-body.md` from them in project.md's `[handoff] language`, following `pr_template` when it is set (fill its sections; leave none empty without saying why). Keep every fact; add none. Then `F pr open <id>` — pushes the branch and opens or updates the PR with that body, the title, draft state, reviewers and links from `[handoff]` (enables auto-merge in `auto-merge` mode). |
 | `merge-local` | `F merge <id>`. |
@@ -79,7 +78,8 @@ finished:
 
 **A round is done only when every scheduled reviewer's file exists** — never start the builder
 mid-round. Then `F workspace check`: if the workspace changed, state says `review-reset`. The factory
-reads each review's verdict from its findings — CHANGES only for a BLOCKING one — and the builder's
+reads each review's verdict from its findings — CHANGES only for a BLOCKING one; a report it can't
+read safely goes back to its reviewer, and state lists that reviewer again with the reason — and the builder's
 next brief carries one merged list (`round-N/findings.md`), not the individual reviews.
 
 ### Objections
@@ -113,7 +113,7 @@ The inbox refuses a second identical command for a job while the first is still 
 ## Commands, as the orchestrator runs them
 
 - **approve `<id>`** — for a needs-human job: `F approve <id> --by "<who>"`. State then takes it
-  through rebase, the full suite and `merge_mode`.
+  through rebase, the project's checks and `merge_mode`.
 - **rework `<id>` `<note>`** — for a needs-human or open-PR job: `F rework <id> --note "<note>" --by
   "<who>"`. It records the note (and the PR's comments), starts a fresh round budget, and state runs a
   builder round and review again, and the job comes back for approval; the same PR is updated. If the job isn't the active
@@ -139,5 +139,5 @@ criteria. No code, no branch names, no review details. No other comments, ever.
 ## Report
 
 At the end of a run, and whenever a job reaches needs-human or opens a PR: per job, one line — id,
-title, stage, and the PR link or the needs-human reason. List failed red-checks and codex fallbacks.
+title, stage, and the PR link or the needs-human reason. List rejected review reports and codex fallbacks.
 Keep it short; the board has the detail.
