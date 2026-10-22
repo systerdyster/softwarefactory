@@ -37,7 +37,7 @@ class FlowTest(SandboxTest):
     def brief(self, *args):
         """A brief, and the agent it starts doing its work at once: attached and stopped through the hooks."""
         text = self.cli("brief", self.job, *args)
-        agent_type = "factory:factory-builder" if args[0] == "builder" else f"factory:factory-review-{args[-1]}"
+        agent_type = f"factory:factory-{args[0]}" if args[0] in ("builder", "tidy") else f"factory:factory-review-{args[-1]}"
         self.agents = getattr(self, "agents", 0) + 1
         agent_id = f"agent-{self.agents}"
         self.assertEqual(agent_starts(self.paths.root, text, agent_id, agent_type), 0)
@@ -53,6 +53,17 @@ class FlowTest(SandboxTest):
         old = (self.jd / "build.md").read_text() if (self.jd / "build.md").exists() else "# Build log\n"
         self.sb.write("build.md", old + f"\n{section}\nStatus: done\n", base=self.jd)
 
+    def tidy(self, files=None, removed=""):
+        """The tidy pass: its brief, its commit when it changed something, and tidy.md."""
+        self.expect("spawn-tidy")
+        text = self.brief("tidy")
+        for rel, content in (files or {}).items():
+            self.sb.write(rel, content, base=self.sb.ws)
+        if files:
+            self.sb.commit("Tidy", cwd=self.sb.ws)
+        self.sb.write("round-1/tidy.md", f"# Tidy\n\nStatus: done\n\n## Removed\n{removed}\n", base=self.jd)
+        return text
+
     def review(self, n, name, findings=""):
         self.assertIn(f"review-{name}.md", self.brief("reviewer", "--reviewer", name))
         self.sb.write(f"round-{n}/review-{name}.md", f"VERDICT: PASS\n\n## Findings\n{findings}\n", base=self.jd)
@@ -64,7 +75,7 @@ class FlowTest(SandboxTest):
 
         self.expect("spawn-builder")
         self.assertIn("Map each acceptance criterion", self.brief("builder"))
-        self.sb.write("src/app.py", "def answer():\n    return 43\n", base=self.sb.ws)
+        self.sb.write("src/app.py", "def answer():\n    # return the answer\n    return 43\n", base=self.sb.ws)
         self.sb.write("tests/test_answer.py", TEST, base=self.sb.ws)
         self.sb.write("LINT_ERROR", "", base=self.sb.ws)
         self.sb.commit("Answer, with its test", cwd=self.sb.ws)
@@ -81,10 +92,14 @@ class FlowTest(SandboxTest):
         self.log("## Round 1 (attempt 2)")
         self.expect("verify")
         self.assertEqual([s["name"] for s in self.cli("verify", self.job)["steps"]], ["lint", "suite"])
+        self.assertIn("src/app.py", self.tidy({"src/app.py": "def answer():\n    return 43\n"},
+                                              "- `src/app.py:2` a comment that repeats the code\n"))
+        self.assertEqual(self.expect("verify")["attempt"], "tidy")
+        self.cli("verify", self.job)
         self.expect("schedule")
         self.assertEqual(self.cli("schedule", self.job)["reviewers"], ["code"])
         self.expect("spawn-reviewers")
-        self.brief("reviewer", "--reviewer", "code")
+        self.assertIn("tidy.md", self.brief("reviewer", "--reviewer", "code"))
         self.sb.write("round-1/review-code.md", "VERDICT: CHANGES\n\n## Findings\n"
                       "1. BLOCKING `src/app.py:2` — returns 43; AC1 asks for 42.\n"
                       "2. NOTE `src/app.py:1` — a docstring would not hurt.\n", base=self.jd)
@@ -114,7 +129,9 @@ class FlowTest(SandboxTest):
         self.expect("rebase")
         self.assertEqual(self.cli("rebase", self.job)["result"], "green")
         self.expect("pr")
-        self.assertIn("Approved by Fredrik", self.cli("pr", "body", self.job)["body"])
+        body = self.cli("pr", "body", self.job)["body"]
+        self.assertIn("Approved by Fredrik", body)
+        self.assertIn("a comment that repeats the code", body)
         self.assertEqual(self.cli("pr", "open", self.job)["state"], "MANUAL")
         s = self.cli("state", self.job)
         self.assertEqual((s["stage"], s["waiting"]), ("pr-open", True))
@@ -136,6 +153,7 @@ class FlowTest(SandboxTest):
         self.sb.commit("Answer", cwd=self.sb.ws)
         self.log("## Round 1")
         self.cli("verify", self.job)
+        self.tidy()
         self.cli("schedule", self.job)
         self.brief("reviewer", "--reviewer", "code")
         self.sb.write("round-1/review-code.md", "VERDICT: CHANGES\n\n## Findings\n### The total can drift (should fix)\n",
@@ -143,6 +161,34 @@ class FlowTest(SandboxTest):
         s = self.cli("state", self.job)
         self.assertEqual((s["next"]["action"], s["next"]["reviewers"]), ("spawn-reviewers", ["code"]))
         self.assertIn("rejected", self.brief("reviewer", "--reviewer", "code"))
+
+    def test_a_tidy_pass_that_turns_the_checks_red_is_discarded(self):
+        self.cli("next", "--lease", self.lease)
+        self.cli("start", self.job)
+        self.sb.write("src/app.py", "def answer():\n    return 42\n", base=self.sb.ws)
+        built = self.sb.commit("Answer", cwd=self.sb.ws)
+        self.log("## Round 1")
+        self.cli("verify", self.job)
+        self.tidy({"BROKEN": ""}, "- `check.py` looked unused\n")
+        self.cli("verify", self.job, expect=1)
+        self.expect("tidy-discard")
+        self.assertEqual(self.cli("tidy-discard", self.job)["head"], built)
+        self.assertEqual(git(self.sb.ws, "rev-parse", "HEAD"), built)
+        self.assertFalse((self.sb.ws / "BROKEN").exists())
+        self.assertIn("Discarded: suite is red after the tidy pass", (self.jd / "round-1" / "tidy.md").read_text())
+        self.expect("schedule")
+        self.cli("schedule", self.job)
+        self.assertNotIn("tidy.md", self.brief("reviewer", "--reviewer", "code"))
+
+    def test_a_tidy_pass_that_changes_nothing_goes_straight_to_review(self):
+        self.cli("next", "--lease", self.lease)
+        self.cli("start", self.job)
+        self.sb.write("src/app.py", "def answer():\n    return 42\n", base=self.sb.ws)
+        self.sb.commit("Answer", cwd=self.sb.ws)
+        self.log("## Round 1")
+        self.cli("verify", self.job)
+        self.tidy()
+        self.expect("schedule")
 
     def test_every_brief_lists_the_projects_written_rules(self):
         self.sb.push_target_change("Wiki/Components.md", "# Components\n\nA modifier only reassigns private variables.\n")

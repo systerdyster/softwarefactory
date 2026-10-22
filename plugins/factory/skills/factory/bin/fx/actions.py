@@ -64,6 +64,19 @@ def verify(paths, cfg, job_id, round_number, attempt):
     return {**record, "tail": checks["tail"]}
 
 
+def tidy_discard(paths, job_id, round_number, before, why):
+    """Puts the branch back on the builder's green result and records why in tidy.md."""
+    _require_workspace(paths, job_id)
+    cwd = paths.workspace(job_id)
+    dropped = gitutil.rev("HEAD", cwd)
+    gitutil.run(["reset", "--hard", before], cwd)
+    gitutil.run(["clean", "-fd"], cwd)
+    path = paths.round_dir(job_id, round_number) / "tidy.md"
+    text = jobs.read(path) or "# Tidy\n"
+    jobs.write_atomic(path, text.rstrip() + f"\n\nDiscarded: {why}\nDropped-Head: {dropped}\n")
+    return {"round": round_number, "head": before, "dropped": dropped, "why": why}
+
+
 def review_reset(paths, job_id, round_number):
     rd = paths.round_dir(job_id, round_number)
     stamp = jobs.now().replace(":", "")

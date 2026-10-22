@@ -15,12 +15,18 @@ only. It was first built from a blueprint prompt; this repo is now the source.
    red sends the builder back within the round. A result counts only for the same head and commands.
    The builder runs targeted checks while it works; this is the one full run. A rebase that leaves
    HEAD unchanged reuses a green result; one that moves the code is checked again.
-3. **Review**: the main reviewer (`code`) always; a specialist (security, performance, stability, ui,
+3. **Tidy** — once per job, after round 1's first green verify: a fresh agent makes the change smaller
+   and simpler without changing behaviour — needless comments, tests that add nothing (never one
+   tests.md maps to a criterion or a reproduction), dead code, needless complexity in the files the
+   change touches, and whatever the change left without a user, wherever it lives. Then verify again;
+   red, unfinished or uncommitted resets the branch to the builder's result. round-1/tidy.md lists each
+   removal for the reviewer and the PR.
+4. **Review**: the main reviewer (`code`) always; a specialist (security, performance, stability, ui,
    ux, platform, codex) when plan.md's `Specialists:` line names it or its `[paths]` pattern matches.
    The factory reads each verdict from the findings — CHANGES only for a BLOCKING one — and merges all
    findings into one `findings.md`, same `path:line` = one item.
-4. **Fix rounds** rerun only the reviewers that blocked, on the diff since their last look.
-5. **Needs-human, ready** — every job stops for the developer's approval, with the diff size against
+5. **Fix rounds** rerun only the reviewers that blocked, on the diff since their last look.
+6. **Needs-human, ready** — every job stops for the developer's approval, with the diff size against
    `max_diff` and the main review's least-sure list. Then rebase, the project's checks, PR.
 
 spec.md's `## Decided` is settled for every agent; project.md's `[rules] docs` (a wiki's
@@ -92,7 +98,7 @@ plugins/factory/
     bin/factory.py, hook.py, fx/          every mechanical step; prints JSON, exits non-zero on failure
     bin/tests/                            unittest, real temp git repos with a bare origin
     server.py, dashboard.html             dashboard + inbox, 127.0.0.1 with a token
-  agents/factory-*.md                     builder, review-code (main), review-{security,performance,
+  agents/factory-*.md                     builder, tidy, review-code (main), review-{security,performance,
                                           stability,platform,ux,ui}, codex-fallback
 ```
 
@@ -151,12 +157,20 @@ the repo root (or `-s tests` from `skills/factory/bin`).
   runs the project's tests, build and lint, not only `suite`. A review report the parser can't read
   safely (CHANGES with nothing marked BLOCKING, BLOCKING outside a finding item) goes back to its
   reviewer instead of reading as PASS.
+- **A tidy agent, not a stricter reviewer.** The main reviewer already flagged dead code, padding
+  tests and complexity, but only as NOTEs: they were fixed only if some other finding forced a fix
+  round, so a job that passed round 1 carried its clutter into the PR. Making clutter BLOCKING would
+  have cost a full builder and review round per comment. The tidy pass runs before review, so the
+  reviewer sees the final code and no extra review round is spent; it runs once per job, since fix
+  rounds are small. Its scope is the whole touched files (the PR may carry some cleanup of older code,
+  listed in tidy.md) plus anything the change orphaned. Anything short of clean and green is
+  discarded rather than repaired: the builder never fixes the tidy pass's mistakes.
 
 ## Proven, and not yet
 
 Proven by the tests and by a scratch install: every script, the state machine, one job end to end
-through the CLI (queue → builder → verify red on lint → builder → verify green → numbered BLOCKING
-review → merged findings → fix round → review →
+through the CLI (queue → builder → verify red on lint → builder → verify green → tidy → verify green →
+numbered BLOCKING review → merged findings → fix round → review →
 human approval → rebase onto a moved target → PR → merged → cleaned up), the guard against a real hook invocation, the dashboard's
 token/host/origin/path checks, `init-files`, `allowlist`, and Codex detection against
 the installed CLI (0.153.4).

@@ -3,7 +3,8 @@ calling agent to its role. Agent frontmatter can grant or withhold a whole tool,
 Bash command or a single path, so this enforces the per-role limits mechanically. Exit 0 allows the
 call; exit 2 blocks it with the reason on stderr, which the agent sees.
 
-Roles: builder, and review-<name> for reviewers (review-codex for the codex fallback). Reviewers may
+Roles: builder, tidy (the builder's limits, writing tidy.md instead of build.md and tests.md), and
+review-<name> for reviewers (review-codex for the codex fallback). Reviewers may
 run the project commands project.md lists under [reviewers] commands, e.g. the browser tests that
 render components; nothing else that executes.
 
@@ -30,6 +31,7 @@ BANNED_FLAGS = {"--output", "--no-verify", "--amend", "-w", "--ext-diff", "--tex
 METACHARS = re.compile(r"[;&|`<>\n]|\$\(")
 FACTORY_CLI = "factory-cli"
 READ_FACTORY = {"state", "board"}
+WRITERS = ("builder", "tidy")
 
 
 class Blocked(Exception):
@@ -60,7 +62,7 @@ def job_of(paths, target):
 def _usage(role, review_commands):
     lines = ["Allowed shell commands for this role (one plain command per call, no ; && | > or $()):",
              "  git -C factory/workspaces/<job> " + "|".join(sorted(READ_GIT)) + " ..."]
-    if role == "builder":
+    if role in WRITERS:
         lines.append("  git -C factory/workspaces/<job> " + "|".join(sorted(WRITE_GIT)) + " ...")
         lines.append(f"  {FACTORY_CLI} ws run <job> <command-name> [args]   (names are [commands] in project.md)")
     elif review_commands:
@@ -86,7 +88,7 @@ def check_bash(paths, role, command, review_commands=()):
         if sub in READ_FACTORY:
             return None, False
         if sub == "ws" and len(argv) >= 5 and argv[2] == "run":
-            if role == "builder" or argv[4] in review_commands:
+            if role in WRITERS or argv[4] in review_commands:
                 return argv[3], True
         raise Blocked(f"`{' '.join(argv[:5])}` is not available to the {role}.\n" + _usage(role, review_commands))
     if argv[0] in ("ls", "pwd", "wc"):
@@ -105,7 +107,7 @@ def _check_git(paths, role, argv, review_commands):
         raise Blocked(f"git flag {banned[0]} is not allowed")
     if sub in READ_GIT:
         return job, False
-    if sub in WRITE_GIT and role == "builder":
+    if sub in WRITE_GIT and role in WRITERS:
         return job, True
     raise Blocked(f"`git {sub}` is not available to the {role}. Only the orchestrator switches, rebases or pushes.\n"
                   + _usage(role, review_commands))
@@ -130,6 +132,10 @@ def check_write(paths, role, raw_path):
     ws = paths.workspace(job).resolve()
     if _inside(target, ws) and not _inside(target, ws / ".git"):
         return job
+    if role == "tidy":
+        if target == jd / "round-1" / "tidy.md":
+            return job
+        raise Blocked("the tidy pass may write only inside factory/workspaces/<job>/ and round-1/tidy.md in its job folder")
     if target in (jd / "build.md", jd / "tests.md"):
         return job
     raise Blocked(f"the {role} may write only inside factory/workspaces/<job>/ and build.md and tests.md in its job folder")

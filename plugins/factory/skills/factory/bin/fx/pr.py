@@ -60,6 +60,11 @@ def body(paths, cfg, job_id):
                       "(FALLBACK: claude).**"]
     exemptions = _section(tests, "Exemptions")
     lines += ["", "### Test exemptions", "", exemptions or "None."]
+    tidy = jobs.read(paths.round_dir(job_id, 1) / "tidy.md")
+    if tidy:
+        discarded = jobs.field(tidy, "Discarded")
+        done = "\n".join(s for s in (_section(tidy, "Removed"), _section(tidy, "Simplified")) if s)
+        lines += ["", "### Tidy pass", "", f"Discarded: {discarded}" if discarded else (done or "Nothing changed.")]
     lines += ["", "### Least sure is correct", "", least or "Nothing named."]
     if human:
         lines += ["", f"Approved by {jobs.field(human, 'Approved-By') or 'a human'} at "

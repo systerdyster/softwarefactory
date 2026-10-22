@@ -17,6 +17,7 @@ import sys
 PREFIX = "factory:"
 ROLES = {
     "factory-builder": "builder",
+    "factory-tidy": "tidy",
     "factory-codex-fallback": "review-codex",
 }
 REVIEWER_PREFIX = "factory-review-"

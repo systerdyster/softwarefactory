@@ -62,7 +62,9 @@ Repeat:
 | `open-workspace` | `F workspace open <id>` — the job's worktree is missing (removed by hand); it is created again on the job's branch. |
 | `spawn-builder` | `F brief <id> builder`, then spawn `factory-builder` in the background with it as its prompt, verbatim. The brief reserves the run; the plugin's hook attaches the agent to it when the Agent call returns. |
 | `wait-agent` | Nothing: an agent of this job is reserved or running (`next.run`/`next.runs`). Ask again when it returns. |
-| `verify` | `F verify <id>` — the project's tests, build and lint on the builder's result, in project.md's `[factory] verify` order, stopping at the first red one. Red is not an error to handle: state sends the builder back. A result is reused only for the same head and the same commands. |
+| `verify` | `F verify <id>` — the project's tests, build and lint on the builder's result (or the tidy pass's, `next.attempt` = `tidy`), in project.md's `[factory] verify` order, stopping at the first red one. Red is not an error to handle: state sends the builder back, or discards the tidy pass. A result is reused only for the same head and the same commands. |
+| `spawn-tidy` | Once per job, after round 1's first green verify: `F brief <id> tidy`, then spawn `factory-tidy` in the background with it as its prompt, verbatim. It makes the change smaller and simpler without changing behaviour and writes round-1/tidy.md. |
+| `tidy-discard` | `F tidy-discard <id>` — the tidy pass didn't finish cleanly or turned the checks red: the branch goes back to the builder's green result, and the reason is recorded in tidy.md. Review then runs on the builder's result. |
 | `schedule` | `F schedule <id>` — writes round-N/scheduled.md. |
 | `spawn-reviewers` | See **Reviewers**. |
 | `review-reset` | `F review-reset <id>` — discards the round's reviews (and any workspace change a reviewer made), so the round reruns. |

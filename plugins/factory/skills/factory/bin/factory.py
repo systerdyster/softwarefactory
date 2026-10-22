@@ -106,10 +106,20 @@ def cmd_verify(a, p):
     s, n = _state_round(p, cfg, a.job)
     if s["next"]["action"] != "verify":
         raise FactoryError(f"state says {s['next']['action']}, not verify", state=s)
-    result = actions.verify(p, cfg, a.job, n, s["next"]["attempt"])
+    attempt = s["next"]["attempt"]
+    result = actions.verify(p, cfg, a.job, n, attempt)
     if not result["green"]:
-        raise FactoryError(f"{result['failed']} is red after the builder", **result)
+        who = "the tidy pass" if attempt == "tidy" else "the builder"
+        raise FactoryError(f"{result['failed']} is red after {who}", **result)
     return result
+
+
+def cmd_tidy_discard(a, p):
+    cfg = _cfg(p)
+    s, n = _state_round(p, cfg, a.job)
+    if s["next"]["action"] != "tidy-discard":
+        raise FactoryError(f"state says {s['next']['action']}, not tidy-discard", state=s)
+    return actions.tidy_discard(p, a.job, n, s["next"]["before"], s["reason"])
 
 
 def cmd_review_reset(a, p):
@@ -269,7 +279,8 @@ def parser():
     sp.add_argument("args", nargs=argparse.REMAINDER)
     add("suite", cmd_suite, "prove the project's checks ([factory] verify) green on the target, in a throwaway worktree")
     add("start", cmd_start, "open a taken job's worktree on its branch and prove its checks green").add_argument("job")
-    add("verify", cmd_verify, "run the project's checks on the builder's round").add_argument("job")
+    add("verify", cmd_verify, "run the project's checks on the builder's round or the tidy pass").add_argument("job")
+    add("tidy-discard", cmd_tidy_discard, "put the branch back on the builder's green result").add_argument("job")
     add("review-reset", cmd_review_reset, "discard the current round's reviews and workspace changes").add_argument("job")
     add("codex-review", cmd_codex_review, "run Codex for the current round; exit 3 means spawn codex-fallback").add_argument("job")
     sp = add("brief", cmd_brief, "the prompt for a fresh agent, derived from state")

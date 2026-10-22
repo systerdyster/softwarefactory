@@ -24,8 +24,20 @@ def _round_facts(paths, job_id, n):
     for f in d.glob("ruling-*.md"):
         rulings[int(f.stem.rsplit("-", 1)[1])] = jobs.ruling(f.read_text(encoding="utf-8"))
     for f in d.glob("verify-*.json"):
-        verifies[int(f.stem.rsplit("-", 1)[1])] = jobs.read_json(f)
+        key = f.stem.split("-", 1)[1]
+        verifies[int(key) if key.isdigit() else key] = jobs.read_json(f)
     return {"scheduled": jobs.scheduled(d), "reviews": jobs.reviews(d), "rulings": rulings, "verifies": verifies}
+
+
+def _tidy_facts(paths, job_id, spawns):
+    """The tidy pass runs once per job, in round 1, on top of the builder's green result: the head its
+    brief was written for is what a discard goes back to."""
+    spawn = next((s for s in spawns if s.get("agent") == "tidy"), None)
+    if not spawn:
+        return None
+    text = jobs.read(paths.round_dir(job_id, 1) / "tidy.md") or ""
+    return {"before": spawn["head"], "status": (jobs.field(text, "Status") or "").lower() or None,
+            "discarded": jobs.field(text, "Discarded")}
 
 
 def gather(paths, cfg, job_id):
@@ -45,6 +57,9 @@ def gather(paths, cfg, job_id):
     decision_text = jobs.read(jd / "decision.md")
     human_text = jobs.read(jd / "human-approval.md")
     rounds = {n: _round_facts(paths, job_id, n) for n in jobs.rounds_on_disk(jd)}
+    spawns = _spawn_log(jd)
+    if 1 in rounds:
+        rounds[1]["tidy"] = _tidy_facts(paths, job_id, spawns)
     entry = queue.entry(paths, job_id)
     return {
         "id": job_id,
@@ -67,7 +82,7 @@ def gather(paths, cfg, job_id):
         "merge": jobs.read_json(jd / "merge.json"),
         "merged_locally": bool(head) and (jd / "merge.json").exists() and gitutil.rev(cfg.target_branch, paths.root) is not None
         and gitutil.is_ancestor(head, cfg.target_branch, paths.root),
-        "spawns": _spawn_log(jd),
+        "spawns": spawns,
         "jira_log": _jira_log(jd),
         "required": REQUIRED_REVIEWERS,
         "max_rounds": cfg.max_rounds,
@@ -212,6 +227,47 @@ def _verified(f, record, heads):
     return bool(record) and record.get("head") in heads and record.get("fingerprint") == f["verify_fingerprint"]
 
 
+def _verified_build(f, facts, n, a, heads):
+    ws = f["workspace"]
+    if ws.get("on_branch") and ws.get("dirty"):
+        return _builder(f, "building", n, a + 1, "the builder left uncommitted changes")
+    verify = facts["verifies"].get(a)
+    if not _verified(f, verify, heads):
+        if not ws.get("on_branch"):
+            return _out(f, "building", "open-workspace", "verify the round")
+        return _out(f, "building", "verify", "run the project's tests, build and lint on the builder's result",
+                    round=n, attempt=a)
+    if not verify.get("green"):
+        return _builder(f, "building", n, a + 1,
+                        f"{verify.get('failed') or 'the checks'} is red after the builder ({verify.get('log')})")
+    return None
+
+
+def _tidied(f, facts, n, a, tidy, heads):
+    """The tidy pass changes no behaviour, so anything short of a clean, green result is discarded and
+    the builder's result goes to review as it was."""
+    ws = f["workspace"]
+
+    def discard(why):
+        return _out(f, "building", "tidy-discard", why, round=n, before=tidy["before"])
+
+    if tidy["status"] != "done":
+        return discard("the tidy pass did not finish")
+    if ws.get("on_branch") and ws.get("dirty") and not facts["scheduled"]:
+        return discard("the tidy pass left uncommitted changes")
+    if f["head"] == tidy["before"]:
+        return _verified_build(f, facts, n, a, heads)
+    verify = facts["verifies"].get("tidy")
+    if not _verified(f, verify, heads):
+        if not ws.get("on_branch"):
+            return _out(f, "building", "open-workspace", "verify the tidy pass")
+        return _out(f, "building", "verify", "run the project's tests, build and lint on the tidy pass",
+                    round=n, attempt="tidy")
+    if not verify.get("green"):
+        return discard(f"{verify.get('failed') or 'the checks'} is red after the tidy pass ({verify.get('log')})")
+    return None
+
+
 def _round(f, n, start):
     sections = _sections(f, n)
     last = sections[-1]
@@ -232,20 +288,19 @@ def _round(f, n, start):
                         f"objection in round {n} would change scope, design or acceptance criteria")
         return _builder(f, "building", n, a + 1, "objection ruled on; continue within the approved plan")
 
-    if ws.get("on_branch") and ws.get("dirty"):
-        return _builder(f, "building", n, a + 1, "the builder left uncommitted changes")
     heads = _equivalent_heads(f, f["head"])
-    verify = facts["verifies"].get(a)
-    if not _verified(f, verify, heads):
-        if not ws.get("on_branch"):
-            return _out(f, "building", "open-workspace", "verify the round")
-        return _out(f, "building", "verify", "run the project's tests, build and lint on the builder's result",
-                    round=n, attempt=a)
-    if not verify.get("green"):
-        return _builder(f, "building", n, a + 1,
-                        f"{verify.get('failed') or 'the checks'} is red after the builder ({verify.get('log')})")
-
     sched = facts["scheduled"]
+    tidy = facts.get("tidy") if n == 1 else None
+    if tidy and not tidy["discarded"]:
+        result = _tidied(f, facts, n, a, tidy, heads)
+    else:
+        result = _verified_build(f, facts, n, a, heads)
+        if result is None and n == 1 and not tidy and not sched:
+            result = _out(f, "building", "spawn-tidy" if ws.get("on_branch") else "open-workspace",
+                          "simplify and clean up the change once, before review", round=n)
+    if result is not None:
+        return result
+
     if not sched:
         return _out(f, "reviewing", "schedule", "pick this round's reviewers", round=n)
     if sched["head"] not in heads:
@@ -353,14 +408,14 @@ PASS_THROUGH = ("cancel", "finish", "needs-human", "wait-pr", "none", "take", "s
 
 
 def hold_for_runs(f, result):
-    """Live agent runs (see runs.py) hold the job: while its builder runs, nothing else happens to the
-    workspace; a reviewer already running is not started again."""
+    """Live agent runs (see runs.py) hold the job: while its builder or tidy pass runs, nothing else
+    happens to the workspace; a reviewer already running is not started again."""
     nxt = result["next"]
     live = f.get("live_runs") or []
-    builder = next((r for r in live if r["role"] == "builder"), None)
-    if builder and nxt["action"] not in PASS_THROUGH:
-        result["next"] = {"action": "wait-agent", "run": builder["run"]}
-        result["reason"] = f"builder run {builder['run']} is {builder['status']}"
+    writer = next((r for r in live if r["role"] in ("builder", "tidy")), None)
+    if writer and nxt["action"] not in PASS_THROUGH:
+        result["next"] = {"action": "wait-agent", "run": writer["run"]}
+        result["reason"] = f"{writer['role']} run {writer['run']} is {writer['status']}"
         return result
     if nxt["action"] == "spawn-reviewers":
         busy = {r["role"][len("review-"):] for r in live if r["role"].startswith("review-") and r["round"] == nxt["round"]}

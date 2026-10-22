@@ -22,6 +22,7 @@ def event(agent_type=None, **tool):
 class RoleTest(unittest.TestCase):
     def test_factory_agents_map_to_their_roles(self):
         self.assertEqual(hook.role_for("factory:factory-builder"), "builder")
+        self.assertEqual(hook.role_for("factory:factory-tidy"), "tidy")
         self.assertEqual(hook.role_for("factory:factory-codex-fallback"), "review-codex")
         self.assertEqual(hook.role_for("factory:factory-review-security"), "review-security")
 

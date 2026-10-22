@@ -44,6 +44,10 @@ def passing(head=H1):
     return rnd({"code": "PASS"}, head=head)
 
 
+def tidied(before=H1, status="done", discarded=None):
+    return {"before": before, "status": status, "discarded": discarded}
+
+
 def nxt(f):
     return state.decide(f)["next"]["action"]
 
@@ -141,7 +145,7 @@ class BuildRoundTest(unittest.TestCase):
         self.assertEqual((r["next"]["action"], r["next"]["round"], r["next"]["attempt"]), ("spawn-builder", 1, 2))
 
     def test_verified_round_is_scheduled_then_reviewed(self):
-        f = base_facts(build=[done(1)], rounds={1: {**rnd(), "scheduled": None}})
+        f = base_facts(build=[done(1)], rounds={1: {**rnd(), "scheduled": None, "tidy": tidied()}})
         self.assertEqual(nxt(f), "schedule")
         f["rounds"][1] = rnd({}, scheduled=["code", "ui"])
         r = state.decide(f)
@@ -174,6 +178,62 @@ class BuildRoundTest(unittest.TestCase):
         r = state.decide(f)
         self.assertEqual(r["stage"], "needs-human")
         self.assertIn("after 3 rounds", r["reason"])
+
+
+class TidyTest(unittest.TestCase):
+    def round_one(self, head=H1, tidy=None, **over):
+        return base_facts(head=head, build=[done(1)], rounds={1: {**rnd(**over), "scheduled": None, "tidy": tidy}})
+
+    def test_round_one_is_tidied_once_after_its_first_green_verify(self):
+        r = state.decide(self.round_one())
+        self.assertEqual((r["next"]["action"], r["next"]["round"], r["stage"]), ("spawn-tidy", 1, "building"))
+
+    def test_a_red_build_goes_back_to_the_builder_not_to_the_tidy_pass(self):
+        f = self.round_one(verifies={1: {"head": H1, "green": False, "log": "l", "failed": "lint", "fingerprint": FP}})
+        self.assertEqual(nxt(f), "spawn-builder")
+
+    def test_later_rounds_and_reworks_are_not_tidied(self):
+        f = base_facts(head=H2, build=[done(1), done(2)],
+                       rounds={1: {**rnd({"code": "CHANGES"}), "tidy": None}, 2: {**rnd(head=H2), "scheduled": None}})
+        self.assertEqual(nxt(f), "schedule")
+
+    def test_a_tidied_head_is_verified_before_review(self):
+        r = state.decide(self.round_one(head=H2, tidy=tidied()))
+        self.assertEqual((r["next"]["action"], r["next"]["attempt"]), ("verify", "tidy"))
+
+    def test_a_green_tidied_head_is_reviewed(self):
+        verifies = {1: {"head": H1, "green": True, "fingerprint": FP}, "tidy": {"head": H2, "green": True, "fingerprint": FP}}
+        self.assertEqual(nxt(self.round_one(head=H2, tidy=tidied(), verifies=verifies)), "schedule")
+
+    def test_a_tidy_pass_that_changed_nothing_is_not_verified_again(self):
+        self.assertEqual(nxt(self.round_one(tidy=tidied())), "schedule")
+
+    def test_anything_short_of_a_clean_green_tidy_pass_is_discarded(self):
+        red = {1: {"head": H1, "green": True, "fingerprint": FP},
+               "tidy": {"head": H2, "green": False, "failed": "suite", "log": "l", "fingerprint": FP}}
+        for f, why in ((self.round_one(head=H2, tidy=tidied(status=None)), "did not finish"),
+                       (self.round_one(head=H2, tidy=tidied(), verifies=red), "suite is red after the tidy pass")):
+            r = state.decide(f)
+            self.assertEqual((r["next"]["action"], r["next"]["before"]), ("tidy-discard", H1))
+            self.assertIn(why, r["reason"])
+        f = self.round_one(head=H2, tidy=tidied())
+        f["workspace"]["dirty"] = ["src/a.py"]
+        self.assertEqual(nxt(f), "tidy-discard")
+
+    def test_a_workspace_changed_during_review_resets_the_review_not_the_tidy_pass(self):
+        verifies = {1: {"head": H1, "green": True, "fingerprint": FP}, "tidy": {"head": H2, "green": True, "fingerprint": FP}}
+        f = base_facts(head=H2, build=[done(1)],
+                       rounds={1: {**rnd({"code": "PASS"}, head=H2, verifies=verifies), "tidy": tidied()}})
+        f["workspace"]["dirty"] = ["src/a.py"]
+        self.assertEqual(nxt(f), "review-reset")
+
+    def test_a_discarded_tidy_pass_reviews_the_builders_result(self):
+        self.assertEqual(nxt(self.round_one(tidy=tidied(discarded="suite is red"))), "schedule")
+
+    def test_a_live_tidy_pass_holds_the_job(self):
+        f = self.round_one(head=H2, tidy=tidied(status=None))
+        f["live_runs"] = [{"run": "t1", "role": "tidy", "round": 1, "attempt": None, "status": "running"}]
+        self.assertEqual(state.hold_for_runs(f, state.decide(f))["next"], {"action": "wait-agent", "run": "t1"})
 
 
 class ObjectionTest(unittest.TestCase):

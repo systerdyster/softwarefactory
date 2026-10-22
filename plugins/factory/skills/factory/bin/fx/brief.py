@@ -9,7 +9,8 @@ from .paths import branch_name
 
 RULE_FILES = ["CLAUDE.md", "AGENTS.md", "PROJECT-RULES.md", ".claude/CLAUDE.md"]
 REVIEWER_AGENTS = {"security", "code", "performance", "stability", "platform", "ux", "ui"}
-EXPECTED = {"builder": "spawn-builder", "reviewer": "spawn-reviewers", "codex-fallback": "spawn-reviewers"}
+EXPECTED = {"builder": "spawn-builder", "tidy": "spawn-tidy", "reviewer": "spawn-reviewers",
+            "codex-fallback": "spawn-reviewers"}
 
 
 def _rules(ws, cfg):
@@ -92,7 +93,7 @@ def builder(paths, cfg, job_id, s, nxt):
                   "one list to work from: resolve every blocking item — fix it, or answer it in build.md with the "
                   "evidence that it is wrong. Fix notes where cheap. Don't re-read the individual reviews.", ""]
         reads.append(listed["file"])
-    for f in sorted(rd.glob("verify-*.json")):
+    for f in sorted(rd.glob("verify-[0-9]*.json")):
         v = jobs.read_json(f)
         if v and not v.get("green"):
             reads.append(paths.root / v["log"])
@@ -115,6 +116,26 @@ def builder(paths, cfg, job_id, s, nxt):
     lines += [f"Append a section that starts with the line `{heading}` to {jd / 'build.md'}, and end it with "
               "`Status: done` or `Status: objection` (plus `Objection: plan`).", ""]
     lines += ["Return one line: `DONE: <summary>` or `OBJECTION: <one line>`."]
+    return lines
+
+
+def tidy(paths, cfg, job_id, s, nxt):
+    jd = paths.job(job_id)
+    rd = paths.round_dir(job_id, nxt["round"])
+    head = s["head"]
+    base = gitutil.merge_base(cfg.base_ref, head, paths.root)
+    touched = gitutil.changed_files(base, head, paths.root)
+    lines = ["## Tidy pass", "",
+             f"The builder's result is green. Review `git -C factory/workspaces/{job_id} diff {base}..{head}` and make "
+             "it smaller and simpler without changing what it does. The files it touches are yours to tidy:", ""]
+    lines += [f"- {p}" for p in touched] + [""]
+    lines += ["Beyond them, only what the change left without a user.", ""]
+    reads = [jd / "spec.md", jd / "plan.md", jd / "tests.md" if (jd / "tests.md").exists() else None,
+             jd / "build.md", paths.project]
+    lines += _files("Read", reads)
+    lines += [f"Commit your changes, then write {rd / 'tidy.md'} as your agent file shows, with `Status: done` — "
+              "also when you changed nothing.", ""]
+    lines += ["Return one line: `DONE: <n> removed, <n> simplified`."]
     return lines
 
 
@@ -146,6 +167,12 @@ def reviewer(paths, cfg, job_id, s, nxt, name):
     rework = _latest_rework(paths, job_id)
     if rework:
         reads.append(rework)
+    tidied = jobs.read(rd / "tidy.md")
+    if tidied and not jobs.field(tidied, "Discarded"):
+        reads.append(rd / "tidy.md")
+        lines += [f"A tidy pass ran after the builder: {rd / 'tidy.md'} lists what it removed or simplified. "
+                  "Something it removed that was needed — a test that protected behaviour, code still in use — "
+                  "is a finding.", ""]
     if name in ("ui", "ux") and cfg.reviewer_commands:
         lines += [f"Render before you judge: run `factory-cli ws run {job_id} <name> [args]` with one of "
                   f"{', '.join(cfg.reviewer_commands)} (project.md says what each renders and where the screenshots "
@@ -172,6 +199,8 @@ def brief(paths, cfg, job_id, agent, reviewer_name=None):
     lines = _header(paths, cfg, job_id, agent if agent != "reviewer" else f"review-{reviewer_name}", s)
     if agent == "builder":
         lines += builder(paths, cfg, job_id, s, nxt)
+    elif agent == "tidy":
+        lines += tidy(paths, cfg, job_id, s, nxt)
     else:
         name = "codex" if agent == "codex-fallback" else reviewer_name
         if name not in nxt.get("reviewers", []):
@@ -179,7 +208,7 @@ def brief(paths, cfg, job_id, agent, reviewer_name=None):
         if agent == "reviewer" and name not in REVIEWER_AGENTS:
             raise FactoryError(f"{name} has no reviewer agent; codex runs through `codex-review`")
         lines += reviewer(paths, cfg, job_id, s, nxt, name)
-    role = {"builder": "builder", "codex-fallback": "review-codex"}.get(agent, f"review-{reviewer_name}")
+    role = {"builder": "builder", "tidy": "tidy", "codex-fallback": "review-codex"}.get(agent, f"review-{reviewer_name}")
     run = runs.reserve(paths, cfg, job_id, role, nxt.get("round"), nxt.get("attempt"), s["head"])
     actions.log_spawn(paths, job_id, agent if agent != "reviewer" else f"review-{reviewer_name}",
                       nxt.get("round"), nxt.get("attempt"), s["head"],

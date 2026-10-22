@@ -82,6 +82,16 @@ class GuardTest(SandboxTest):
         self.assertEqual(self.write("builder", self.jd / "baseline.json"), 2)
         self.assertEqual(self.bash("builder", f"git -C {self.ws} commit --amend -m x"), 2)
 
+    def test_the_tidy_pass_works_in_the_workspace_and_writes_only_tidy_md_in_the_job_folder(self):
+        self.running("agent-a", role="tidy")
+        self.assertEqual(self.bash("tidy", f"git -C {self.ws} rm src/app.py"), 0)
+        self.assertEqual(self.bash("tidy", f"git -C {self.ws} commit -m 'Remove orphan'"), 0)
+        self.assertEqual(self.bash("tidy", f"factory-cli ws run {self.job} test tests/x.py"), 0)
+        self.assertEqual(self.write("tidy", self.sb.ws / "src" / "app.py"), 0)
+        self.assertEqual(self.write("tidy", self.jd / "round-1" / "tidy.md"), 0)
+        for path in ("tests.md", "build.md", "round-2/tidy.md", "round-1/review-code.md"):
+            self.assertEqual(self.write("tidy", self.jd / path), 2, path)
+
     def test_the_first_write_to_another_job_is_refused(self):
         self.running("agent-a")
         self.running("agent-b", job=self.other)
