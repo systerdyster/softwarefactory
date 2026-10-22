@@ -113,6 +113,9 @@ work_items = false
 ; language of the PR description, and the project's PR template if it has one (repo-relative path)
 language = en
 pr_template =
+; how agents write commit messages; empty = imperative short subject, a 2–3 line body only for the why,
+; no case key in the subject when the branch carries it
+commits =
 
 [jira]
 enabled = false

@@ -2,7 +2,8 @@ import unittest
 
 from support import SandboxTest, git
 
-from fx import jobs, pr, workspace
+from fx import config, jobs, pr, workspace
+from fx.errors import FactoryError
 
 
 class PrTest(SandboxTest):
@@ -27,6 +28,18 @@ class PrTest(SandboxTest):
         for expected in ("The answer is 42.", "| security | PASS |", "Logging: no observable output.",
                          "The rounding in app.py:2.", "FALLBACK: claude", "Approved by Fredrik at `0123456789ab`"):
             self.assertIn(expected, text)
+
+    def test_a_description_with_ai_attribution_is_refused(self):
+        self.sb.write("pr-body.md", "## Answer\n\nThe answer is 42.\n\n🤖 Generated with [Claude Code](https://x)\n",
+                      base=self.jd)
+        with self.assertRaises(FactoryError):
+            pr.final_body(self.paths, self.cfg, self.job)
+
+    def test_agents_get_the_default_commit_convention_unless_the_project_has_one(self):
+        self.assertIn("Subject imperative", self.cfg.commits)
+        self.paths.project.write_text(self.paths.project.read_text().replace(
+            "[jira]", "[handoff]\ncommits = Swedish, key first\n\n[jira]"), encoding="utf-8")
+        self.assertEqual(config.load(self.paths).commits, "Swedish, key first")
 
     def test_other_tool_pushes_and_leaves_the_pr_to_a_human(self):
         record = pr.open_or_update(self.paths, self.cfg, self.job)

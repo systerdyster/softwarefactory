@@ -63,6 +63,11 @@ def _files(label, items):
     return [f"{label}:", *[f"- {i}" for i in items], ""] if items else []
 
 
+def _commits(cfg):
+    return [f"Commit messages: {cfg.commits} Never add AI attribution — no `Co-Authored-By`, no \"Generated "
+            "with\"; the guard refuses such a commit.", ""]
+
+
 def _latest_rework(paths, job_id):
     reworks = jobs.reworks(paths.job(job_id))
     return paths.job(job_id) / reworks[-1]["file"] if reworks else None
@@ -118,6 +123,7 @@ def builder(paths, cfg, job_id, s, nxt):
         lines += [f"The branch was rebased onto {cfg.base_ref} and the suite is {rebase[-1]['result']}. "
                   "Make the full suite green.", ""]
     lines += _files("Read", reads)
+    lines += _commits(cfg)
     lines += [f"Append a section that starts with the line `{heading}` to {jd / 'build.md'}, and end it with "
               "`Status: done` or `Status: objection` (plus `Objection: plan`).", ""]
     lines += ["Return one line: `DONE: <summary>` or `OBJECTION: <one line>`."]
@@ -138,6 +144,7 @@ def tidy(paths, cfg, job_id, s, nxt):
     reads = [jd / "spec.md", jd / "plan.md", jd / "tests.md" if (jd / "tests.md").exists() else None,
              jd / "build.md", paths.project]
     lines += _files("Read", reads)
+    lines += _commits(cfg)
     lines += [f"Commit your changes, then write {rd / 'tidy.md'} as your agent file shows, with `Status: done` — "
               "also when you changed nothing.", ""]
     lines += ["Return one line: `DONE: <n> removed, <n> simplified`."]

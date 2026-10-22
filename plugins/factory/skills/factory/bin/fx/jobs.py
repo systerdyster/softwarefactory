@@ -67,6 +67,14 @@ def section(text, heading):
     return m.group(1).strip() if m else ""
 
 
+_ATTRIBUTION = re.compile(r"co-authored-by:|generated (with|by) \[?claude|🤖", re.I)
+
+
+def attribution(text):
+    """AI attribution in a commit message or PR description, which the factory never lets through."""
+    return bool(_ATTRIBUTION.search(text or ""))
+
+
 def add_to_section(text, heading, line):
     """Appends a line at the end of a `## heading` section, adding the section at the end if missing."""
     m = re.search(rf"^##\s+{re.escape(heading)}\s*$(.*?)(?=^##\s|\Z)", text, re.S | re.M | re.I)

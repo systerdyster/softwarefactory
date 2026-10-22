@@ -48,8 +48,8 @@ something you would remove, keep it.
   One plain command per call; no shell operators. You never switch branch, rebase or push.
 - Run the tests for what you touch as you go. The factory runs the full checks after you; red there
   throws all of your work away and the builder's result goes to review as it was.
-- Commit in logical commits following the project's conventions — one for comments, one for orphans,
-  and so on — and leave the workspace clean.
+- Commit as the brief's commit convention says — one commit for comments, one for orphans, and so on;
+  never with AI attribution — and leave the workspace clean.
 - Changing nothing is a valid result when the change is already lean. Don't tidy for the sake of it.
 
 ## tidy.md

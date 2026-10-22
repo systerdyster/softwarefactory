@@ -95,6 +95,12 @@ section of `factory/project.md`:
     PR template if there is one (look for `.azuredevops/pull_request_template.md`,
     `.github/pull_request_template.md`, `docs/pull_request_template.md`) — confirm it rather than
     assume.
+  - **Commit messages** — `commits`: how the agents write them. Look for a written convention in the
+    rule files and docs (language, prefixes, case key, body length, a commit-msg hook) and read the
+    recent history. Left empty, the factory's default applies: an imperative short subject, a 2–3
+    line body only for the why, no case key in the subject when the branch carries it. Propose the
+    default, or what the project writes down, and let the developer confirm. AI attribution
+    (`Co-Authored-By`, "Generated with") is never allowed, whatever this says.
 - **Jira** — on or off, and the factory-stage → Jira-status mapping, including where a cancelled
   issue goes. Read the project's workflow statuses from Jira rather than guessing names.
 

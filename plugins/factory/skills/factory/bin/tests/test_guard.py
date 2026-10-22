@@ -92,6 +92,14 @@ class GuardTest(SandboxTest):
         for path in ("tests.md", "build.md", "round-2/tidy.md", "round-1/review-code.md"):
             self.assertEqual(self.write("tidy", self.jd / path), 2, path)
 
+    def test_a_commit_with_ai_attribution_is_refused(self):
+        self.running("agent-a")
+        self.assertEqual(self.bash("builder", f"git -C {self.ws} commit -m 'Add x' -m 'Co-Authored-By: Claude <c@a>'"), 2)
+        self.assertEqual(self.bash("builder", f"git -C {self.ws} commit '--message=Generated with Claude Code'"), 2)
+        message = self.sb.write("msg.txt", "Add x\n\nCo-authored-by: Claude Opus <noreply@anthropic.com>\n", base=self.sb.ws)
+        self.assertEqual(self.bash("builder", f"git -C {self.ws} commit -F {message}"), 2)
+        self.assertEqual(self.bash("builder", f"git -C {self.ws} commit -m 'Add x' -m 'Why it was needed'"), 0)
+
     def test_the_first_write_to_another_job_is_refused(self):
         self.running("agent-a")
         self.running("agent-b", job=self.other)

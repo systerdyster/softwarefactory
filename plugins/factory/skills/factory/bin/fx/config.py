@@ -13,6 +13,10 @@ MERGE_MODES = ["pr", "local-merge", "auto-merge"]
 PR_TOOLS = ["gh", "az", "other"]
 JIRA_LINKS = ["title", "body", "both", "none"]
 BRANCH_FIELDS = {"id", "key", "slug"}
+DEFAULT_COMMITS = ("Subject imperative and short, no trailing period (`Add user profile route`, not `Added …` or a "
+                   "noun phrase). A body only when the why isn't obvious from subject and diff, then 2–3 lines on the "
+                   "reason, never a paraphrase of the diff. No case key in the subject when the branch name carries it. "
+                   "Related work in one commit rather than many small ones.")
 
 _BLOCK = re.compile(r"^```ini[^\n]*\n(.*?)^```", re.S | re.M)
 
@@ -216,6 +220,11 @@ class Config:
     @property
     def pr_template(self):
         return self.get("handoff", "pr_template")
+
+    @property
+    def commits(self):
+        """How agents write commit messages: the project's convention, else DEFAULT_COMMITS."""
+        return self.get("handoff", "commits") or DEFAULT_COMMITS
 
     @property
     def jira_enabled(self):

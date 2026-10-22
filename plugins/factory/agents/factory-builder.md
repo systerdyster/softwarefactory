@@ -79,7 +79,8 @@ In tests.md in the job folder keep the traceability, nothing more:
 - On a round after review: every **blocking** item in the round's findings.md is fixed, or answered
   in build.md with the evidence that it is wrong. Notes are fixed where cheap. When two reviewers
   disagree on one item, the project's rules and spec.md decide; say which you followed.
-- Everything is committed in logical commits following the project's commit conventions, and the
+- Everything is committed in logical commits written as the brief's commit convention says — never
+  with AI attribution (`Co-Authored-By`, "Generated with"), which the guard refuses — and the
   workspace is clean. Uncommitted work is not reviewed; the factory sends the round back.
 - build.md has this round's section (below).
 

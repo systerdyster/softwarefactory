@@ -106,6 +106,9 @@ def final_body(paths, cfg, job_id):
     written = jobs.read(jd / "pr-body.md")
     if not written:
         return body(paths, cfg, job_id)
+    if jobs.attribution(written):
+        raise FactoryError("pr-body.md carries AI attribution (Co-Authored-By / Generated with); remove it — the "
+                           "description becomes the merge commit's message")
     meta = jobs.meta(jd)
     if meta.get("jira") and cfg.jira_link in ("body", "both") and meta["jira"] not in written:
         written = written.rstrip("\n") + "\n\n" + jira_line(cfg, meta["jira"]) + "\n"
