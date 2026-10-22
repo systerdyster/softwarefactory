@@ -74,6 +74,11 @@ class ServerTest(SandboxTest):
             proc.stdout.close()
         self.assertFalse(self.paths.dashboard.exists())
 
+    def test_a_queued_job_says_which_jobs_it_waits_for(self):
+        later = self.sb.queue_job("002-later", "Later", after=[self.job])
+        cards = {c["id"]: c for c in json.loads(self.request("GET", "/board.json")[1])["jobs"]}
+        self.assertEqual((cards[later]["waits_for"], cards[self.job]["waits_for"]), ([self.job], []))
+
     def test_a_record_left_by_a_dead_dashboard_is_ignored(self):
         self.paths.dashboard.write_text(json.dumps({"url": "http://127.0.0.1:1/?token=x", "port": 1, "pid": 999999}))
         self.assertIsNone(server.running(self.paths))

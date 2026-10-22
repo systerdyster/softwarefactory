@@ -45,6 +45,7 @@
   .card .title:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
   .card .reason { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; margin-top: 8px; }
   .card.human .reason { color: var(--human); }
+  .card .waits { font-size: 12px; color: var(--human); overflow-wrap: anywhere; }
   .pipe { list-style: none; margin: 10px 0 0; padding: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
   @media (max-width: 640px) { .pipe { grid-template-columns: repeat(4, minmax(0, 1fr)); row-gap: 10px; } }
   .step { min-width: 0; font-size: 12px; }
@@ -186,7 +187,9 @@
 
   function compact(job) {
     return `<article class="card compact" data-id="${esc(job.id)}"><button class="title" data-open="${esc(job.id)}">`
-      + `${esc(job.title || job.id)}</button><span class="id">${esc(job.id)} · ${esc(job.stage)}</span></article>`;
+      + `${esc(job.title || job.id)}</button><span class="id">${esc(job.id)} · ${esc(job.stage)}</span>`
+      + ((job.waits_for || []).length ? `<span class="waits">waits for ${esc(job.waits_for.join(", "))}</span>` : "")
+      + `</article>`;
   }
 
   function render() {

@@ -86,7 +86,8 @@ def pipeline(s):
 
 
 def build(paths, cfg, write=True):
-    ids = [e["id"] for e in queue.entries(paths)]
+    statuses = {e["id"]: e["status"] for e in queue.entries(paths)}
+    ids = list(statuses)
     if paths.jobs.exists():
         ids += sorted(d.name for d in paths.jobs.iterdir() if d.is_dir() and d.name not in ids and jobs.JOB_ID.match(d.name))
     cards = []
@@ -96,6 +97,7 @@ def build(paths, cfg, write=True):
         except FactoryError as e:
             s = {"id": job_id, "stage": "unknown", "reason": str(e), "next": {"action": "none"}, "verdicts": {}}
         s["pipeline"] = pipeline(s)
+        s["waits_for"] = queue.blocked_by(paths, job_id, statuses) if s["stage"] == "queued" else []
         jd = paths.job(job_id)
         s["files"] = sorted(str(p.relative_to(jd)) for p in jd.rglob("*.md")) if jd.exists() else []
         s["queued_at"] = (jobs.read_json(jd / "job.json") or {}).get("queued_at") if jd.exists() else None
