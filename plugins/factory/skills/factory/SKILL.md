@@ -1,7 +1,7 @@
 ---
 name: factory
-description: "The software factory: frame one case with a developer into an approved spec and plan (/factory add), then build queued jobs with a fresh builder that tests the behaviour it changes and a main reviewer, plus specialist reviewers where the change calls for them (/factory run), and hand each back for the developer's approval and as a PR. Use when the user types /factory with any subcommand — init, add, run, stop, approve, rework, cancel, status — or asks to queue a case for the factory, run the factory, or check the factory board."
-argument-hint: "init | add <JIRA-KEY | description> | run | stop | approve <id> | rework <id> <note> | cancel <id> [reason] | status"
+description: "The software factory: frame one case with a developer into an approved spec and plan (/factory add), then build queued jobs with a fresh builder that tests the behaviour it changes and a main reviewer, plus specialist reviewers where the change calls for them (/factory run), and hand each back for the developer's approval and as a PR. Use when the user types /factory with any subcommand — init, add, run, stop, approve, answer, rework, cancel, status — or asks to queue a case for the factory, run the factory, or check the factory board."
+argument-hint: "init | add <JIRA-KEY | description> | run | stop | approve <id> | answer <id> <text> | rework <id> <note> | cancel <id> [reason] | status"
 metadata:
   type: reference
 ---
@@ -32,11 +32,12 @@ standard library only; every command prints JSON and exits non-zero on failure).
 | `run` | [reference/orchestrator.md](reference/orchestrator.md) |
 | `stop` | `F stop` — the orchestrator takes no new job and finishes the active ones. Say so. |
 | `approve <id>` | In the orchestrator session: as in orchestrator.md. Anywhere else: `F command approve <id> --by "<name>"` and say the orchestrator will act on it. |
+| `answer <id> <text>` | Same split: orchestrator acts; elsewhere `F command answer <id> --text "<text>" --by "<name>"`. For a job whose objection waits for the developer's decision. |
 | `rework <id> <note>` | Same split: orchestrator acts; elsewhere `F command rework <id> --text "<note>" --by "<name>"`. |
 | `cancel <id> [reason]` | Same split: orchestrator acts; elsewhere `F command cancel <id> --text "<reason>" --by "<name>"`. |
 | `status` | `F board --print`, then show a compact table: id, title, stage, round, verdicts of the latest round, next action or waiting reason, PR link. Needs-human jobs first, with their reason. |
 
-Only the orchestrator executes approve, rework and cancel, because only it can stop a job's running
+Only the orchestrator executes approve, answer, rework and cancel, because only it can stop a job's running
 agents and it owns the jobs' worktrees. Any other session queues the command in `factory/inbox/`, exactly as
 the dashboard does, and the orchestrator runs it on its next step (or on its next start).
 

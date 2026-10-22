@@ -23,6 +23,10 @@ def _round_facts(paths, job_id, n):
     rulings, verifies = {}, {}
     for f in d.glob("ruling-*.md"):
         rulings[int(f.stem.rsplit("-", 1)[1])] = jobs.ruling(f.read_text(encoding="utf-8"))
+    for f in d.glob("answer-*.md"):
+        attempt = int(f.stem.rsplit("-", 1)[1])
+        if rulings.get(attempt) == "NEEDS-HUMAN":
+            rulings[attempt] = "ANSWERED"
     for f in d.glob("verify-*.json"):
         key = f.stem.split("-", 1)[1]
         verifies[int(key) if key.isdigit() else key] = jobs.read_json(f)
@@ -285,7 +289,10 @@ def _round(f, n, start):
                         round=n, attempt=a)
         if ruling == "NEEDS-HUMAN":
             return _out(f, "needs-human", "needs-human",
-                        f"objection in round {n} would change scope, design or acceptance criteria")
+                        f"objection in round {n} needs your decision: it would change scope, design or acceptance criteria",
+                        question=True, round=n, attempt=a)
+        if ruling == "ANSWERED":
+            return _builder(f, "building", n, a + 1, "you answered the objection; it is now in spec.md's Decided")
         return _builder(f, "building", n, a + 1, "objection ruled on; continue within the approved plan")
 
     heads = _equivalent_heads(f, f["head"])

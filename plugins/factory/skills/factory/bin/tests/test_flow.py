@@ -10,6 +10,7 @@ import unittest
 from support import SandboxTest, agent_starts, agent_stops, git
 
 import factory
+from fx import jobs
 
 TEST = "import sys\nsys.path.insert(0, 'src')\nfrom app import answer\nassert answer() == 42\n"
 
@@ -189,6 +190,34 @@ class FlowTest(SandboxTest):
         self.cli("verify", self.job)
         self.tidy()
         self.expect("schedule")
+
+    def test_an_objection_is_answered_by_the_developer_and_the_builder_continues(self):
+        self.cli("next", "--lease", self.lease)
+        self.cli("start", self.job)
+        self.brief("builder")
+        self.sb.write("build.md", "# Build log\n\n## Round 1\nThe plan can't hold.\nObjection: plan\nStatus: objection\n",
+                      base=self.jd)
+        self.expect("judge-objection")
+        self.sb.write("round-1/ruling-1.md", "RULING: NEEDS-HUMAN\n\nQuestion: Keep two boundaries or add a third?\n\n"
+                      "The category page reads `nodeId` above both.\n\n## Options\n"
+                      "- (a) Add a third outer boundary — breaks \"two boundaries\" [recommended]\n"
+                      "- (b) Read nodeId lazily — touches the search provider\n", base=self.jd)
+        s = self.cli("state", self.job)
+        self.assertTrue(s["next"]["question"])
+        self.cli("approve", self.job, "--by", "Fredrik", expect=1)
+        card = next(c for c in self.cli("board", "--print")["jobs"] if c["id"] == self.job)
+        self.assertEqual(card["decision"]["question"], "Keep two boundaries or add a third?")
+        self.assertEqual([(o["key"], o["recommended"]) for o in card["decision"]["options"]], [("a", True), ("b", False)])
+        self.assertIn("objection → waits for your decision", card["story"][0])
+
+        self.cli("answer", self.job, "--text", "(a) Add a third outer boundary", "--by", "Fredrik")
+        self.assertIn("Keep two boundaries or add a third? — (a) Add a third outer boundary",
+                      jobs.section((self.jd / "spec.md").read_text(), "Decided"))
+        nxt = self.expect("spawn-builder")
+        self.assertEqual(nxt["attempt"], 2)
+        self.assertIn("The developer answered your objection", self.brief("builder"))
+        card = next(c for c in self.cli("board", "--print")["jobs"] if c["id"] == self.job)
+        self.assertIn("you decided: (a) Add a third outer boundary", card["story"][0])
 
     def test_every_brief_lists_the_projects_written_rules(self):
         self.sb.push_target_change("Wiki/Components.md", "# Components\n\nA modifier only reassigns private variables.\n")

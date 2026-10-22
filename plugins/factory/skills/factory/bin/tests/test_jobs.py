@@ -36,6 +36,23 @@ class ParsersTest(unittest.TestCase):
         self.assertEqual(jobs.decision("CANCELLED\n\nReason: duplicate"), "CANCELLED")
         self.assertIsNone(jobs.decision("Reason: CANCELLED\n"))
 
+    def test_a_needs_human_ruling_reads_as_a_question_with_options(self):
+        q = jobs.question("RULING: NEEDS-HUMAN\n\nQuestion: Which way?\n\nThe page reads it twice.\n\n## Options\n"
+                          "- (a) One way — costs x [recommended]\n- b) Other way — costs y\n")
+        self.assertEqual((q["question"], q["context"]), ("Which way?", "The page reads it twice."))
+        self.assertEqual(q["options"], [{"key": "a", "text": "One way — costs x", "recommended": True},
+                                        {"key": "b", "text": "Other way — costs y", "recommended": False}])
+
+    def test_a_ruling_without_the_shape_is_shown_whole(self):
+        q = jobs.question("RULING: NEEDS-HUMAN\n\nTake (a) or (b)?\n- (a) this\n")
+        self.assertEqual((q["question"], q["context"], q["options"]), ("", "Take (a) or (b)?\n- (a) this", []))
+
+    def test_a_line_is_added_at_the_end_of_its_section(self):
+        text = "# S\n\n## Decided\n\n- one\n\n## Open questions\n\n- q\n"
+        self.assertEqual(jobs.add_to_section(text, "Decided", "- two"),
+                         "# S\n\n## Decided\n\n- one\n- two\n\n## Open questions\n\n- q\n")
+        self.assertEqual(jobs.add_to_section("# S\n", "Decided", "- two"), "# S\n\n## Decided\n\n- two\n")
+
     def test_job_ids(self):
         for good in ("OPT-123", "AB2-7", "001-fix-login"):
             self.assertEqual(jobs.check_id(good), good)

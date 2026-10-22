@@ -67,6 +67,16 @@ def section(text, heading):
     return m.group(1).strip() if m else ""
 
 
+def add_to_section(text, heading, line):
+    """Appends a line at the end of a `## heading` section, adding the section at the end if missing."""
+    m = re.search(rf"^##\s+{re.escape(heading)}\s*$(.*?)(?=^##\s|\Z)", text, re.S | re.M | re.I)
+    if not m:
+        return text.rstrip() + f"\n\n## {heading}\n\n{line}\n"
+    body = m.group(1).rstrip()
+    rest = text[m.end():]
+    return text[:m.start(1)] + body + f"\n{line}\n" + ("\n" + rest if rest else "")
+
+
 _ITEM = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+(.*)$")
 _BLOCKING = re.compile(r"^(?:🔴\s*)?\**\s*BLOCKING\b")
 _LEADS_WITH_BLOCKING = re.compile(r"^\s*(?:#+\s*)?(?:(?:[-*+]|\d+[.)])\s*)?(?:🔴\s*)?\**\s*BLOCKING\b")
@@ -123,6 +133,23 @@ def decision(text):
 def ruling(text):
     match = re.match(r"^RULING:\s*(CONTINUE|NEEDS-HUMAN)\b", first_line(text), re.I)
     return match.group(1).upper() if match else None
+
+
+_OPTION = re.compile(r"^\(?([a-z0-9])\)\s*(.*?)\s*(\[recommended\])?\s*$", re.I)
+
+
+def question(text):
+    """A NEEDS-HUMAN ruling as the developer answers it: the `Question:` line, the context before
+    `## Options`, and each `- (a) …` option, `[recommended]` marking the one the factory suggests."""
+    options = []
+    for item in section(text, "Options").splitlines():
+        m = _ITEM.match(item)
+        o = _OPTION.match(m.group(1)) if m else None
+        if o:
+            options.append({"key": o.group(1).lower(), "text": o.group(2), "recommended": bool(o.group(3))})
+    body = re.split(r"^##\s", text or "", maxsplit=1, flags=re.M)[0]
+    context = "\n".join(l for l in body.splitlines()[1:] if not re.match(r"^\s*Question:", l, re.I)).strip()
+    return {"question": field(text, "Question") or "", "context": context, "options": options}
 
 
 def build_sections(text):

@@ -5,7 +5,7 @@
 
 Binds to 127.0.0.1 only and prints a URL with a random token; every request must carry that token
 (the page sends it as a header). Serves dashboard.html, the board and the markdown files in job
-folders, and accepts approve, rework and cancel by writing a command file to factory/inbox/, which
+folders, and accepts approve, answer, rework and cancel by writing a command file to factory/inbox/, which
 the orchestrator runs exactly like its terminal form. It never changes a job itself.
 
 The board is computed from the job folders, runs and git when the page asks, at most every

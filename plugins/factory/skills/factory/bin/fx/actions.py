@@ -230,8 +230,10 @@ def approve(paths, cfg, job_id, by):
     current = state_mod.state(paths, cfg, job_id)
     if current["stage"] != "needs-human":
         raise FactoryError(f"{job_id} is {current['stage']}, not needs-human; nothing to approve")
-    if "red on the target branch" in (current.get("reason") or ""):
-        raise FactoryError("the target branch is red; approving a job does not fix that")
+    if not current["next"].get("ready"):
+        raise FactoryError(f"{job_id} is not ready for approval: {current.get('reason')}. "
+                           + ("Answer its question instead." if current["next"].get("question")
+                              else "Rework or cancel it."))
     if not current["head"]:
         raise FactoryError(f"{job_id} has no branch to approve")
     _archive(paths, job_id, "human-approval.md")
@@ -239,6 +241,25 @@ def approve(paths, cfg, job_id, by):
                       f"Head: {current['head']}\nApproved-By: {by or 'a human'}\nAt: {jobs.now()}\n"
                       f"Was: {current.get('reason')}\n")
     return {"approved": job_id, "head": current["head"], "was": current.get("reason")}
+
+
+def answer(paths, cfg, job_id, text, by):
+    """The developer's answer to an objection the orchestrator couldn't rule on. It becomes a decision
+    in spec.md's `## Decided`, so every later agent treats it as settled, and the builder continues."""
+    current = state_mod.state(paths, cfg, job_id)
+    nxt = current["next"]
+    if not nxt.get("question"):
+        raise FactoryError(f"{job_id} has no open question: {current.get('reason')}")
+    if not (text or "").strip():
+        raise FactoryError("an answer needs text")
+    n, a = nxt["round"], nxt["attempt"]
+    asked = jobs.question(jobs.read(paths.round_dir(job_id, n) / f"ruling-{a}.md"))["question"]
+    jobs.write_atomic(paths.round_dir(job_id, n) / f"answer-{a}.md",
+                      f"Answer: {text.strip()}\nBy: {by or 'a human'}\nAt: {jobs.now()}\n")
+    spec = paths.job(job_id) / "spec.md"
+    decision = f"- {asked or 'Objection in round ' + str(n)} — {text.strip()} ({by or 'a human'}, {jobs.now()[:10]})"
+    jobs.write_atomic(spec, jobs.add_to_section(jobs.read(spec) or "", "Decided", decision))
+    return {"answered": job_id, "round": n, "attempt": a, "decision": decision}
 
 
 def rework(paths, cfg, job_id, note, by, pr_module):
@@ -420,11 +441,11 @@ def stop(paths, clear=False):
 
 
 def write_command(paths, command, job_id, text, by):
-    if command not in ("approve", "rework", "cancel"):
-        raise FactoryError("inbox commands are approve, rework and cancel")
+    if command not in ("approve", "answer", "rework", "cancel"):
+        raise FactoryError("inbox commands are approve, answer, rework and cancel")
     jobs.check_id(job_id)
-    if command == "rework" and not (text or "").strip():
-        raise FactoryError("rework needs a note")
+    if command in ("rework", "answer") and not (text or "").strip():
+        raise FactoryError(f"{command} needs text")
     if any(c.get("command") == command and c.get("job") == job_id for c in inbox_list(paths)):
         raise Conflict(f"a {command} for {job_id} is already queued; the orchestrator has not run it yet")
     paths.inbox.mkdir(parents=True, exist_ok=True)

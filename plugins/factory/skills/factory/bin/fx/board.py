@@ -1,7 +1,7 @@
 """`board`: rebuilds factory/board.json from every job folder, backlog.md and git. It holds no
 state of its own, so it is safe to run at any time; the dashboard reads it."""
 
-from . import jobs, queue, state as state_mod
+from . import jobs, queue, state as state_mod, story
 from .errors import FactoryError
 
 STAGE_ORDER = ["queued", "starting", "building", "reviewing", "rebasing", "merging", "needs-human", "pr-open",
@@ -98,6 +98,8 @@ def build(paths, cfg, write=True):
             s = {"id": job_id, "stage": "unknown", "reason": str(e), "next": {"action": "none"}, "verdicts": {}}
         s["pipeline"] = pipeline(s)
         s["waits_for"] = queue.blocked_by(paths, job_id, statuses) if s["stage"] == "queued" else []
+        s["story"] = story.story(paths, job_id, s)
+        s["decision"] = story.decision(paths, job_id, s)
         jd = paths.job(job_id)
         s["files"] = sorted(str(p.relative_to(jd)) for p in jd.rglob("*.md")) if jd.exists() else []
         s["queued_at"] = (jobs.read_json(jd / "job.json") or {}).get("queued_at") if jd.exists() else None

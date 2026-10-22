@@ -83,7 +83,7 @@ Repeat:
 | `merge-local` | `F merge <id>`. |
 | `finish` | `F finish <id>` — removes the job's worktree and branches, marks `[x]`. Other jobs' worktrees are not touched. |
 | `cancel` | `F cancel <id> --reason "<reason>"` (a cancelled job whose branch still exists). |
-| `needs-human` | Nothing to do; the job waits for `/factory approve`, `rework` or `cancel`. Report its reason. With `next.ready` every review passed and the job waits for the developer's approval — that approval is always a human's; never approve a job yourself. |
+| `needs-human` | Nothing to do; the job waits for the developer. Report its reason. With `next.ready` every review passed and it waits for `/factory approve` — that approval is always a human's; never approve a job yourself. With `next.question` it waits for `/factory answer` to your NEEDS-HUMAN ruling. Otherwise it waits for `rework` or `cancel`. |
 | `wait-pr` | Nothing; the job is waiting on its PR, on the current target. |
 
 Every agent is spawned **fresh** with the Agent tool, `subagent_type` = `factory:` + the agent's name (plugin agents are scoped by the plugin, e.g. `factory:factory-builder`), and the
@@ -138,13 +138,33 @@ Decide against **what was approved**, nothing else:
   `factory/jobs/<id>/round-<N>/ruling-<A>.md` starting `RULING: CONTINUE`, then the answer the builder
   needs, citing the spec or plan line that settles it.
 - **Any answer would change scope, design or acceptance criteria** — or the spec is genuinely silent —
-  → `RULING: NEEDS-HUMAN`, with the question a human must answer. The job goes to needs-human.
+  → `RULING: NEEDS-HUMAN`. The job goes to needs-human, and the dashboard shows the developer the
+  question with one button per option, so write it in exactly this shape:
+
+  ```markdown
+  RULING: NEEDS-HUMAN
+
+  Question: <one line the developer answers, in plain words — what to choose, for which part>
+
+  <Two or three sentences: what the builder found, with file:line, and why the approved spec doesn't
+  settle it.>
+
+  ## Options
+  - (a) <what to do> — <what it costs or breaks> [recommended]
+  - (b) <what to do> — <what it costs or breaks>
+  ```
+
+  Each option is one line that stands on its own. Mark at most one `[recommended]`, and only when the
+  builder or the spec gives a reason. The developer may also answer in their own words.
 
 `<N>` and `<A>` are the `round` and `attempt` state gives. When in doubt, it's a human's call.
 
+When the developer answers, state says `spawn-builder` again: the answer is in `round-<N>/answer-<A>.md`
+and in spec.md's `## Decided`, and the builder continues in the same round.
+
 ## Inbox
 
-The dashboard, and `/factory approve|rework|cancel` typed in other sessions, write commands to
+The dashboard, and `/factory approve|answer|rework|cancel` typed in other sessions, write commands to
 `factory/inbox/`. Watch it with the Monitor tool: command `F inbox watch`, description "factory inbox
 commands", `timeout_ms` 1800000, re-armed on every expiry for as long as the run lasts. Each event
 line names a file; `F inbox list` shows all pending ones.
@@ -156,7 +176,10 @@ The inbox refuses a second identical command for a job while the first is still 
 
 ## Commands, as the orchestrator runs them
 
-- **approve `<id>`** — for a needs-human job: `F approve <id> --by "<who>"`. State then takes it
+- **answer `<id>` `<text>`** — for a job with an open question (`next.question`): `F answer <id> --text
+  "<text>" --by "<who>"`. It records the answer and adds it to spec.md's `## Decided`; state then
+  sends the builder on in the same round.
+- **approve `<id>`** — for a job ready for approval (`next.ready`; refused otherwise): `F approve <id> --by "<who>"`. State then takes it
   through rebase, the project's checks and `merge_mode`. **Integration is one job at a time**: act on
   `pr`/`merge-local` for one job, and ask the others' state afterwards — once the target has moved,
   state sends it through rebase and the project's checks again before it is integrated. A rebase

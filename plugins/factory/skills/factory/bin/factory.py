@@ -177,6 +177,10 @@ def cmd_approve(a, p):
     return actions.approve(p, _cfg(p), a.job, a.by)
 
 
+def cmd_answer(a, p):
+    return actions.answer(p, _cfg(p), a.job, a.text, a.by)
+
+
 def cmd_rework(a, p):
     return actions.rework(p, _cfg(p), a.job, a.note, a.by, pr)
 
@@ -318,6 +322,10 @@ def parser():
     sp = add("approve", cmd_approve, "record a human approval of a needs-human job's head")
     sp.add_argument("job")
     sp.add_argument("--by", default="")
+    sp = add("answer", cmd_answer, "answer a job's open question; it goes into spec.md's Decided")
+    sp.add_argument("job")
+    sp.add_argument("--text", required=True)
+    sp.add_argument("--by", default="")
     sp = add("rework", cmd_rework, "queue a rework round with a note (and PR comments)")
     sp.add_argument("job")
     sp.add_argument("--note", required=True)
@@ -340,7 +348,7 @@ def parser():
     sp.add_argument("--force", action="store_true", help="with --takeover: also a fresh one (the human stopped it)")
     add("stop", cmd_stop, "stop after the current job; --clear to lift").add_argument("--clear", action="store_true")
     sp = add("command", cmd_command, "write an approve|rework|cancel command to the inbox")
-    sp.add_argument("command", choices=["approve", "rework", "cancel"])
+    sp.add_argument("command", choices=["approve", "answer", "rework", "cancel"])
     sp.add_argument("job")
     sp.add_argument("--text", default="")
     sp.add_argument("--by", default="")

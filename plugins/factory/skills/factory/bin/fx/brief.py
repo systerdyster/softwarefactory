@@ -100,6 +100,11 @@ def builder(paths, cfg, job_id, s, nxt):
             lines += [f"{v.get('failed') or 'The checks'} was red after attempt {f.stem.split('-')[1]}: "
                       f"see {paths.root / v['log']}.", ""]
     reads += sorted(rd.glob("ruling-*.md"))
+    answers = sorted(rd.glob("answer-*.md"))
+    if answers:
+        reads += answers
+        lines += [f"The developer answered your objection: {answers[-1]}. It is now in spec.md's `## Decided`; "
+                  "build to it.", ""]
     rebase = (jobs.read_json(jd / "rebase.json") or {}).get("history", [])
     if rebasing:
         lines += ["A rebase onto the target branch is in progress and stopped on conflicts:", ""]

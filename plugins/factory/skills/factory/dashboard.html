@@ -88,16 +88,35 @@
   .doc pre { background: var(--pending-bg); padding: 10px; border-radius: 8px; overflow: auto; }
   .doc code { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace; }
   .doc table { border-collapse: collapse; } .doc td, .doc th { border: 1px solid var(--line); padding: 3px 8px; }
-  .acts { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line); align-items: center; }
-  .acts textarea { flex: 1 1 260px; min-height: 38px; font: inherit; padding: 6px 8px; border-radius: 8px;
-                   border: 1px solid var(--line); background: var(--bg); color: inherit; }
+  .story-wrap:empty { display: none; }
+  .story { margin: 0; padding: 10px 16px 10px 34px; border-bottom: 1px solid var(--line); font-size: 12.5px;
+           color: var(--muted); display: grid; gap: 2px; }
+  .story li { overflow-wrap: anywhere; }
+  .acts { padding: 12px 16px; border-bottom: 1px solid var(--line); max-height: 55vh; overflow: auto; }
+  .acts:empty { display: none; }
+  .acts h3 { margin: 0 0 6px; font-size: 14px; }
+  .acts .q { margin: 0 0 6px; font-weight: 600; overflow-wrap: anywhere; }
+  .acts .ctx { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+  .acts .ctx p { margin: 0 0 6px; }
+  .acts .lead { margin: 10px 0 4px; font-weight: 600; font-size: 13px; }
+  .acts .least { margin: 0; padding-left: 20px; font-size: 13px; display: grid; gap: 4px; }
+  .acts .warn { color: var(--changes); }
+  .opts { border: 0; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
+  .opt { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--line);
+         border-radius: 8px; cursor: pointer; overflow-wrap: anywhere; }
+  .opt:has(input:checked) { border-color: var(--accent); }
+  .opt input { margin-top: 3px; }
+  .rec { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--pass-bg); color: var(--pass); }
+  .acts textarea { display: block; width: 100%; min-height: 38px; margin-top: 8px; font: inherit; padding: 6px 8px;
+                   border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: inherit; }
+  .btns { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
   .btn { font: inherit; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg);
          color: inherit; cursor: pointer; }
   .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
   .btn.danger { color: var(--changes); }
   .btn:focus-visible, .files button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   .btn:disabled { opacity: .5; cursor: not-allowed; }
-  .cmds { display: grid; gap: 4px; padding: 0 16px 12px; font-size: 12.5px; }
+  .cmds { display: grid; gap: 4px; padding: 8px 16px; font-size: 12.5px; border-bottom: 1px solid var(--line); }
   .cmds:empty { display: none; }
   .cmd { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; overflow-wrap: anywhere; }
   .cmd .state { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; }
@@ -123,12 +142,13 @@
     <div><div class="note" id="dlg-id"></div><h2 id="dlg-title"></h2><div class="note" id="dlg-reason"></div></div>
     <button class="btn" id="dlg-close" aria-label="Close">Close</button>
   </div>
+  <section class="story-wrap" id="dlg-story" aria-label="What has happened"></section>
+  <section class="acts" id="dlg-acts"></section>
+  <div class="cmds" id="dlg-cmds" role="status" aria-live="polite" aria-label="Commands for this job"></div>
   <div class="dlg-body">
     <nav class="files" id="dlg-files" aria-label="Job files"></nav>
     <article class="doc" id="dlg-doc"></article>
   </div>
-  <div class="acts" id="dlg-acts"></div>
-  <div class="cmds" id="dlg-cmds" role="status" aria-live="polite" aria-label="Commands for this job"></div>
 </dialog>
 
 <script>
@@ -245,15 +265,62 @@
     } catch (e) { $("dlg-doc").innerHTML = `<p class="error">${esc(e.message)}</p>`; }
   }
 
+  function story(job) {
+    const lines = job.story || [];
+    return lines.length ? `<ol class="story">${lines.map((l) => `<li>${esc(l)}</li>`).join("")}</ol>` : "";
+  }
+
+  function checksLine(c) {
+    if (!c) return "";
+    const over = c.diff_lines > c.max_diff ? ` <strong class="warn">over max_diff ${esc(c.max_diff)}</strong>` : "";
+    return `<p class="note">${esc(c.diff_lines)} lines changed in ${esc(c.files)} files${over}`
+      + `${(c.lockfiles || []).length ? ` · lockfiles: ${esc(c.lockfiles.join(", "))}` : ""}</p>`;
+  }
+
+  // What the developer decides now, and only the buttons that answer it.
+  function decision(job) {
+    const d = job.decision;
+    const cancel = ["done", "merged", "cancelled"].includes(job.stage) ? [] : [["cancel", "Cancel job", "danger"]];
+    if (d && d.kind === "question") {
+      const options = (d.options || []).map((o, i) =>
+        `<label class="opt"><input type="radio" name="answer" value="(${esc(o.key)}) ${esc(o.text)}"${o.recommended || (!i && !d.options.some((x) => x.recommended)) ? " checked" : ""}>`
+        + `<span><strong>(${esc(o.key)})</strong> ${esc(o.text)}${o.recommended ? ` <span class="rec">recommended</span>` : ""}</span></label>`).join("");
+      return { html: `<h3>Your decision</h3>${d.question ? `<p class="q">${esc(d.question)}</p>` : ""}`
+        + `<div class="ctx">${markdown(d.context || "")}</div>`
+        + `<fieldset class="opts"><legend class="sr">Options</legend>${options}`
+        + `<label class="opt"><input type="radio" name="answer" value=""${options ? "" : " checked"}><span>Your own answer</span></label>`
+        + `<textarea id="act-text" aria-label="Your own answer" placeholder="Your own answer"></textarea></fieldset>`,
+        acts: [["answer", "Answer and continue", "primary"], ...cancel] };
+    }
+    if (d && d.kind === "approve") {
+      const least = (d.least_sure || []).map((l) => `<li>${markdown(l).replace(/^<p>|<\/p>$/g, "")}</li>`).join("");
+      return { html: `<h3>Ready for your approval</h3>${d.summary ? `<div class="ctx">${markdown(d.summary)}</div>` : ""}`
+        + checksLine(d.checks)
+        + (least ? `<p class="lead">Check before you approve — the reviewer is least sure of:</p><ol class="least">${least}</ol>`
+                 : `<p class="note">The reviewer named nothing it is unsure of.</p>`)
+        + `<textarea id="act-text" aria-label="Rework note" placeholder="Rework note — what to change"></textarea>`,
+        acts: [["approve", "Approve", "primary"], ["rework", "Rework", ""], ...cancel] };
+    }
+    if (d && d.kind === "stopped") {
+      return { html: `<h3>Stopped — needs you</h3><p class="q">${esc(d.reason)}</p>`
+        + `<textarea id="act-text" aria-label="Rework note" placeholder="Rework note — what to do next"></textarea>`,
+        acts: [["rework", "Rework", "primary"], ...cancel] };
+    }
+    const rework = job.stage === "pr-open" ? [["rework", "Rework", ""]] : [];
+    if (!rework.length && !cancel.length) return { html: "", acts: [] };
+    return { html: `<textarea id="act-text" aria-label="Rework note or reason for cancelling" placeholder="Rework note, or reason for cancelling"></textarea>`,
+             acts: [...rework, ...cancel] };
+  }
+
   function actions(job) {
-    const acts = [];
-    if (job.stage === "needs-human") acts.push(["approve", "Approve", "primary"]);
-    if (job.stage === "needs-human" || job.stage === "pr-open") acts.push(["rework", "Rework", ""]);
-    if (!["done", "merged", "cancelled"].includes(job.stage)) acts.push(["cancel", "Cancel job", "danger"]);
-    if (!acts.length) return "";
-    return `<textarea id="act-text" aria-label="Note for rework, or reason for cancel" placeholder="Rework note, or reason for cancelling"></textarea>`
-      + acts.map(([cmd, label, cls]) => `<button class="btn ${cls}" data-cmd="${cmd}">${label}</button>`).join("")
-      + `<span class="note" id="act-status" role="status"></span>`;
+    const { html, acts } = decision(job);
+    return html + (acts.length ? `<div class="btns">${acts.map(([cmd, label, cls]) =>
+      `<button class="btn ${cls}" data-cmd="${cmd}">${label}</button>`).join("")}<span class="note" id="act-status" role="status"></span></div>` : "");
+  }
+
+  function decisionKey(job) {
+    const d = job.decision || {};
+    return [job.stage, d.kind, d.question, d.context].join("|");
   }
 
   function lockButtons() {
@@ -280,7 +347,12 @@
 
   async function send(job, command) {
     if (sending || pending) return;
-    const text = ($("act-text") || {}).value || "";
+    let text = ($("act-text") || {}).value || "";
+    if (command === "answer") {
+      const picked = document.querySelector('#dlg-acts input[name="answer"]:checked');
+      if (picked && picked.value) text = picked.value;
+      if (!text.trim()) { $("act-status").textContent = "Pick an option or write your answer."; return; }
+    }
     if (command === "rework" && !text.trim()) { $("act-status").textContent = "Rework needs a note."; return; }
     if (command === "cancel" && !confirm(`Cancel ${job.id}? This closes its PR and deletes its branch.`)) return;
     sending = true; lockButtons();
@@ -298,7 +370,8 @@
   function fillHeader(job) {
     $("dlg-id").textContent = `${job.id} · ${job.stage}`;
     $("dlg-title").textContent = job.title || job.id;
-    $("dlg-reason").textContent = job.reason || "";
+    $("dlg-reason").textContent = job.decision ? "" : job.reason || "";
+    $("dlg-story").innerHTML = story(job);
   }
 
   function fillFiles(job) {
@@ -313,9 +386,11 @@
   }
 
   function fillActions(job) {
-    openStage = job.stage;
+    openStage = decisionKey(job);
     $("dlg-acts").innerHTML = actions(job);
     $("dlg-acts").querySelectorAll("button[data-cmd]").forEach((b) => b.addEventListener("click", () => send(job, b.dataset.cmd)));
+    const own = $("dlg-acts").querySelector('input[name="answer"][value=""]');
+    if (own) $("act-text").addEventListener("input", () => { own.checked = true; });
     lockButtons();
   }
 
@@ -328,7 +403,9 @@
     fillFiles(job);
     fillActions(job);
     const files = job.files || [];
-    const first = ["decision.md", "spec.md"].find((f) => files.includes(f)) || files[0];
+    const asked = job.decision && job.decision.kind === "question" && job.next
+      ? `round-${job.next.round}/ruling-${job.next.attempt}.md` : null;
+    const first = [asked, "decision.md", "spec.md"].find((f) => f && files.includes(f)) || files[0];
     if (first) show(job, first);
     if (!$("dlg").open) $("dlg").showModal();
     loadCommands(id);
@@ -340,7 +417,7 @@
     const job = (board.jobs || []).find((j) => j.id === openJob); if (!job) return;
     fillHeader(job);
     if ((job.files || []).join("\n") !== openFiles) fillFiles(job);
-    if (job.stage !== openStage) fillActions(job);
+    if (decisionKey(job) !== openStage) fillActions(job);
     loadCommands(job.id);
   }
 

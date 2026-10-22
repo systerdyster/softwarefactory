@@ -178,6 +178,14 @@ the repo root (or `-s tests` from `skills/factory/bin`).
   start, build, verify, tidy, review (each reviewer running, waiting or done), approve, PR — with the
   running agent's time. Every git call runs with `GIT_OPTIONAL_LOCKS=0`, so these reads never take
   `index.lock` from under an agent's commit.
+- **A job that waits for the developer says what to decide, and offers only the answers that fit.**
+  A NEEDS-HUMAN ruling has a `Question:` line and `## Options` (`- (a) … [recommended]`); the
+  dashboard shows them as choices plus a free answer, and `answer` records it in spec.md's
+  `## Decided` and sends the builder on in the same round — before, the question sat in
+  round-N/ruling-A.md and the only way to answer was a rework note. A job ready for approval shows
+  spec.md's summary, the diff size and the main review's least-sure list. Approve is refused unless
+  the job is ready: it used to accept a job stopped on an objection and take unfinished work to a PR.
+  Every job opens on a few lines of what has happened, round by round (`fx/story.py`).
 - **One dashboard per project**, recorded in `factory/dashboard.json` (URL, pid, port; mode 0600,
   removed on exit). `/factory run` starts it, or links to the one already running; started by hand
   it reads the queue and jobs without an orchestrator, and its header says so, since commands then
