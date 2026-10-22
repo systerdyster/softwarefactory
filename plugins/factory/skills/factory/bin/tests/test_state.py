@@ -343,6 +343,14 @@ class LiveRunTest(unittest.TestCase):
         self.assertEqual(state.hold_for_runs(f, state.decide(f))["next"]["action"], "wait-agent")
 
 
+    def test_a_reviewer_still_running_holds_the_next_round_and_the_approval(self):
+        running = [{"run": "r4", "role": "review-code", "round": 1, "attempt": None, "status": "running"}]
+        for rounds in ({1: rnd({"code": "CHANGES"})}, {1: passing()}):
+            f = base_facts(build=[done(1)], rounds=rounds)
+            f["live_runs"] = running
+            self.assertEqual(state.hold_for_runs(f, state.decide(f))["next"], {"action": "wait-agent", "runs": ["r4"]})
+
+
 class HumanTest(unittest.TestCase):
     def test_human_approval_skips_the_open_verdicts(self):
         rounds = {n: rnd({"code": "CHANGES"}) for n in (1, 2, 3)}

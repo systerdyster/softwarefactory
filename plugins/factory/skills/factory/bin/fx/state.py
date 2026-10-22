@@ -416,7 +416,8 @@ PASS_THROUGH = ("cancel", "finish", "needs-human", "wait-pr", "none", "take", "s
 
 def hold_for_runs(f, result):
     """Live agent runs (see runs.py) hold the job: while its builder or tidy pass runs, nothing else
-    happens to the workspace; a reviewer already running is not started again."""
+    happens to the workspace; a reviewer already running is not started again; and while any reviewer
+    runs, its round isn't judged — it may still rewrite the file it already wrote."""
     nxt = result["next"]
     live = f.get("live_runs") or []
     writer = next((r for r in live if r["role"] in ("builder", "tidy")), None)
@@ -424,14 +425,17 @@ def hold_for_runs(f, result):
         result["next"] = {"action": "wait-agent", "run": writer["run"]}
         result["reason"] = f"{writer['role']} run {writer['run']} is {writer['status']}"
         return result
+    reviewers = [r for r in live if r["role"].startswith("review-")]
+    busy = {r["role"][len("review-"):] for r in reviewers}
     if nxt["action"] == "spawn-reviewers":
-        busy = {r["role"][len("review-"):] for r in live if r["role"].startswith("review-") and r["round"] == nxt["round"]}
+        busy = {r["role"][len("review-"):] for r in reviewers if r["round"] == nxt["round"]}
         left = [n for n in nxt["reviewers"] if n not in busy]
-        if not left:
-            result["next"] = {"action": "wait-agent", "runs": sorted(r["run"] for r in live)}
-            result["reason"] = f"reviewers running: {', '.join(sorted(busy))}"
-        else:
+        if left:
             nxt["reviewers"] = left
+            return result
+    if busy and nxt["action"] not in ("cancel", "finish"):
+        result["next"] = {"action": "wait-agent", "runs": sorted(r["run"] for r in reviewers)}
+        result["reason"] = f"reviewers running: {', '.join(sorted(busy))}"
     return result
 
 
