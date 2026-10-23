@@ -3,7 +3,7 @@ freshly spawned agent. It is derived from `state`, so the round, attempt and rea
 the job folder, and it refuses when `state` does not call for that agent. Every brief is logged
 to spawns.jsonl, which `state` reads to notice an agent that keeps making no progress."""
 
-from . import actions, findings, gitutil, jobs, mages, runs, state as state_mod
+from . import actions, findings, gitutil, jobs, mages, runs, skills, state as state_mod
 from .errors import FactoryError
 from .paths import branch_name
 
@@ -13,15 +13,26 @@ EXPECTED = {"builder": "spawn-builder", "tidy": "spawn-tidy", "wiki": "spawn-wik
 
 
 def _rules(ws, cfg):
+    """The project's written rules every agent reads. Its skills are not among them: an agent gets the
+    skills [heroes] or [mages] give it, so none reads a release or hotfix procedure as a rule."""
     found = [f for f in RULE_FILES if (ws / f).exists()]
     for pattern in cfg.docs:
         found += sorted(str(p.relative_to(ws)) for p in ws.glob(pattern)
                         if p.is_file() and str(p.relative_to(ws)) not in found)
-    skills = ws / ".claude" / "skills"
-    if skills.exists():
-        found += sorted(str(p.relative_to(ws)) for p in skills.glob("*/SKILL.md")
-                        if not str(p).endswith("skills/factory/SKILL.md"))
     return found
+
+
+def _hero_skills(paths, cfg, job_id, hero, base, head):
+    """The project's way of doing this hero's work, scoped to this job."""
+    found = skills.hero(paths, cfg, job_id, hero)
+    if not found:
+        return []
+    return [f"Skills you follow — the project's way of doing this work; read each before you start: "
+            + ", ".join(str(p) for p in found) + ".",
+            f"They were written for a person working on a case. Here the case is this job, and the change is "
+            f"`git -C factory/workspaces/{job_id} diff {base}..{head}`: where a skill reads a git range, a release "
+            "or a case from somewhere else, use this. Where a skill says to create or switch a branch, push, open "
+            "a PR, move a case, ask someone or commit in another way, your agent file and this brief win.", ""]
 
 
 def _header(paths, cfg, job_id, agent, s):
@@ -123,6 +134,8 @@ def builder(paths, cfg, job_id, s, nxt):
             reads.append(paths.root / rebase[-1]["log"])
         lines += [f"The branch was rebased onto {cfg.base_ref} and the suite is {rebase[-1]['result']}. "
                   "Make the full suite green.", ""]
+    head = s["head"]
+    lines += _hero_skills(paths, cfg, job_id, "coder", gitutil.merge_base(cfg.base_ref, head, paths.root), head)
     lines += _files("Read", reads)
     lines += _commits(cfg)
     lines += [f"Test note: keep {jd / 'test-note.md'} true to the change as it stands after this round, in "
@@ -146,6 +159,7 @@ def tidy(paths, cfg, job_id, s, nxt):
              "it smaller and simpler without changing what it does. The files it touches are yours to tidy:", ""]
     lines += [f"- {p}" for p in touched] + [""]
     lines += ["Beyond them, only what the change left without a user.", ""]
+    lines += _hero_skills(paths, cfg, job_id, "scout", base, head)
     reads = [jd / "spec.md", jd / "plan.md", jd / "tests.md" if (jd / "tests.md").exists() else None,
              jd / "build.md", paths.project]
     lines += _files("Read", reads)
@@ -175,7 +189,9 @@ def wiki(paths, cfg, job_id, s, nxt):
     if len(pages) > 200:
         lines += [f"- … and {len(pages) - 200} more"]
     lines += [""]
-    if cfg.wiki_guide:
+    writer = _hero_skills(paths, cfg, job_id, "writer", base, head)
+    lines += writer
+    if cfg.wiki_guide and not writer:
         lines += [f"The project's own wiki conventions are the rules for how you write: {ws / cfg.wiki_guide}. "
                   "Where they are a procedure for a person, follow the parts that apply to editing existing pages.", ""]
     if cfg.wiki_external:

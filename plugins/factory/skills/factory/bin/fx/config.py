@@ -12,6 +12,7 @@ OPTIONAL_REVIEWERS = ["platform", "ux", "ui", "codex"]
 MERGE_MODES = ["pr", "local-merge", "auto-merge"]
 PR_TOOLS = ["gh", "az", "other"]
 CASE_LINKS = ["title", "body", "both", "none"]
+HEROES = ["coder", "scout", "writer"]
 EVENTS = ["claimed", "started", "waiting", "handed-off", "completed", "cancelled"]
 BRANCH_FIELDS = {"id", "key", "slug"}
 DEFAULT_COMMITS = ("Subject imperative and short, no trailing period (`Add user profile route`, not `Added …` or a "
@@ -190,6 +191,16 @@ class Config:
         return result
 
     @property
+    def heroes(self):
+        """The skills each hero follows beside its own method, from [heroes]: coder (the builder), scout
+        (the tidy pass) and writer (the wiki pass), each a list of skill:<name> or default:<name>."""
+        if self._p.has_section("heroes"):
+            unknown = [k for k, _ in self._p.items("heroes") if k not in HEROES]
+            if unknown:
+                raise FactoryError(f"project.md: [heroes] knows {HEROES}, not {unknown}")
+        return {h: [_skill_ref(f"[heroes] {h}", v) for v in self.getlist("heroes", h)] for h in HEROES}
+
+    @property
     def reviewer_commands(self):
         """Project commands reviewers may run, e.g. the browser tests that render components."""
         return self.getlist("reviewers", "commands")
@@ -311,9 +322,13 @@ def _rulebook(name, value):
         raise FactoryError(f"project.md: [mages] {name} = {value!r}; codex, and only codex, is the Codex CLI")
     if value == "codex":
         return {"kind": "codex"}
+    return _skill_ref(f"[mages] {name}", value, "or codex")
+
+
+def _skill_ref(where, value, alternative=""):
     kind, _, skill = value.partition(":")
     if kind not in ("skill", "default") or not re.fullmatch(r"[A-Za-z0-9][\w.-]*", skill.strip()):
-        raise FactoryError(f"project.md: [mages] {name} = {value!r}; expected skill:<name>, default:<name> or codex")
+        raise FactoryError(f"project.md: {where} = {value!r}; expected skill:<name> or default:<name> {alternative}".rstrip())
     return {"kind": kind, "name": skill.strip()}
 
 

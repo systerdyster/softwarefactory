@@ -8,7 +8,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from . import events, gitutil, jobs, mages, queue, runs, workspace
+from . import events, gitutil, jobs, mages, queue, runs, skills, workspace
 from .config import REQUIRED_REVIEWERS
 from .errors import FactoryError
 from .paths import branch_name
@@ -508,11 +508,15 @@ def state(paths, cfg, job_id):
     f = gather(paths, cfg, job_id)
     f["live_runs"] = runs.for_job(paths, cfg, job_id)
     result = hold_for_runs(f, decide(f))
-    if result["next"]["action"] == "spawn-reviewers":
-        try:
+    action = result["next"]["action"]
+    try:
+        if action == "spawn-reviewers":
             result["next"]["models"] = mages.models(paths, cfg, job_id, result["next"]["reviewers"])
-        except FactoryError as e:
-            result = _out(f, "needs-human", "needs-human", f"{e}; add the skill on the target branch, or change [mages]")
+        elif action in skills.HERO_OF_ACTION:
+            skills.hero(paths, cfg, job_id, skills.HERO_OF_ACTION[action])
+    except FactoryError as e:
+        result = _out(f, "needs-human", "needs-human",
+                      f"{e}; add the skill on the target branch, or change [heroes] or [mages]")
     if result["next"].get("ready") and f["head"]:
         c = checks(paths, cfg, f["head"])
         result["checks"] = c

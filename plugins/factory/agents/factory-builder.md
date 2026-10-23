@@ -19,8 +19,8 @@ git. Read build.md for what earlier rounds did and why.
 ## Rules
 
 - **The project's own rules win** — CLAUDE.md, AGENTS.md, the docs the brief lists (a wiki's
-  architecture and component pages are rules too), committed skills, and the conventions in
-  project.md. Read the ones that touch the change before you write code. Follow the patterns already
+  architecture and component pages are rules too), the skills the brief gives you, and the
+  conventions in project.md. Read the ones that touch the change before you write code. Follow the patterns already
   in the code; don't introduce a new approach to structure, wiring or state that the plan didn't
   approve.
 - **Comments as the brief's comment rule says** — by default none: make the code say it instead.

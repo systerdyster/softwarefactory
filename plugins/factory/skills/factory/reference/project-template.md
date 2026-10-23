@@ -90,8 +90,14 @@ writing =
 wiki =
 ; wikis in other repos that a change may affect: named in the agent's report, never edited
 wiki_external =
-; the project's own wiki conventions (a file in the repo, e.g. a skill) the wiki agent follows
-wiki_guide =
+
+[heroes]
+; the skills each hero follows beside its own method, comma-separated: skill:<a skill in .claude/skills>
+; or default:<the factory's defaults/skills/<name>>. Only these reach the agent; the project's other
+; skills don't. coder builds the change, scout tidies it, writer keeps the wiki true.
+coder =
+scout =
+writer =
 
 [mages]
 ; <name> = the rulebook the Mage reviews by: skill:<a skill in .claude/skills> or default:<the factory's

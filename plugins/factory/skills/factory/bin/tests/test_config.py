@@ -32,6 +32,17 @@ class ConfigTest(unittest.TestCase):
                                      "a11y": {"kind": "default", "name": "ux"},
                                      "codex": {"kind": "codex"}})
 
+    def test_heroes_list_the_skills_they_follow_and_none_by_default(self):
+        cfg = parse("[heroes]\ncoder = skill:tdd, skill:add-component\nwriter = default:wiki-style")
+        self.assertEqual(cfg.heroes, {"coder": [{"kind": "skill", "name": "tdd"}, {"kind": "skill", "name": "add-component"}],
+                                      "scout": [], "writer": [{"kind": "default", "name": "wiki-style"}]})
+        self.assertEqual(parse("[factory]\n").heroes, {"coder": [], "scout": [], "writer": []})
+
+    def test_heroes_are_the_three_and_name_their_skills(self):
+        for body in ("[heroes]\nmage = skill:code-review", "[heroes]\ncoder = tdd"):
+            with self.assertRaises(FactoryError, msg=body):
+                parse(body).heroes
+
     def test_mages_need_the_main_one_and_a_rulebook_each(self):
         for body in ("[mages]\nsecurity = default:security", "[mages]\ncode = code-review",
                      "[mages]\ncode = skill:", "[mages]\nCode Review = skill:code-review",

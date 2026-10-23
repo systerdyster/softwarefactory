@@ -63,6 +63,15 @@ class WikiTest(SandboxTest):
                          str(self.jd / "round-1" / "wiki.md")):
             self.assertIn(expected, text)
 
+    def test_the_writers_skills_replace_the_wiki_guide(self):
+        self.sb.write(".claude/skills/wiki-sync/SKILL.md", "---\nname: wiki-sync\n---\n# Sync\n", base=self.sb.ws)
+        self.paths.project.write_text(self.paths.project.read_text().replace(
+            "[events]", "[heroes]\nwriter = skill:wiki-sync\n\n[events]"), encoding="utf-8")
+        cfg = config.load(self.paths)
+        text = "\n".join(brief.wiki(self.paths, cfg, self.job, {"head": self.reviewed}, {"round": 1}))
+        self.assertIn(str(self.sb.ws / ".claude/skills/wiki-sync/SKILL.md"), text)
+        self.assertNotIn("The project's own wiki conventions", text)
+
     def test_the_comment_carries_the_wiki_report_or_says_it_was_not_updated(self):
         self.assertIn("The wiki was not updated", pr.details(self.paths, self.cfg, self.job))
         self.sb.write("round-1/wiki.md", "Status: done\n\n## Changed\n- Wiki/Page.md — says 42\n\n"

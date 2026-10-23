@@ -75,12 +75,17 @@ section of `factory/project.md`:
   factory may keep true and set `[rules] wiki` to their globs (existing pages only, e.g. `Wiki/Tech/**/*.md`).
   A wiki in another repo goes in `[rules] wiki_external` by name: the wiki agent reports what a change
   makes stale there and never edits it. If the project has its own wiki conventions or a skill for
-  syncing the wiki, set `[rules] wiki_guide` to that file: the agent follows it instead of guessing.
+  syncing the wiki, name it in `[heroes] writer`: the agent follows it instead of guessing.
   Explain what the agent does: once every review of a job passed and before the developer approves it,
   it edits existing pages that the change made false and commits them on the job's branch, so the
   developer approves the pages with the change. It lists in the PR comment what it changed and what
   pages or other wikis it thinks are missing. Nothing in the wiki is reviewed by the reviewers. Leave
   `wiki` empty for a project without a wiki in the repo.
+- **Heroes** — `[heroes]`: which of the project's skills the builder (`coder`), the tidy pass
+  (`scout`) and the wiki pass (`writer`) follow — craft skills such as `tdd`, `add-component`,
+  `commit`, `wiki-sync`. Only the skills named here or in `[mages]` reach an agent; a procedure for
+  a person (build-feature, close-feature, release, hotfix) is not a craft skill — leave it out.
+  Propose a mapping from `.claude/skills/` and let the developer confirm it.
 - **Mages** — `[mages]`: who reviews, each by a rulebook. `code` is the main Mage and reviews every
   job; the factory's defaults give security, performance and stability beside it. Look for the
   project's own review skills (`.claude/skills/*review*`) and offer them as rulebooks

@@ -1,0 +1,22 @@
+"""The skills the factory hands its agents: a project's own, read from the job's worktree so the
+branch's version applies, or one of the factory's defaults (defaults/skills/). [heroes] gives the
+builder, the tidy pass and the wiki pass theirs; [mages] gives each Mage its rulebook."""
+
+from .errors import FactoryError
+
+HERO_OF_ACTION = {"spawn-builder": "coder", "spawn-tidy": "scout", "spawn-wiki": "writer"}
+
+
+def path(paths, job_id, ref):
+    if ref["kind"] == "skill":
+        found = paths.workspace(job_id) / ".claude" / "skills" / ref["name"] / "SKILL.md"
+    else:
+        found = paths.plugin / "defaults" / "skills" / ref["name"] / "SKILL.md"
+    if not found.is_file():
+        raise FactoryError(f"{ref['kind']}:{ref['name']} has no skill at {found}")
+    return found
+
+
+def hero(paths, cfg, job_id, name):
+    """The skills a hero follows in this job, as paths; a missing one is an error, never skipped."""
+    return [path(paths, job_id, ref) for ref in cfg.heroes[name]]

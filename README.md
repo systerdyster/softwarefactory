@@ -284,6 +284,15 @@ the repo root (or `-s tests` from `skills/factory/bin`).
   from the run its brief reserved; before the run is attached it may read, and write nothing. A
   rulebook that is missing stops the job for the developer. Without `[mages]`, `[reviewers] enabled`
   still picks the defaults, until init rewrites project.md.
+- **An agent gets the skills it is given, not all of them.** Every brief used to list every skill in
+  the project as a rule, so a builder read release and hotfix procedures beside the craft skills it
+  needed. Now `[heroes]` names the skills the builder (`coder`), the tidy pass (`scout`) and the wiki
+  pass (`writer`) follow, and `[mages]` each Mage's rulebook; the written rules (CLAUDE.md, AGENTS.md,
+  `[rules] docs`) still reach everyone. A skill was written for a person working on a case, so the
+  brief scopes it to the job — its diff stands in for a git range or a release — and the agent file
+  and brief win over a skill's branch, push, PR, tracker and commit steps. `writer` replaces
+  `[rules] wiki_guide`, which is read only when `writer` is empty. A named skill that is missing stops
+  the job for the developer.
 - **Agents run project commands through `factory-cli ws run <job> <name>`**, named in project.md's
   `[commands]`, so one allowlist rule (`Bash(factory-cli:*)`) covers every project's build, lint and
   test without listing free-form shell, and it does not change between plugin versions.
@@ -364,8 +373,8 @@ the repo root (or `-s tests` from `skills/factory/bin`).
   and `git mv`. Once the pass has started, the round's build and reviews are settled, so its commit
   doesn't reopen them; what it commits is checked against the globs, and anything else stops the job
   for the developer. A pass that says done but left pages uncommitted is tried again, then stops the
-  job. Two tries, then the job goes on and the PR comment says the wiki was not updated. `wiki_guide`
-  points at the project's own wiki conventions, which the agent follows. The reviewers never see the
+  job. Two tries, then the job goes on and the PR comment says the wiki was not updated. `[heroes]
+  writer` names the project's own wiki skills, which the agent follows. The reviewers never see the
   wiki change; the developer approves it with the change, and the PR comment lists it. It first ran
   after approval, which kept the approval valid across a wiki commit only through a record of heads
   and a second equivalence rule, and left the pages unseen by anyone before the PR; before approval,

@@ -265,6 +265,27 @@ class FlowTest(SandboxTest):
         self.cli("start", self.job)
         self.assertIn(str(self.sb.ws / "Wiki/Components.md"), self.brief("builder"))
 
+    def test_a_hero_follows_only_the_skills_it_was_given_scoped_to_the_job(self):
+        for name in ("tdd", "release"):
+            self.sb.push_target_change(f".claude/skills/{name}/SKILL.md", f"---\nname: {name}\n---\n# {name}\n")
+        self.sb.write("project.md", self.paths.project.read_text().replace(
+            "[reviewers]\n", "[heroes]\ncoder = skill:tdd\n\n[reviewers]\n"), base=self.paths.factory)
+        self.cli("next", "--lease", self.lease)
+        self.cli("start", self.job)
+        brief = self.brief("builder")
+        self.assertIn(str(self.sb.ws / ".claude/skills/tdd/SKILL.md"), brief)
+        self.assertIn("your agent file and this brief win", brief)
+        self.assertNotIn("skills/release", brief)
+
+    def test_a_hero_whose_skill_is_missing_stops_the_job_for_the_developer(self):
+        self.sb.write("project.md", self.paths.project.read_text().replace(
+            "[reviewers]\n", "[heroes]\ncoder = skill:tdd\n\n[reviewers]\n"), base=self.paths.factory)
+        self.cli("next", "--lease", self.lease)
+        self.cli("start", self.job)
+        s = self.cli("state", self.job)
+        self.assertEqual(s["stage"], "needs-human")
+        self.assertIn("skill:tdd has no skill", s["reason"])
+
     def test_every_brief_carries_the_comment_rule_the_project_sets_or_the_default(self):
         self.cli("next", "--lease", self.lease)
         self.cli("start", self.job)
