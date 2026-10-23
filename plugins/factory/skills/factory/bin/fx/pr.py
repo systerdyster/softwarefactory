@@ -210,6 +210,10 @@ def open_or_update(paths, cfg, job_id):
     meta = jobs.meta(jd)
     existing = jobs.read_json(jd / "pr.json")
     text = final_body(paths, cfg, job_id)
+    if _had_auto(existing) and cfg.pr_tool in ("gh", "az"):
+        _set_auto(paths, existing["tool"], existing["number"], False)
+        existing = dict(existing, auto=False)
+        jobs.write_json(jd / "pr.json", existing)
     head = _push(paths, cfg, job_id)
     title = title_for(cfg, meta)
     branch = branch_name(paths, job_id)
@@ -248,9 +252,7 @@ def _open_with(paths, cfg, record, existing, meta, branch, title, text, body_fil
         view = _gh_view(paths, branch)
         record.update(number=view["number"], url=view["url"], state=view["state"])
         if auto:
-            _cli(["gh", "pr", "merge", str(view["number"]), "--auto", "--merge"], paths.root)
-        elif _had_auto(existing):
-            _cli(["gh", "pr", "merge", str(view["number"]), "--disable-auto"], paths.root)
+            _set_auto(paths, "gh", view["number"], True)
     else:
         description = text if len(text) <= 3900 else text[:3800] + "\n\n_(truncated; see the job folder)_\n"
         if existing and existing.get("state") == "OPEN":
@@ -262,14 +264,22 @@ def _open_with(paths, cfg, record, existing, meta, branch, title, text, body_fil
                                     "--description", description, *create_flags(cfg, meta, "az"),
                                     "--output", "json"], paths.root))
         record.update(number=data["pullRequestId"], url=_az_url(data), state=AZ_STATE.get(data.get("status"), "OPEN"))
-        if auto or _had_auto(existing):
-            _cli(["az", "repos", "pr", "update", "--id", str(data["pullRequestId"]), "--auto-complete",
-                  "true" if auto else "false", "--output", "json"], paths.root)
+        if auto:
+            _set_auto(paths, "az", data["pullRequestId"], True)
+
+
+def _set_auto(paths, tool, number, on):
+    if tool == "gh":
+        _cli(["gh", "pr", "merge", str(number), "--auto" if on else "--disable-auto"]
+             + (["--merge"] if on else []), paths.root)
+    else:
+        _cli(["az", "repos", "pr", "update", "--id", str(number), "--auto-complete",
+              "true" if on else "false", "--output", "json"], paths.root)
 
 
 def _had_auto(existing):
-    """An open PR this factory set to auto-complete earlier keeps that setting until it is turned off:
-    the developer's later choice of a plain publish has to take it away."""
+    """An open PR this factory set to auto-complete earlier is switched off before new code is pushed to
+    it, so a push can never land on a PR that may merge by itself; a failure there stops the publish."""
     return bool(existing and existing.get("state") == "OPEN" and existing.get("auto"))
 
 

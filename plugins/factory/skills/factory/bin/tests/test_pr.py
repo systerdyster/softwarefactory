@@ -1,5 +1,6 @@
 import os
 import unittest
+from unittest import mock
 
 from support import SandboxTest, git
 
@@ -145,6 +146,30 @@ class PrTest(SandboxTest):
                 self.assertFalse(pr.open_or_update(self.paths, cfg, self.job)["auto"])
                 self.assertIn(off, log.read_text(), tool)
                 self.assertNotIn("--auto --merge", log.read_text())
+        finally:
+            os.environ["PATH"] = old_path
+
+    def test_nothing_is_pushed_when_auto_complete_cannot_be_switched_off(self):
+        fake = self.sb.write("bin/gh", '#!/bin/sh\n'
+                             'case "$1 $2" in\n'
+                             '  "pr view") echo \'{"number": 5, "url": "https://gh/pr/5", "state": "OPEN"}\' ;;\n'
+                             '  "api -X") echo \'{"id": 77}\' ;;\n'
+                             '  "pr merge") case "$*" in *--disable-auto*) echo boom >&2; exit 1 ;; esac ;;\n'
+                             'esac\n', base=self.sb.tmp)
+        fake.chmod(0o755)
+        self.paths.project.write_text(self.paths.project.read_text().replace("pr_tool = other", "pr_tool = gh")
+                                      .replace("merge_mode = local-merge", "merge_mode = pr"), encoding="utf-8")
+        cfg = config.load(self.paths)
+        old_path = os.environ["PATH"]
+        os.environ["PATH"] = f"{fake.parent}:{old_path}"
+        try:
+            self.sb.write("human-approval.md", "Head: abc\nAuto-Complete: yes\n", base=self.jd)
+            pr.open_or_update(self.paths, cfg, self.job)
+            self.sb.write("human-approval.md", "Head: abc\n", base=self.jd)
+            with mock.patch.object(pr, "_push") as push:
+                with self.assertRaises(FactoryError):
+                    pr.open_or_update(self.paths, cfg, self.job)
+            push.assert_not_called()
         finally:
             os.environ["PATH"] = old_path
 
