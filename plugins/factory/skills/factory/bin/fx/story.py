@@ -104,7 +104,9 @@ def confidence(paths, job_id):
 def publish_choice(cfg):
     """Which approval buttons the dashboard offers: both ways of publishing a PR when the project
     publishes plain ones and the PR tool can auto-complete, the auto one alone when the project always
-    does, otherwise the plain approval."""
+    does, *Merge* when the project merges locally, otherwise the plain approval."""
+    if cfg.merge_mode == "local-merge":
+        return "merge"
     if not cfg.auto_complete_available:
         return "approve"
     return "both" if cfg.merge_mode == "pr" else "auto"

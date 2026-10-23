@@ -75,6 +75,16 @@ def rebase_in_progress(cwd):
     return (gd / "rebase-merge").exists() or (gd / "rebase-apply").exists()
 
 
+def operation_in_progress(cwd):
+    """The name of a rebase, merge, cherry-pick or revert left half-done in `cwd`, else None."""
+    gd = git_dir(cwd)
+    for name, marker in (("rebase", "rebase-merge"), ("rebase", "rebase-apply"), ("merge", "MERGE_HEAD"),
+                         ("cherry-pick", "CHERRY_PICK_HEAD"), ("revert", "REVERT_HEAD")):
+        if (gd / marker).exists():
+            return name
+    return None
+
+
 def rebasing_branch(cwd):
     gd = git_dir(cwd)
     for d in ("rebase-merge", "rebase-apply"):

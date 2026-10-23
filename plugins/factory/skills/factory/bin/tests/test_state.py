@@ -304,6 +304,15 @@ class ApprovalAndMergeTest(unittest.TestCase):
         self.assertEqual(nxt(f), "merge-local")
         f["merge"] = {"merged": False, "head": H1, "blocked": "main is checked out"}
         self.assertEqual(state.decide(f)["stage"], "needs-human")
+        f["merge_retry"] = True
+        self.assertEqual(nxt(f), "merge-local")
+
+    def test_a_merge_whose_tree_differs_from_the_verified_branch_stops_for_a_human(self):
+        f = self.approved_facts(merge_mode="local-merge")
+        f["merge"] = {"merged": True, "commit": "c" * 40, "previous": "p" * 40, "target": "develop", "tree_matches": False}
+        r = state.decide(f)
+        self.assertEqual((r["stage"], r["next"]["action"]), ("needs-human", "needs-human"))
+        self.assertIn("git reset --hard pppppppppppp", r["reason"])
 
 
 class OpenPrTest(unittest.TestCase):
@@ -385,13 +394,18 @@ class HumanTest(unittest.TestCase):
 
 
 class JiraTest(unittest.TestCase):
-    def test_pr_open_transitions_and_asks_for_the_one_comment(self):
-        f = base_facts(jira_log=["claimed", "status:building"])
+    def test_pr_open_transitions_and_asks_for_the_one_comment_with_the_test_note(self):
+        f = base_facts(jira_log=["claimed", "status:building"], test_note="Open the catalogue and switch view.")
         todo = state.jira_todo(f, {"stage": "pr-open"})
         self.assertEqual([t["action"] for t in todo], ["transition", "comment"])
+        self.assertEqual(todo[1]["text"], "Open the catalogue and switch view.")
         f["jira_log"] += ["status:pr-open", "comment"]
         self.assertEqual(state.jira_todo(f, {"stage": "merged"}), [{"action": "transition", "event": "status:merged",
                                                                      "to": "Done"}])
+
+    def test_an_empty_test_note_means_no_comment(self):
+        f = base_facts(jira_log=["claimed", "status:building"], test_note="")
+        self.assertEqual([t["action"] for t in state.jira_todo(f, {"stage": "pr-open"})], ["transition"])
 
     def test_unmapped_stage_needs_nothing(self):
         self.assertEqual(state.jira_todo(base_facts(), {"stage": "needs-human"}), [])

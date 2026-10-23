@@ -328,6 +328,16 @@ the repo root (or `-s tests` from `skills/factory/bin`).
   nothing is fetched, pushed or deleted remotely, and the developer pulls the target themselves.
   With `remote = origin` the job is rebased on `origin/<target>` and `F merge` refuses it as not on
   top of the local target (tested both ways).
+- **`local-merge` merges where the developer works.** `F merge` runs `git merge --no-ff` in the main
+  checkout when it holds the target and is clean (no uncommitted changes, nothing half-done), so the
+  working tree follows; with no checkout on the target it builds the merge with plumbing. Another
+  worktree on the target, a dirty checkout or a refusing hook (the merge is aborted) leaves the job
+  waiting, with the reason in merge.json, and it tries again a minute later. It never pushes, and
+  never resets or reverts. The branch already contains the target's tip and was verified, so the
+  merge's tree must equal the branch's tree (`tree_matches`); a different tree stops the job instead
+  of re-running the checks. The dashboard's button is *Merge*; the Jira comment is the builder's test
+  note, posted only when it is not empty. A merge undone by hand (`git reset --hard <previous>`) no
+  longer reads as merged.
 - **A merged PR is noticed without being told.** While it waits, `F wait` fetches the target once a
   minute and, when the target moved, checks each open PR against it (`pr.check_merged`). With gh or
   az, git only says when to ask: the PR tool's state decides, since the same change can reach the

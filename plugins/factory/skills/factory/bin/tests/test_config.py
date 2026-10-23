@@ -54,7 +54,7 @@ class ConfigTest(unittest.TestCase):
         from fx import story
         for body, expected in (("[factory]\npr_tool = az", "both"), ("[factory]\npr_tool = gh\nmerge_mode = auto-merge", "auto"),
                                ("[factory]\npr_tool = other", "approve"),
-                               ("[factory]\npr_tool = az\nmerge_mode = local-merge", "approve")):
+                               ("[factory]\npr_tool = az\nmerge_mode = local-merge", "merge")):
             self.assertEqual(story.publish_choice(parse(body)), expected, body)
 
     def test_unknown_reviewer_is_refused(self):

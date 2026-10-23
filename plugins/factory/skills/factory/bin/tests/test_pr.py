@@ -122,10 +122,43 @@ class PrTest(SandboxTest):
         self.assertEqual(record["state"], "MANUAL")
         self.assertEqual(git(self.sb.origin, "rev-parse", "factory/001-answer"), self.head)
 
-    def test_local_merge_refuses_while_the_target_is_checked_out(self):
+    def test_local_merge_in_a_clean_checkout_merges_there_and_the_working_tree_follows(self):
+        record = pr.merge_local(self.paths, self.cfg, self.job)
+        self.assertEqual((record["merged"], record["via"], record["tree_matches"]), (True, "checkout", True))
+        self.assertEqual(git(self.sb.root, "rev-parse", "HEAD"), record["commit"])
+        self.assertIn("return 42", (self.sb.root / "src" / "app.py").read_text())
+        self.assertEqual(len(git(self.sb.root, "rev-list", "--parents", "-n", "1", "main").split()), 3)
+
+    def test_local_merge_leaves_a_dirty_checkout_alone(self):
+        self.sb.write("notes.txt", "mine\n")
+        before = git(self.sb.root, "rev-parse", "main")
         record = pr.merge_local(self.paths, self.cfg, self.job)
         self.assertFalse(record["merged"])
-        self.assertIn("checked out", record["blocked"])
+        self.assertIn("uncommitted changes (notes.txt)", record["blocked"])
+        self.assertEqual(git(self.sb.root, "rev-parse", "main"), before)
+
+    def test_local_merge_waits_for_a_half_done_operation_in_the_checkout(self):
+        (self.sb.root / ".git" / "MERGE_HEAD").write_text(self.head + "\n")
+        self.assertIn("a merge is in progress", pr.merge_local(self.paths, self.cfg, self.job)["blocked"])
+
+    def test_local_merge_refuses_while_another_worktree_holds_the_target(self):
+        git(self.sb.root, "switch", "--detach")
+        other = self.sb.tmp / "second-main"
+        git(self.sb.root, "worktree", "add", str(other), "main")
+        record = pr.merge_local(self.paths, self.cfg, self.job)
+        self.assertFalse(record["merged"])
+        self.assertIn(f"main is checked out in {other}", record["blocked"])
+
+    def test_a_merge_the_checkouts_hook_refuses_is_aborted_and_reported(self):
+        hook = self.sb.root / ".git" / "hooks" / "commit-msg"
+        hook.write_text("#!/bin/sh\necho 'a body is required' >&2\nexit 1\n")
+        hook.chmod(0o755)
+        before = git(self.sb.root, "rev-parse", "main")
+        record = pr.merge_local(self.paths, self.cfg, self.job)
+        self.assertFalse(record["merged"])
+        self.assertIn("a body is required", record["blocked"])
+        self.assertEqual(git(self.sb.root, "rev-parse", "main"), before)
+        self.assertIsNone(gitutil.operation_in_progress(self.sb.root))
 
     def test_local_merge_builds_a_no_ff_merge_without_touching_any_checkout(self):
         git(self.sb.root, "switch", "--detach")
@@ -247,6 +280,16 @@ class LocalTargetTest(SandboxTest):
         self.origin_head = git(self.sb.root, "rev-parse", "origin/main")
         self.job = self.sb.queue_job()
         queue.take(self.paths)
+
+    def test_a_merge_that_is_undone_by_hand_does_not_read_as_merged(self):
+        actions.start(self.paths, self.cfg, self.job)
+        self.sb.write("src/app.py", "def answer():\n    return 42\n", base=self.sb.ws)
+        self.sb.commit("Answer", cwd=self.sb.ws)
+        actions.rebase(self.paths, self.cfg, self.job)
+        record = pr.merge_local(self.paths, self.cfg, self.job)
+        self.assertEqual(state.state(self.paths, self.cfg, self.job)["next"]["action"], "finish")
+        git(self.sb.root, "reset", "--hard", record["previous"])
+        self.assertNotEqual(state.state(self.paths, self.cfg, self.job)["next"]["action"], "finish")
 
     def test_the_job_starts_from_the_local_target_and_merges_on_top_of_it_without_touching_origin(self):
         self.assertEqual(self.cfg.base_ref, "main")

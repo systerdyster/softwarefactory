@@ -7,6 +7,7 @@ import os
 import re
 import subprocess
 import tempfile
+from pathlib import Path
 
 from . import findings, gitutil, jobs, schedule
 from .errors import FactoryError
@@ -358,30 +359,66 @@ def close(paths, cfg, job_id):
     return {"closed": record.get("url") or record.get("branch")}
 
 
+def _merge_blocked(jd, head, why):
+    record = {"merged": False, "head": head, "at": jobs.now(), "blocked": why}
+    jobs.write_json(jd / "merge.json", record)
+    return record
+
+
+def _tree(ref, cwd):
+    return gitutil.out(["rev-parse", f"{ref}^{{tree}}"], cwd)
+
+
+def _merge_in_checkout(paths, jd, branch, target, head, old, message):
+    """The target is checked out in the main checkout: merge there, as a person would, so the working
+    tree follows. Only into a clean checkout with nothing half-done; a refused merge is aborted."""
+    root = paths.root
+    by_hand = f"merge it there with `git merge --no-ff {branch}`"
+    busy = gitutil.operation_in_progress(root)
+    if busy:
+        return _merge_blocked(jd, head, f"a {busy} is in progress in {root}; finish or abort it, or {by_hand}")
+    dirty = gitutil.dirty_files(root)
+    if dirty:
+        shown = ", ".join(dirty[:5]) + (f" and {len(dirty) - 5} more" if len(dirty) > 5 else "")
+        return _merge_blocked(jd, head, f"{root} has uncommitted changes ({shown}); commit or stash them, or {by_hand}")
+    result = gitutil.run(["merge", "--no-ff", "-m", message, branch], root, check=False)
+    if result.returncode != 0:
+        gitutil.run(["merge", "--abort"], root, check=False)
+        return _merge_blocked(jd, head, f"git merge was refused and aborted: "
+                                        f"{(result.stderr.strip() or result.stdout.strip())[:400]}")
+    commit = gitutil.rev("HEAD", root)
+    record = {"merged": True, "commit": commit, "target": target, "at": jobs.now(), "via": "checkout",
+              "previous": old, "tree_matches": _tree(commit, root) == _tree(head, root)}
+    jobs.write_json(jd / "merge.json", record)
+    return record
+
+
 def merge_local(paths, cfg, job_id):
-    """local-merge: a --no-ff merge commit on the local target branch, built with plumbing so no
-    checkout is touched. Refuses when the target branch is checked out anywhere, because moving
-    the ref under a checkout would leave that checkout looking reverted."""
+    """local-merge: a --no-ff merge of the job's branch into the local target. When no checkout holds
+    the target, a merge commit is built with plumbing, so nothing is touched. When the main checkout
+    holds it, `git merge` runs there (clean checkout only), since moving the ref under a checkout would
+    leave it looking reverted. Any other worktree holding it blocks. Never pushes. The branch contains
+    the target's tip, so the merge's tree must equal the verified branch's: `tree_matches` says so."""
     jd = paths.job(job_id)
     branch = branch_name(paths, job_id)
     target = cfg.target_branch
-    holders = gitutil.worktrees_on_branch(target, paths.root)
     head = gitutil.rev(branch, paths.root)
-    if holders:
-        record = {"merged": False, "head": head, "at": jobs.now(),
-                  "blocked": f"{target} is checked out in {holders[0]}; merge it there with `git merge --no-ff {branch}`"}
-        jobs.write_json(jd / "merge.json", record)
-        return record
     old = gitutil.rev(target, paths.root)
     if not old:
         raise FactoryError(f"local branch {target} does not exist")
     if not gitutil.is_ancestor(old, head, paths.root):
         raise FactoryError(f"{branch} is not on top of local {target}; rebase again", stale=True)
-    meta = jobs.meta(jd)
-    tree = gitutil.out(["rev-parse", f"{head}^{{tree}}"], paths.root)
-    message = f"Merge {branch}: {meta['title']}"
-    commit = gitutil.out(["commit-tree", tree, "-p", old, "-p", head, "-m", message], paths.root)
+    message = f"Merge {branch}: {jobs.meta(jd)['title']}"
+    holders = gitutil.worktrees_on_branch(target, paths.root)
+    elsewhere = [h for h in holders if Path(h).resolve() != Path(paths.root).resolve()]
+    if elsewhere:
+        return _merge_blocked(jd, head, f"{target} is checked out in {elsewhere[0]}; merge it there with "
+                                        f"`git merge --no-ff {branch}`")
+    if holders:
+        return _merge_in_checkout(paths, jd, branch, target, head, old, message)
+    commit = gitutil.out(["commit-tree", _tree(head, paths.root), "-p", old, "-p", head, "-m", message], paths.root)
     gitutil.run(["update-ref", f"refs/heads/{target}", commit, old], paths.root)
-    record = {"merged": True, "commit": commit, "target": target, "at": jobs.now()}
+    record = {"merged": True, "commit": commit, "target": target, "at": jobs.now(), "via": "plumbing",
+              "previous": old, "tree_matches": True}
     jobs.write_json(jd / "merge.json", record)
     return record

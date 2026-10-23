@@ -5,6 +5,7 @@ gather() collects facts; decide() is a pure function of those facts, so the rule
 without git. Network state (PR status) is read from pr.json, which `pr status` refreshes."""
 
 import json
+from datetime import datetime
 from pathlib import Path
 
 from . import gitutil, jobs, queue, runs, workspace
@@ -44,6 +45,18 @@ def _tidy_facts(paths, job_id, spawns):
             "discarded": jobs.field(text, "Discarded")}
 
 
+MERGE_RETRY_SECONDS = 60
+
+
+def _merge_retry(record):
+    """True once a blocked merge has waited long enough to try again: what blocked it, such as a dirty
+    checkout, is usually fixed by the developer without telling the factory."""
+    if not record or not record.get("blocked") or not record.get("at"):
+        return False
+    age = (datetime.fromisoformat(jobs.now()) - datetime.fromisoformat(record["at"])).total_seconds()
+    return age >= MERGE_RETRY_SECONDS
+
+
 def gather(paths, cfg, job_id):
     jd = paths.job(job_id)
     branch = branch_name(paths, job_id)
@@ -65,6 +78,11 @@ def gather(paths, cfg, job_id):
     if 1 in rounds:
         rounds[1]["tidy"] = _tidy_facts(paths, job_id, spawns)
     entry = queue.entry(paths, job_id)
+    merge_record = jobs.read_json(jd / "merge.json")
+    merged_locally = bool(head) and merge_record is not None and gitutil.rev(cfg.target_branch, paths.root) is not None \
+        and gitutil.is_ancestor(head, cfg.target_branch, paths.root)
+    if merge_record and merge_record.get("merged") and not merged_locally:
+        merge_record = None
     return {
         "id": job_id,
         "meta": jobs.read_json(jd / "job.json") or {},
@@ -83,9 +101,10 @@ def gather(paths, cfg, job_id):
         "human_approval": {"head": jobs.field(human_text, "Head")} if human_text else None,
         "rebase": jobs.read_json(jd / "rebase.json") or {"history": []},
         "pr": jobs.read_json(jd / "pr.json"),
-        "merge": jobs.read_json(jd / "merge.json"),
-        "merged_locally": bool(head) and (jd / "merge.json").exists() and gitutil.rev(cfg.target_branch, paths.root) is not None
-        and gitutil.is_ancestor(head, cfg.target_branch, paths.root),
+        "test_note": (jobs.read(jd / "test-note.md") or "").strip(),
+        "merge": merge_record,
+        "merged_locally": merged_locally,
+        "merge_retry": _merge_retry(merge_record),
         "spawns": spawns,
         "jira_log": _jira_log(jd),
         "required": REQUIRED_REVIEWERS,
@@ -176,7 +195,13 @@ def decide(f):
         if f["branch_exists"]:
             return _out(f, "cancelled", "cancel", "cancelled; branch still exists")
         return _out(f, "cancelled", reason="cancelled")
-    merged = (f["pr"] or {}).get("state") == "MERGED" or (f["merge"] or {}).get("merged") or f.get("merged_locally")
+    merge = f["merge"] or {}
+    if merge.get("merged") and merge.get("tree_matches") is False and f["backlog"] != "done":
+        return _out(f, "needs-human", "needs-human",
+                    f"the merge on {merge['target']} ({merge['commit'][:12]}) has a different tree than the branch "
+                    f"that was verified; look at it. Nothing is pushed. To undo it: "
+                    f"`git reset --hard {merge['previous'][:12]}` in the checkout, and the job merges again")
+    merged = (f["pr"] or {}).get("state") == "MERGED" or merge.get("merged") or f.get("merged_locally")
     if merged or f["backlog"] == "done":
         if f["branch_exists"] or f["backlog"] != "done":
             return _out(f, "merged", "finish", "merged; clean up branches and mark done")
@@ -368,7 +393,8 @@ def _approval(f, human):
             return _out(f, "rebasing", "open-workspace", why)
         return _out(f, "rebasing", "rebase", why)
     if f["merge_mode"] == "local-merge":
-        blocked = f["merge"] and f["merge"].get("blocked") and f["merge"].get("head") == f["head"]
+        blocked = f["merge"] and f["merge"].get("blocked") and f["merge"].get("head") == f["head"] \
+            and not f.get("merge_retry")
         if blocked:
             return _out(f, "needs-human", "needs-human", f["merge"]["blocked"])
         return _out(f, "merging", "merge-local", "merge into the local target branch")
@@ -408,8 +434,8 @@ def jira_todo(f, result):
         todo.append({"action": "transition", "event": f"status:{status_stage}", "to": f["jira_map"][status_stage]})
     if stage == "cancelled" and "unassigned" not in log:
         todo.append({"action": "unassign", "event": "unassigned"})
-    if stage in ("pr-open", "merged", "done") and "comment" not in log:
-        todo.append({"action": "comment", "event": "comment"})
+    if stage in ("pr-open", "merged", "done") and "comment" not in log and f.get("test_note"):
+        todo.append({"action": "comment", "event": "comment", "text": f["test_note"]})
     return todo
 
 
