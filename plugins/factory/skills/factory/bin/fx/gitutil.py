@@ -96,11 +96,9 @@ def is_ancestor(a, b, cwd):
     return ok(["merge-base", "--is-ancestor", a, b], cwd)
 
 
-def is_merged(head, ref, cwd):
-    """True when `head` is in `ref`: an ancestor (merge commit, fast-forward), or every file the
-    branch changed has the branch's content in `ref` (squash and rebase merges leave no ancestry)."""
-    if is_ancestor(head, ref, cwd):
-        return True
+def has_content_in(head, ref, cwd):
+    """True when every file the branch changed has the branch's content in `ref`. What a squash or
+    rebase merge leaves, but also what the same change arriving another way leaves: a hint, not proof."""
     base = merge_base(ref, head, cwd)
     files = changed_files(base, head, cwd) if base else []
     return bool(files) and ok(["diff", "--quiet", ref, head, "--", *files], cwd)

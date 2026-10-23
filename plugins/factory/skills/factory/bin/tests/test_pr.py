@@ -115,32 +115,69 @@ class MergedDetectionTest(SandboxTest):
     def jd(self):
         return self.paths.job(self.job)
 
-    def test_a_branch_that_is_not_in_the_target_stays_open(self):
-        self.assertFalse(pr.detect_merged(self.paths, self.cfg, self.job))
-        self.assertEqual(self.state(), "MANUAL")
-
-    def test_a_merge_commit_is_detected(self):
-        self.merge_on_target("merge", "--no-ff", "-m", "Merge", self.branch)
-        self.assertTrue(pr.detect_merged(self.paths, self.cfg, self.job))
-        self.assertEqual(self.state(), "MERGED")
-
-    def test_a_squash_merge_is_detected(self):
+    def squash_on_target(self):
         self.merge_on_target("merge", "--squash", self.branch)
         git(self.sb.root, "commit", "-m", "Squash")
         git(self.sb.root, "push", "origin", "HEAD:main")
         git(self.sb.root, "fetch", "origin")
-        self.assertTrue(pr.detect_merged(self.paths, self.cfg, self.job))
+
+    def as_gh(self, pr_state):
+        """The job's PR as a gh PR whose state the fake gh reports."""
+        fake = self.sb.write("bin/gh", f'#!/bin/sh\necho \'{{"number": 5, "url": "u", "state": "{pr_state}"}}\'\n',
+                             base=self.sb.tmp)
+        fake.chmod(0o755)
+        record = jobs.read_json(self.jd / "pr.json")
+        jobs.write_json(self.jd / "pr.json", {**record, "tool": "gh", "number": 5, "state": "OPEN"})
+        old = os.environ["PATH"]
+        os.environ["PATH"] = f"{fake.parent}:{old}"
+        self.addCleanup(os.environ.__setitem__, "PATH", old)
+
+    def test_a_branch_that_is_not_in_the_target_stays_open(self):
+        self.assertIsNone(pr.check_merged(self.paths, self.cfg, self.job))
+        self.assertEqual(self.state(), "MANUAL")
+
+    def test_a_merge_commit_is_proof_without_a_pr_tool(self):
+        self.merge_on_target("merge", "--no-ff", "-m", "Merge", self.branch)
+        self.assertEqual(pr.check_merged(self.paths, self.cfg, self.job), "merged")
+        self.assertEqual(self.state(), "MERGED")
+
+    def test_a_squash_is_only_a_suspicion_without_a_pr_tool_and_asked_once(self):
+        self.squash_on_target()
+        self.assertEqual(pr.check_merged(self.paths, self.cfg, self.job), "suspected")
+        self.assertEqual(self.state(), "MANUAL")
+        self.assertIsNone(pr.check_merged(self.paths, self.cfg, self.job))
+
+    def test_confirming_a_suspicion_lets_the_job_finish(self):
+        self.squash_on_target()
+        pr.check_merged(self.paths, self.cfg, self.job)
+        pr.confirm_merged(self.paths, self.cfg, self.job)
+        self.assertEqual(state.state(self.paths, self.cfg, self.job)["next"]["action"], "finish")
+
+    def test_the_same_content_arriving_another_way_does_not_close_a_pr_the_tool_says_is_open(self):
+        self.as_gh("OPEN")
+        self.squash_on_target()
+        self.assertIsNone(pr.check_merged(self.paths, self.cfg, self.job))
+        self.assertEqual(self.state(), "OPEN")
+
+    def test_a_pr_the_tool_says_is_merged_is_merged(self):
+        self.as_gh("MERGED")
+        self.squash_on_target()
+        self.assertEqual(pr.check_merged(self.paths, self.cfg, self.job), "merged")
 
     def test_a_closed_pr_is_left_alone(self):
         record = jobs.read_json(self.jd / "pr.json")
         jobs.write_json(self.jd / "pr.json", {**record, "state": "CLOSED"})
         self.merge_on_target("merge", "--no-ff", "-m", "Merge", self.branch)
-        self.assertFalse(pr.detect_merged(self.paths, self.cfg, self.job))
+        self.assertIsNone(pr.check_merged(self.paths, self.cfg, self.job))
 
     def test_wait_wakes_when_the_target_took_the_branch(self):
         self.merge_on_target("merge", "--no-ff", "-m", "Merge", self.branch)
         self.assertEqual(actions.wait(self.paths, self.cfg, timeout=5, interval=0.1), {"woken_by": "merged"})
         self.assertEqual(state.state(self.paths, self.cfg, self.job)["next"]["action"], "finish")
+
+    def test_wait_wakes_to_ask_when_only_the_content_arrived(self):
+        self.squash_on_target()
+        self.assertEqual(actions.wait(self.paths, self.cfg, timeout=5, interval=0.1), {"woken_by": "merge-suspected"})
 
     def test_wait_times_out_while_the_target_has_not_moved(self):
         self.assertEqual(actions.wait(self.paths, self.cfg, timeout=0.3, interval=0.1), {"woken_by": "timeout"})

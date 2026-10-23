@@ -358,7 +358,9 @@ def _approval(f, human):
     if pr and pr.get("state") in ("CLOSED", "ABANDONED"):
         return _out(f, "needs-human", "needs-human", f"the PR was closed without merging: {pr.get('url')}")
     if pr and pr.get("state") in ("OPEN", "MANUAL") and pr.get("head") == f["head"] and current:
-        return _out(f, "pr-open", "wait-pr", f"PR open: {pr.get('url')}", url=pr.get("url"))
+        suspected = " — its content is in the target; ask the developer whether it was merged" \
+            if pr.get("merge_suspected") else ""
+        return _out(f, "pr-open", "wait-pr", f"PR open: {pr.get('url')}{suspected}", url=pr.get("url"))
     if not current:
         why = "the target branch moved; rebase the open PR's branch and check it again" if pr \
             else "rebase on the target branch and run the project's checks"

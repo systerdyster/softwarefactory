@@ -150,6 +150,8 @@ def cmd_pr(a, p):
         return pr.open_or_update(p, cfg, a.job)
     if a.action == "status":
         return pr.status(p, cfg, a.job)
+    if a.action == "confirm-merged":
+        return pr.confirm_merged(p, cfg, a.job)
     if a.action == "comments":
         return {"comments": pr.comments(p, cfg, a.job)}
     if a.action == "body":
@@ -308,8 +310,8 @@ def parser():
     sp = add("rebase", cmd_rebase, "rebase on the target and run the suite; --continue after conflicts")
     sp.add_argument("job")
     sp.add_argument("--continue", dest="cont", action="store_true")
-    sp = add("pr", cmd_pr, "open|status|comments|body|close the job's PR (pushes the branch)")
-    sp.add_argument("action", choices=["open", "status", "comments", "body", "close"])
+    sp = add("pr", cmd_pr, "open|status|confirm-merged|comments|body|close the job's PR (pushes the branch)")
+    sp.add_argument("action", choices=["open", "status", "confirm-merged", "comments", "body", "close"])
     sp.add_argument("job")
     add("merge", cmd_merge, "local-merge: --no-ff merge into the local target branch").add_argument("job")
     sp = add("cleanup", cmd_cleanup, "remove the job's local and remote branch; workspace back to target")

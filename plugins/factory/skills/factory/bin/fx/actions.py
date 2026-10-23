@@ -377,15 +377,16 @@ FETCH_SECONDS = 60
 
 
 def _merged_while_waiting(paths, cfg, seen):
-    """Fetches the target and, when it moved since `seen`, marks every open PR whose branch is now
-    in it. Returns the target's head and the jobs marked."""
+    """Fetches the target and, when it moved since `seen`, checks every open PR against it. Returns
+    the target's head and why to wake: "merged" (the PR tool or git proved it), "merge-suspected"
+    (only the content is in the target; the developer decides), or None."""
     if cfg.remote:
         gitutil.run(["fetch", cfg.remote], paths.root, check=False, timeout=300)
     head = gitutil.rev(cfg.base_ref, paths.root)
     if head == seen:
-        return head, []
-    return head, [e["id"] for e in queue.entries(paths)
-                  if e["status"] == "taken" and pr_mod.detect_merged(paths, cfg, e["id"])]
+        return head, None
+    found = {pr_mod.check_merged(paths, cfg, e["id"]) for e in queue.entries(paths) if e["status"] == "taken"}
+    return head, "merged" if "merged" in found else "merge-suspected" if "suspected" in found else None
 
 
 def wait(paths, cfg, timeout=WAIT_SECONDS, interval=2.0):
@@ -399,8 +400,7 @@ def wait(paths, cfg, timeout=WAIT_SECONDS, interval=2.0):
         why = _woken(paths)
         if not why and time.monotonic() >= next_fetch:
             next_fetch = time.monotonic() + FETCH_SECONDS
-            seen, merged = _merged_while_waiting(paths, cfg, seen)
-            why = "merged" if merged else None
+            seen, why = _merged_while_waiting(paths, cfg, seen)
         if why or time.monotonic() >= deadline:
             return {"woken_by": why or "timeout"}
         time.sleep(interval)

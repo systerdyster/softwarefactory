@@ -265,18 +265,42 @@ def status(paths, cfg, job_id):
     return record
 
 
-def detect_merged(paths, cfg, job_id):
-    """Marks an open PR merged when its branch is already in the target, without asking the PR
-    tool: a human merged it. Reads the refs as they are; the caller fetches."""
+def check_merged(paths, cfg, job_id):
+    """After the target moved: is this open PR merged? Returns "merged", "suspected" or None.
+    The PR tool decides for gh and az; git only says when to ask. Without a PR tool, an ancestor
+    is proof, while the branch's content being in the target is only a suspicion: the same change
+    can arrive another way, and the branch is deleted once the job finishes. Reads the refs as
+    they are; the caller fetches."""
     jd = paths.job(job_id)
     record = jobs.read_json(jd / "pr.json")
     if not record or record.get("state") not in ("OPEN", "MANUAL") or not record.get("head"):
-        return False
-    if not gitutil.is_merged(record["head"], cfg.base_ref, paths.root):
-        return False
-    record.update(state="MERGED", merged_detected_by="git", checked_at=jobs.now())
+        return None
+    ancestor = gitutil.is_ancestor(record["head"], cfg.base_ref, paths.root)
+    if record["tool"] in ("gh", "az"):
+        if not ancestor and not gitutil.has_content_in(record["head"], cfg.base_ref, paths.root):
+            return None
+        try:
+            return "merged" if status(paths, cfg, job_id)["state"] == "MERGED" else None
+        except FactoryError:
+            return None
+    if ancestor:
+        return "merged" if status(paths, cfg, job_id)["state"] == "MERGED" else None
+    if record.get("merge_suspected") or not gitutil.has_content_in(record["head"], cfg.base_ref, paths.root):
+        return None
+    record["merge_suspected"] = jobs.now()
     jobs.write_json(jd / "pr.json", record)
-    return True
+    return "suspected"
+
+
+def confirm_merged(paths, cfg, job_id):
+    """The developer said the PR was merged (the one case git can't settle): mark it so."""
+    jd = paths.job(job_id)
+    record = jobs.read_json(jd / "pr.json")
+    if not record or record.get("state") not in ("OPEN", "MANUAL"):
+        raise FactoryError(f"{job_id} has no open PR to confirm")
+    record.update(state="MERGED", merge_confirmed_by="human", checked_at=jobs.now())
+    jobs.write_json(jd / "pr.json", record)
+    return record
 
 
 def comments(paths, cfg, job_id):
