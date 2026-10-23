@@ -118,5 +118,6 @@ def decision(paths, job_id, s):
         exemptions = [e for e in _items(jobs.read(jd / "tests.md"), "Exemptions") if e.lower() != "none"]
         return {"kind": "approve", "summary": jobs.section(jobs.read(jd / "spec.md"), "Summary"),
                 "checks": s.get("checks"), "least_sure": least[:ITEM_LIMIT], "exemptions": exemptions,
-                "findings": [{"reviewer": name, "text": item} for name, item in findings.remaining(paths, job_id)]}
+                "findings": [{"reviewer": name, "text": item} for name, item in findings.remaining(paths, job_id)],
+                "unrendered": [{"reviewer": name, "why": why} for name, why in findings.unrendered(paths, job_id)]}
     return {"kind": "stopped", "reason": s.get("reason")}

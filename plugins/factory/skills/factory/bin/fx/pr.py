@@ -74,6 +74,11 @@ def details(paths, cfg, job_id):
         done = "\n".join(s for s in (_section(tidy, "Removed"), _section(tidy, "Simplified")) if s)
         lines += ["", "### Tidy pass", "", f"Discarded: {discarded}" if discarded else (done or "Nothing changed.")]
     lines += ["", "### Least sure is correct", "", least or "Nothing named."]
+    unseen = findings.unrendered(paths, job_id)
+    if unseen:
+        lines += ["", "### Not looked at in a browser", "",
+                  "These reviewers' verdicts rest on reading the code; check the change by eye:", ""]
+        lines += [f"- **{name}** — {why}" for name, why in unseen]
     left = findings.remaining(paths, job_id)
     lines += ["", "### Findings the reviewers left", ""]
     lines += [f"- **{name}** — {item}" for name, item in left] or ["None."]

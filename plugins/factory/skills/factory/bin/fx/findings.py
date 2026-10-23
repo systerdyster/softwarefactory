@@ -73,12 +73,27 @@ def write(paths, job_id, round_number):
     return {"file": out, "blocking": len(blocking), "notes": len(notes)}
 
 
+def _latest_reviews(paths, job_id):
+    latest = {}
+    for n in jobs.rounds_on_disk(paths.job(job_id)):
+        for f in sorted(paths.round_dir(job_id, n).glob("review-*.md")):
+            latest[f.stem[len("review-"):]] = f.read_text(encoding="utf-8")
+    return sorted(latest.items())
+
+
 def remaining(paths, job_id):
     """What the reviewers still say when the job reaches the developer: each reviewer's findings from
     its latest review (a fix round's review lists again whatever it holds as not resolved), as
     [(reviewer, finding)]. Notes the builder fixed are gone because their reviewer no longer lists them."""
-    latest = {}
-    for n in jobs.rounds_on_disk(paths.job(job_id)):
-        for f in sorted(paths.round_dir(job_id, n).glob("review-*.md")):
-            latest[f.stem[len("review-"):]] = jobs.finding_items(f.read_text(encoding="utf-8"))
-    return [(name, item) for name, items in sorted(latest.items()) for item in items]
+    return [(name, item) for name, text in _latest_reviews(paths, job_id) for item in jobs.finding_items(text)]
+
+
+def unrendered(paths, job_id):
+    """The reviewers whose latest review says `RENDERED: no — why`: their PASS rests on reading code
+    only, so the developer has to look at the change themselves. [(reviewer, why)]."""
+    found = []
+    for name, text in _latest_reviews(paths, job_id):
+        rendered = jobs.field(text, "RENDERED") or ""
+        if re.match(r"no\b", rendered, re.I):
+            found.append((name, re.sub(r"^no\s*[—–-]*\s*", "", rendered, flags=re.I) or "no reason given"))
+    return found

@@ -43,6 +43,15 @@ class PrTest(SandboxTest):
         self.assertIn("- **ui** — 🟡 NOTE `a.css:3` — not rendered.", text)
         self.assertNotIn("wrong.", text)
 
+    def test_a_review_that_never_rendered_the_change_is_flagged_for_the_developer(self):
+        self.sb.write("round-1/review-ui.md", "VERDICT: PASS\n\nRENDERED: no — the project lists no render commands\n",
+                      base=self.jd)
+        self.sb.write("round-1/review-ux.md", "VERDICT: PASS\n\nRENDERED: catalog page at 360 and 1280px\n",
+                      base=self.jd)
+        text = pr.details(self.paths, self.cfg, self.job)
+        self.assertIn("- **ui** — the project lists no render commands", text)
+        self.assertNotIn("**ux**", text)
+
     def test_a_description_with_ai_attribution_is_refused(self):
         self.sb.write("pr-body.md", "## Answer\n\nThe answer is 42.\n\n🤖 Generated with [Claude Code](https://x)\n",
                       base=self.jd)

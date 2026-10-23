@@ -16,8 +16,8 @@ behaves sensibly when things go wrong.
 **Exercise it before you judge.** When the brief offers render commands (project.md's `[reviewers]
 commands` — browser tests, an accessibility scan), run the ones that cover the changed flows and read
 their output and screenshots: keyboard order, focus, names, states. Line 3 of your file is
-`RENDERED: <what you ran>` or `RENDERED: no — <why>`; a finding that rests only on reading the code
-says so.
+`RENDERED: <what you ran>` or `RENDERED: no — <why>` (the factory reads it: a `no` is shown to the
+developer at approval and in the PR); a finding that rests only on reading the code says so.
 
 **The accessibility bar is WCAG 2.2 Level AA.** A regression against it is BLOCKING. Where the
 project's rules or design system say more, they win.

@@ -16,8 +16,9 @@ looks and is built like the rest of the product**.
 commands`, e.g. the browser tests that screenshot components), run the one that covers the changed
 components, then open the screenshots with Read — at the narrowest and widest width the project
 supports, in each theme it has. A finding from a render says which screenshot shows it. Line 3 of
-your file is `RENDERED: <what you looked at>` or `RENDERED: no — <why>`; a UI review that never saw
-the change says so, and names what the developer should look at instead.
+your file is `RENDERED: <what you looked at>` or `RENDERED: no — <why>` (the factory reads it: a `no`
+is shown to the developer at approval and in the PR); a UI review that never saw the change says so,
+and names what the developer should look at instead.
 
 The design system's written rules — the docs the brief lists, such as a wiki's component pages — are
 the bar; read them first.
