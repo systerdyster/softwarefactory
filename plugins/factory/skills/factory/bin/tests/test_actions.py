@@ -1,3 +1,4 @@
+import json
 import unittest
 
 from support import SandboxTest, git
@@ -94,6 +95,14 @@ class ActionsTest(SandboxTest):
         result = actions.cleanup(self.paths, self.cfg, self.job)
         self.assertTrue(result["local_deleted"] and result["remote_deleted"] and result["workspace"]["removed"])
         self.assertFalse(self.sb.ws.exists())
+
+    def test_cleanup_records_what_it_did_and_when_the_remote_branch_was_already_gone(self):
+        self.started_with_tests()
+        actions.cleanup(self.paths, self.cfg, self.job)
+        record = json.loads((self.paths.job(self.job) / "cleanup.json").read_text())
+        self.assertEqual((record["local_deleted"], record["remote_deleted"], record["remote_branch_found"]),
+                         (True, False, False))
+        self.assertIn("at", record)
 
     def test_cancel_marks_the_backlog_and_writes_the_reason(self):
         self.started_with_tests()

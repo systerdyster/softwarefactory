@@ -200,7 +200,10 @@ def cleanup(paths, cfg, job_id, discard=False):
     if gitutil.remote_branch_exists(cfg.remote, branch, paths.root):
         gitutil.run(["push", cfg.remote, "--delete", branch], paths.root, timeout=300)
         result["remote_deleted"] = True
+    else:
+        result["remote_branch_found"] = False
     result["runs_aborted"] = runs.abort_job(paths, job_id, "the job was finished or cancelled")
+    jobs.write_json(paths.job(job_id) / "cleanup.json", {**result, "at": jobs.now(), "discard": discard})
     return result
 
 
