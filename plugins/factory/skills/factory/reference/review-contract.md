@@ -54,8 +54,12 @@ Reviewer: <name> · Round <n> · Head <sha>
 
 - **Two severities.** **BLOCKING** must change before the job goes to the developer: a written project
   rule broken, an acceptance criterion not met, or a defect with a concrete failure — wrong output,
-  crash, data loss, a security or accessibility regression, unbounded work per request. **NOTE** is
-  everything else; the builder fixes notes where cheap, and the rest reach the developer with the PR.
+  crash, data loss, a security or accessibility regression, unbounded work per request. A keyboard
+  shortcut the component captures and breaks (the browser's back, Tab, Esc: `preventDefault` on a key
+  with its modifiers unchecked) is an accessibility defect, so BLOCKING, whether or not the old
+  component did the same. A defect you can name a cheap fix for is no less BLOCKING for the cheap fix.
+  **NOTE** is everything else. It reaches the developer with the PR; the builder sees it only when a
+  fix round happens anyway, because a round with no BLOCKING finding goes straight to approval.
 - **The factory derives the verdict from your findings**: CHANGES exactly when a finding item under
   Findings (a `-` bullet or a numbered `1.` item) starts with BLOCKING. Write the matching word on
   line 1. A report it can't read safely — CHANGES with no finding marked BLOCKING, or BLOCKING outside
