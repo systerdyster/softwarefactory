@@ -117,6 +117,37 @@ class PrTest(SandboxTest):
             os.environ["PATH"] = old_path
         self.assertIn("pr merge 5 --auto --merge", log.read_text())
 
+    def test_a_plain_publish_takes_auto_complete_off_a_pr_that_had_it(self):
+        log = self.sb.tmp / "calls.log"
+        fake_body = ('#!/bin/sh\n'
+                     f'echo "$(basename "$0") $@" >> {log}\n'
+                     'case "$1 $2" in\n'
+                     '  "pr view") echo \'{"number": 5, "url": "https://gh/pr/5", "state": "OPEN"}\' ;;\n'
+                     '  "api -X") echo \'{"id": 77}\' ;;\n'
+                     '  "devops invoke") echo \'{"id": 1}\' ;;\n'
+                     '  "repos pr") echo \'{"pullRequestId": 5, "status": "active", "repository": {"webUrl": "https://az/r"}}\' ;;\n'
+                     'esac\n')
+        self.sb.write("bin/gh", fake_body, base=self.sb.tmp).chmod(0o755)
+        self.sb.write("bin/az", fake_body, base=self.sb.tmp).chmod(0o755)
+        old_path = os.environ["PATH"]
+        os.environ["PATH"] = f"{self.sb.tmp / 'bin'}:{old_path}"
+        try:
+            for tool, off in (("gh", "pr merge 5 --disable-auto"), ("az", "--auto-complete false")):
+                self.paths.project.write_text(self.paths.project.read_text().replace("pr_tool = other", f"pr_tool = {tool}")
+                                              .replace("pr_tool = gh", f"pr_tool = {tool}")
+                                              .replace("pr_tool = az", f"pr_tool = {tool}")
+                                              .replace("merge_mode = local-merge", "merge_mode = pr"), encoding="utf-8")
+                cfg = config.load(self.paths)
+                self.sb.write("human-approval.md", "Head: abc\nAuto-Complete: yes\n", base=self.jd)
+                pr.open_or_update(self.paths, cfg, self.job)
+                log.write_text("")
+                self.sb.write("human-approval.md", "Head: abc\n", base=self.jd)
+                self.assertFalse(pr.open_or_update(self.paths, cfg, self.job)["auto"])
+                self.assertIn(off, log.read_text(), tool)
+                self.assertNotIn("--auto --merge", log.read_text())
+        finally:
+            os.environ["PATH"] = old_path
+
     def test_other_tool_pushes_and_leaves_the_pr_to_a_human(self):
         record = pr.open_or_update(self.paths, self.cfg, self.job)
         self.assertEqual(record["state"], "MANUAL")

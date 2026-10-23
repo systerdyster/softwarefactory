@@ -54,11 +54,14 @@ def _wiki_facts(paths, cfg, job_id, head, human_text, spawns):
     what it committed stays inside the wiki globs, in which case the approved head and the head after
     it are the same work."""
     facts = {"enabled": bool(cfg.wiki_globs), "attempts": 0, "status": None, "approved": None,
-             "only_wiki": None, "stray": []}
+             "only_wiki": None, "stray": [], "recorded": False, "after": None}
     if not cfg.wiki_globs or not human_text:
         return facts
     jd = paths.job(job_id)
     approved, since = jobs.field(human_text, "Head"), jobs.field(human_text, "At") or ""
+    record = jobs.read_json(jd / "wiki.json") or {}
+    if record.get("approved") == approved:
+        facts.update(recorded=True, after=record.get("after"))
     facts.update(approved=approved, status=(jobs.field(jobs.read(jd / "wiki.md"), "Status") or "").lower() or None,
                  attempts=sum(1 for s in spawns if s.get("agent") == "wiki" and (s.get("at") or "") >= since))
     ws = paths.workspace(job_id)
@@ -161,10 +164,13 @@ def _equivalent_heads(f, head):
     wiki = f.get("wiki") or {}
     if wiki.get("only_wiki") and wiki.get("approved"):
         heads.add(wiki["approved"])
+    edges = list(f["rebase"].get("history", []))
+    if wiki.get("recorded") and wiki.get("approved") and wiki.get("after"):
+        edges.append({"before": wiki["approved"], "after": wiki["after"], "result": "green"})
     changed = True
     while changed:
         changed = False
-        for e in f["rebase"].get("history", []):
+        for e in edges:
             if e.get("result") == "green" and e.get("after") in heads and e.get("before") not in heads:
                 heads.add(e["before"])
                 changed = True
@@ -411,18 +417,22 @@ def _wiki_step(f):
     wiki = f.get("wiki") or {}
     if not wiki.get("enabled"):
         return None
+    if wiki.get("recorded"):
+        return None
     ws = f["workspace"]
-    if wiki.get("status") == "done":
-        return None
-    if wiki["attempts"] >= WIKI_ATTEMPTS:
-        if ws.get("on_branch") and ws.get("dirty"):
-            return _out(f, "needs-human", "needs-human",
-                        f"the wiki agent left uncommitted changes in the workspace: {', '.join(ws['dirty'][:5])}")
-        return None
     if not ws.get("on_branch"):
         return _out(f, "rebasing", "open-workspace", "the wiki agent works in the workspace")
-    return _out(f, "rebasing", "spawn-wiki", "bring the wiki up to date before the branch is rebased",
-                round=0, attempt=wiki["attempts"] + 1)
+    settled = wiki.get("status") == "done" or wiki["attempts"] >= WIKI_ATTEMPTS
+    dirty = ws.get("dirty")
+    if settled and not dirty:
+        return _out(f, "rebasing", "wiki-record",
+                    "record the wiki pass, so the approval stays attached to the branch through the rebase")
+    if wiki["attempts"] >= WIKI_ATTEMPTS:
+        return _out(f, "needs-human", "needs-human",
+                    f"the wiki agent left uncommitted changes in the workspace: {', '.join(dirty[:5])}")
+    why = "the wiki pass left uncommitted changes; try again" if dirty else \
+        "bring the wiki up to date before the branch is rebased"
+    return _out(f, "rebasing", "spawn-wiki", why, round=0, attempt=wiki["attempts"] + 1)
 
 
 def _approval(f, human):

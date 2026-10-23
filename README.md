@@ -332,8 +332,11 @@ the repo root (or `-s tests` from `skills/factory/bin`).
   `wiki_external` the change makes stale). The guard lets it write nothing else and forbids `git rm`
   and `git mv`. The approved head and the head after a wiki-only commit count as the same work, so the
   approval and the reviews stay valid (the diff is checked against the globs; anything else stops the
-  job for the developer). Two tries, then the job goes on and the PR comment says the wiki was not
-  updated. `wiki_guide` points at the project's own wiki conventions, which the agent follows. The
+  job for the developer). Once the pass is done and the workspace clean, `F wiki-record` writes
+  wiki.json (approved head → head after the pass): a rebase rewrites the commits, and without the
+  record nothing would tie the approval to the rewritten branch. A pass that says done but left pages
+  uncommitted is tried again, then stops the job. Two tries, then the job goes on and the PR comment
+  says the wiki was not updated. `wiki_guide` points at the project's own wiki conventions, which the agent follows. The
   reviewers never see the wiki change, and the developer does not approve it; the PR comment lists it.
 - **A target batched locally** (gitflow: finished cases merge into a local `develop` that stays ahead
   of origin) uses `merge_mode = local-merge` with `remote = none`. The base is then the local target;

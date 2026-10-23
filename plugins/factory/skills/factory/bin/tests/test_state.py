@@ -271,11 +271,30 @@ class ApprovalAndMergeTest(unittest.TestCase):
 
     def test_the_wiki_pass_is_tried_twice_and_then_the_job_goes_on_without_it(self):
         self.assertEqual(state.decide(self.approved_facts(wiki=self.wiki(attempts=1)))["next"]["attempt"], 2)
-        self.assertEqual(nxt(self.approved_facts(wiki=self.wiki(attempts=2))), "rebase")
+        self.assertEqual(nxt(self.approved_facts(wiki=self.wiki(attempts=2))), "wiki-record")
+        self.assertEqual(nxt(self.approved_facts(wiki=self.wiki(attempts=2, recorded=True, after=H1))), "rebase")
 
-    def test_a_wiki_commit_stays_the_approved_work_and_the_job_goes_on_to_the_rebase(self):
+    def test_a_finished_wiki_pass_is_recorded_before_the_rebase(self):
         f = self.approved_facts(head=H2, wiki=self.wiki(status="done", only_wiki=True))
+        self.assertEqual(nxt(f), "wiki-record")
+        f["wiki"].update(recorded=True, after=H2)
         self.assertEqual(nxt(f), "rebase")
+
+    def test_a_recorded_wiki_commit_keeps_the_approval_through_a_rebase_that_rewrites_it(self):
+        history = [{"before": H2, "after": H3, "result": "green", "target": T1, "fingerprint": FP}]
+        f = self.approved_facts(head=H3, rounds={1: passing(head=H1)}, rebase={"history": history},
+                                wiki=self.wiki(status="done", recorded=True, after=H2))
+        r = state.decide(f)
+        self.assertEqual((r["stage"], r["next"]["action"]), ("merging", "pr"))
+        f["wiki"].update(recorded=False, after=None)
+        self.assertNotEqual(state.decide(f)["next"]["action"], "pr")
+
+    def test_a_wiki_pass_that_says_done_with_uncommitted_pages_is_tried_again_and_then_stops(self):
+        ws = {"exists": True, "on_branch": True, "dirty": ["Wiki/a.md"], "rebase": False, "unmerged": []}
+        r = state.decide(self.approved_facts(workspace=ws, wiki=self.wiki(status="done", attempts=1)))
+        self.assertEqual((r["next"]["action"], r["next"]["attempt"]), ("spawn-wiki", 2))
+        r = state.decide(self.approved_facts(workspace=ws, wiki=self.wiki(status="done", attempts=2)))
+        self.assertEqual(r["stage"], "needs-human")
 
     def test_a_wiki_pass_that_changed_other_files_stops_for_a_human(self):
         f = self.approved_facts(head=H2, wiki=self.wiki(status="done", only_wiki=False, stray=["src/a.ts"]))

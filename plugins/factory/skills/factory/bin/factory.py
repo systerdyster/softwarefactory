@@ -115,6 +115,10 @@ def cmd_verify(a, p):
     return result
 
 
+def cmd_wiki_record(a, p):
+    return actions.wiki_record(p, _cfg(p), a.job)
+
+
 def cmd_tidy_discard(a, p):
     cfg = _cfg(p)
     s, n = _state_round(p, cfg, a.job)
@@ -301,6 +305,7 @@ def parser():
     add("start", cmd_start, "open a taken job's worktree on its branch and prove its checks green").add_argument("job")
     add("verify", cmd_verify, "run the project's checks on the builder's round or the tidy pass").add_argument("job")
     add("tidy-discard", cmd_tidy_discard, "put the branch back on the builder's green result").add_argument("job")
+    add("wiki-record", cmd_wiki_record, "record the head the wiki pass ended on, for the approved head").add_argument("job")
     add("review-reset", cmd_review_reset, "discard the current round's reviews and workspace changes").add_argument("job")
     add("codex-review", cmd_codex_review, "run Codex for the current round; exit 3 means spawn codex-fallback").add_argument("job")
     sp = add("brief", cmd_brief, "the prompt for a fresh agent, derived from state")

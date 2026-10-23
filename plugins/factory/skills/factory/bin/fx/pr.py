@@ -249,6 +249,8 @@ def _open_with(paths, cfg, record, existing, meta, branch, title, text, body_fil
         record.update(number=view["number"], url=view["url"], state=view["state"])
         if auto:
             _cli(["gh", "pr", "merge", str(view["number"]), "--auto", "--merge"], paths.root)
+        elif _had_auto(existing):
+            _cli(["gh", "pr", "merge", str(view["number"]), "--disable-auto"], paths.root)
     else:
         description = text if len(text) <= 3900 else text[:3800] + "\n\n_(truncated; see the job folder)_\n"
         if existing and existing.get("state") == "OPEN":
@@ -260,9 +262,15 @@ def _open_with(paths, cfg, record, existing, meta, branch, title, text, body_fil
                                     "--description", description, *create_flags(cfg, meta, "az"),
                                     "--output", "json"], paths.root))
         record.update(number=data["pullRequestId"], url=_az_url(data), state=AZ_STATE.get(data.get("status"), "OPEN"))
-        if auto:
-            _cli(["az", "repos", "pr", "update", "--id", str(data["pullRequestId"]), "--auto-complete", "true",
-                  "--output", "json"], paths.root)
+        if auto or _had_auto(existing):
+            _cli(["az", "repos", "pr", "update", "--id", str(data["pullRequestId"]), "--auto-complete",
+                  "true" if auto else "false", "--output", "json"], paths.root)
+
+
+def _had_auto(existing):
+    """An open PR this factory set to auto-complete earlier keeps that setting until it is turned off:
+    the developer's later choice of a plain publish has to take it away."""
+    return bool(existing and existing.get("state") == "OPEN" and existing.get("auto"))
 
 
 def status(paths, cfg, job_id):
