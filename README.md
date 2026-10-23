@@ -323,6 +323,11 @@ the repo root (or `-s tests` from `skills/factory/bin`).
   builder keeps `test-note.md` true to the change in `[handoff] test_note_language` (default: the PR
   language): how someone else checks it by hand, empty when nothing needs it. The approval view shows
   it and the PR comment carries it.
+- **A target batched locally** (gitflow: finished cases merge into a local `develop` that stays ahead
+  of origin) uses `merge_mode = local-merge` with `remote = none`. The base is then the local target;
+  nothing is fetched, pushed or deleted remotely, and the developer pulls the target themselves.
+  With `remote = origin` the job is rebased on `origin/<target>` and `F merge` refuses it as not on
+  top of the local target (tested both ways).
 - **A merged PR is noticed without being told.** While it waits, `F wait` fetches the target once a
   minute and, when the target moved, checks each open PR against it (`pr.check_merged`). With gh or
   az, git only says when to ask: the PR tool's state decides, since the same change can reach the

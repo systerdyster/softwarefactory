@@ -100,6 +100,13 @@ section of `factory/project.md`:
   - **Target branch** — always confirm, even when only one branch exists (`main`, or `develop` in a
     gitflow project). Never a silent default.
   - **merge_mode** — `pr` (recommended), `local-merge` or `auto-merge`.
+  - **A target that is batched locally** — in a gitflow project a finished case is merged into a local
+    `develop`, which stays ahead of `origin` until a person pushes (a push may deploy). Ask whether
+    that is how the team works. If so: `merge_mode = local-merge` and `remote = none`, so the job
+    starts from and rebases on the local target and nothing is fetched or pushed. Tell the developer
+    what that costs: the factory never fetches, so they pull the target themselves before a job
+    starts. With `remote = origin` a job rebased on `origin/<target>` is refused at merge, because
+    the local target has commits it lacks.
   - **Branch name** — the `[handoff] branch` pattern. Propose one from the existing branches and merge
     history (`feature/{key}-{slug}`, `bugfix/{key}`…); `factory/{id}` only if the team has no
     convention.

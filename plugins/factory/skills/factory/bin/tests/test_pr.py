@@ -3,7 +3,7 @@ import unittest
 
 from support import SandboxTest, git
 
-from fx import actions, config, jobs, pr, queue, state, workspace
+from fx import actions, config, gitutil, jobs, pr, queue, state, workspace
 from fx.errors import FactoryError
 
 
@@ -230,6 +230,37 @@ class MergedDetectionTest(SandboxTest):
 
     def test_wait_times_out_while_the_target_has_not_moved(self):
         self.assertEqual(actions.wait(self.paths, self.cfg, timeout=0.3, interval=0.1), {"woken_by": "timeout"})
+
+
+class LocalTargetTest(SandboxTest):
+    """A gitflow project: no remote is read or written, and the local target is ahead of origin because
+    finished cases are batched there until a person pushes."""
+    merge_mode = "local-merge"
+
+    def setUp(self):
+        super().setUp()
+        self.paths.project.write_text(self.paths.project.read_text().replace("remote = origin", "remote = none"),
+                                      encoding="utf-8")
+        self.cfg = config.load(self.paths)
+        self.sb.write("batched.txt", "an earlier case, not pushed\n")
+        self.batched = self.sb.commit("Earlier case")
+        self.origin_head = git(self.sb.root, "rev-parse", "origin/main")
+        self.job = self.sb.queue_job()
+        queue.take(self.paths)
+
+    def test_the_job_starts_from_the_local_target_and_merges_on_top_of_it_without_touching_origin(self):
+        self.assertEqual(self.cfg.base_ref, "main")
+        actions.start(self.paths, self.cfg, self.job)
+        self.sb.write("src/app.py", "def answer():\n    return 42\n", base=self.sb.ws)
+        head = self.sb.commit("Answer", cwd=self.sb.ws)
+        self.assertEqual(actions.rebase(self.paths, self.cfg, self.job)["result"], "green")
+        git(self.sb.root, "switch", "--detach")
+        self.assertTrue(pr.merge_local(self.paths, self.cfg, self.job)["merged"])
+        self.assertTrue(gitutil.is_ancestor(self.batched, "main", self.sb.root))
+        self.assertTrue(gitutil.is_ancestor(head, "main", self.sb.root))
+        self.assertEqual(git(self.sb.root, "rev-parse", "origin/main"), self.origin_head)
+        self.assertEqual(state.state(self.paths, self.cfg, self.job)["next"]["action"], "finish")
+        self.assertFalse(actions.finish(self.paths, self.cfg, self.job)["remote_deleted"])
 
 
 if __name__ == "__main__":
