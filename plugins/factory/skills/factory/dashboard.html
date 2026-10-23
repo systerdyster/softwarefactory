@@ -1496,8 +1496,8 @@ const Scene = (() => {
     renderPanel();
     const o = board.orchestrator || {};
     const gm = o.state === "running" ? "" : o.state === "stale"
-      ? ` · <span class="warn">orchestrator silent for ${esc(ago(o.last_seen))} — it may have stopped; commands wait until it runs</span>`
-      : ` · <span class="warn">orchestrator not running — commands wait for /factory run</span>`;
+      ? ` · <span class="warn">orchestrator silent for ${esc(ago(o.last_seen))} — it may have stopped; nothing is built until it runs</span>`
+      : ` · <span class="warn">orchestrator not running — what you decide is kept, and built on at the next /factory run</span>`;
     const when = board.updated_at ? new Date(board.updated_at).toLocaleTimeString() : "never";
     $("meta").innerHTML = `${esc(board.target || "")} · ${esc(board.merge_mode || "")} · updated ${esc(when)}`
       + (board.stopping ? ` · <span class="warn">stopping after the current job</span>` : "") + gm

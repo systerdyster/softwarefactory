@@ -232,7 +232,7 @@ def cmd_stop(a, p):
 
 
 def cmd_command(a, p):
-    return actions.write_command(p, a.command, a.job, a.text, a.by, a.auto)
+    return actions.give_command(p, _cfg(p), a.command, a.job, a.text, a.by, a.auto)
 
 
 def cmd_inbox(a, p):
@@ -350,13 +350,13 @@ def parser():
     sp.add_argument("--takeover", action="store_true", help="take over a stale lease")
     sp.add_argument("--force", action="store_true", help="with --takeover: also a fresh one (the human stopped it)")
     add("stop", cmd_stop, "stop after the current job; --clear to lift").add_argument("--clear", action="store_true")
-    sp = add("command", cmd_command, "write an approve|rework|cancel command to the inbox")
+    sp = add("command", cmd_command, "apply approve|answer|rework now, or queue a cancel for the orchestrator")
     sp.add_argument("command", choices=["approve", "answer", "rework", "cancel"])
     sp.add_argument("job")
     sp.add_argument("--text", default="")
     sp.add_argument("--by", default="")
     sp.add_argument("--auto", action="store_true", help="approve: open the PR with auto-complete")
-    sp = add("inbox", cmd_inbox, "list pending commands, mark one done, or watch (one line per new command)")
+    sp = add("inbox", cmd_inbox, "list pending cancels, mark one done, or watch (one line per new or applied command)")
     sp.add_argument("action", choices=["list", "done", "watch"])
     sp.add_argument("file", nargs="?")
     sp.add_argument("--outcome", default="")

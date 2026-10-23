@@ -1,6 +1,7 @@
 """Two jobs at once: each in its own worktree, at most two active, waiting jobs out of the way, one
 orchestrator, and finishing or cancelling one job leaving the other alone."""
 
+import threading
 import unittest
 
 from support import SandboxTest, git
@@ -78,9 +79,14 @@ class ParallelTest(SandboxTest):
         self.to_ready(self.a, "src/app.py", "def answer():\n    return 42\n")
         self.assertEqual(self.next()["action"], "wait")
         self.assertEqual(actions.wait(self.paths, self.cfg, timeout=0), {"woken_by": "timeout"})
-        actions.write_command(self.paths, "approve", self.a, "", "dev")
+        approved = threading.Timer(0.5, actions.give_command, (self.paths, self.cfg, "approve", self.a, "", "dev"))
+        approved.start()
+        self.assertEqual(actions.wait(self.paths, self.cfg, timeout=60, interval=0.1), {"woken_by": "inbox"})
+        approved.join()
+        self.assertEqual(actions.wait(self.paths, self.cfg, timeout=0), {"woken_by": "timeout"})
+        actions.give_command(self.paths, self.cfg, "cancel", self.b, "", "dev")
         self.assertEqual(actions.wait(self.paths, self.cfg, timeout=60), {"woken_by": "inbox"})
-        actions.inbox_done(self.paths, actions.inbox_list(self.paths)[0]["file"], "applied")
+        actions.inbox_done(self.paths, actions.inbox_list(self.paths)[0]["file"], "already cancelled", refused=True)
         self.sb.queue_job("004-new", "New")
         self.assertEqual(actions.wait(self.paths, self.cfg, timeout=60), {"woken_by": "queued"})
         queue.mark(self.paths, "004-new", "cancelled")

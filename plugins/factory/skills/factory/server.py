@@ -5,8 +5,9 @@
 
 Binds to 127.0.0.1 only and prints a URL with a random token; every request must carry that token
 (the page sends it as a header). Serves dashboard.html, the board and the markdown files in job
-folders, and accepts approve, answer, rework and cancel by writing a command file to factory/inbox/, which
-the orchestrator runs exactly like its terminal form. It never changes a job itself.
+folders, and takes approve, answer, rework and cancel: the first three are applied at once, exactly like
+their terminal form; a cancel is written to factory/inbox/ for the orchestrator, which alone can stop the
+job's agents.
 
 The board is computed from the job folders, runs and git when the page asks, at most every
 BOARD_MAX_AGE seconds — not read from factory/board.json, which the orchestrator writes only between
@@ -139,17 +140,17 @@ def make_handler(paths, token, port):
                 return self._json(413, {"error": "body missing or too large"})
             try:
                 body = json.loads(self.rfile.read(length))
-                result = actions.write_command(paths, str(body.get("command", "")), str(body.get("job", "")),
-                                               str(body.get("text", ""))[:4000], str(body.get("by", ""))[:200],
-                                               body.get("auto") is True,
-                                               str(body["test_note"])[:4000] if isinstance(body.get("test_note"), str) else None)
+                result = actions.give_command(paths, config.load(paths), str(body.get("command", "")),
+                                              str(body.get("job", "")), str(body.get("text", ""))[:4000],
+                                              str(body.get("by", ""))[:200], body.get("auto") is True,
+                                              str(body["test_note"])[:4000] if isinstance(body.get("test_note"), str) else None)
             except (json.JSONDecodeError, AttributeError):
                 return self._json(400, {"error": "invalid JSON"})
             except Conflict as e:
                 return self._json(409, {"error": str(e)})
             except FactoryError as e:
                 return self._json(400, {"error": str(e)})
-            return self._json(202, result)
+            return self._json(202 if "queued" in result else 200, result)
 
         do_PUT = do_DELETE = do_PATCH = lambda self: self._json(405, {"error": "method not allowed"})
 

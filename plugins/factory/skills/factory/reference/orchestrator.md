@@ -1,6 +1,6 @@
 ---
 name: factory-orchestrator
-description: /factory run — the build loop; how the orchestrator asks state, performs each next action, spawns fresh agents, and handles inbox commands, objections, cancel and Jira
+description: /factory run — the build loop; how the orchestrator asks state, performs each next action, spawns fresh agents, and handles cancels from the inbox, objections, cancel and Jira
 metadata:
   type: reference
 ---
@@ -33,7 +33,7 @@ is bound to the job its brief names. A failure or a wait in one job never holds 
    its output file once for the line `Factory dashboard: http://127.0.0.1:…/?token=…` and give the
    human that URL. It serves until this session ends. When this project's dashboard already runs
    (started by hand, or by an earlier run), it prints that one's URL and exits instead.
-4. Arm the inbox watch (see **Inbox**), then process any pending inbox commands.
+4. Arm the inbox watch (see **Inbox**), then run any cancel waiting there.
 5. **Agents from before** — `F run list`. A live run left by an earlier session holds its work, and
    state says `wait-agent` for it until it ends or goes silent. If the human confirms that session
    and its agents are gone, `F run abort <run>` frees the work now; never abort on your own guess.
@@ -42,7 +42,7 @@ is bound to the job its brief names. A failure or a wait in one job never holds 
 
 Repeat:
 
-1. **Inbox** — process pending commands (below).
+1. **Inbox** — run any cancel waiting there (below).
 2. **Waiting jobs** — for each job whose stage is `pr-open`, `F pr status <id>` (at most once per ten
    minutes per job). It fetches the target too: a merged PR makes the next action `finish`; a target
    that moved under an open PR makes it `rebase`, and the job takes the next free slot.
@@ -54,7 +54,7 @@ Repeat:
    active) or `idle` (the queue is empty and every job is finished): then `F board`, report (below),
    `F lease release --lease <lease>` and end the run. `action` is `wait` when nothing can be built
    now but jobs wait for a human or a PR: report once (the first time), then run `F wait` (Bash
-   timeout 600000) — it returns when an inbox command is pending, a stop is requested or a queued job
+   timeout 600000) — it returns when a cancel is waiting or a command was applied, a stop is requested or a queued job
    can be taken, a PR was merged (it fetches the target and checks open PRs itself: `merged`), the
    target holds an open PR's content without a PR tool to confirm it (`merge-suspected`), or after
    nine minutes — and go
@@ -170,31 +170,32 @@ and in spec.md's `## Decided`, and the builder continues in the same round.
 
 ## Inbox
 
-The dashboard, and `/factory approve|answer|rework|cancel` typed in other sessions, write commands to
-`factory/inbox/`. Watch it with the Monitor tool: command `F inbox watch`, description "factory inbox
-commands", `timeout_ms` 1800000, re-armed on every expiry for as long as the run lasts. Each event
-line names a file; `F inbox list` shows all pending ones.
+Approve, answer and rework are applied at once by whoever gives them — the dashboard, `/factory` in any
+session — and recorded in `factory/inbox/done/`. You don't run them: the job's state already says what
+follows. A cancel waits in `factory/inbox/` for you. Watch both with the Monitor tool: command
+`F inbox watch`, description "factory inbox commands", `timeout_ms` 1800000, re-armed on every expiry
+for as long as the run lasts. An `inbox: <file>` line is a cancel to run; `F inbox list` shows all
+waiting ones. An `applied: <file>` line names a job that may have something to do now: go round the
+loop.
 
-Run each command **exactly like its terminal form** (below), then `F inbox done <file> --outcome
-"<one line>"`. A command that is refused (wrong stage, unknown job, already done) is still marked
-done, with `--refused` and the reason as its outcome — the dashboard shows applied and refused apart.
-The inbox refuses a second identical command for a job while the first is still pending.
+Run a cancel as below, then `F inbox done <file> --outcome "<one line>"`. One that is refused (unknown
+job, already finished) is still marked done, with `--refused` and the reason as its outcome — the
+dashboard shows applied and refused apart. The inbox refuses a second cancel for a job while the first
+is still waiting.
 
-## Commands, as the orchestrator runs them
+## What follows a command
 
-- **answer `<id>` `<text>`** — for a job with an open question (`next.question`): `F answer <id> --text
-  "<text>" --by "<who>"`. It records the answer and adds it to spec.md's `## Decided`; state then
-  sends the builder on in the same round.
-- **approve `<id>`** — for a job ready for approval (`next.ready`; refused otherwise): `F approve <id> --by "<who>"`, with `--auto` when the inbox file says `"auto": true` (the developer chose to
-  publish the PR with auto-complete; gh and az only, refused otherwise). State then takes it
-  through rebase, the project's checks and `merge_mode`. **Integration is one job at a time**: act on
-  `pr`/`merge-local` for one job, and ask the others' state afterwards — once the target has moved,
-  state sends it through rebase and the project's checks again before it is integrated. A rebase
-  that needed conflict resolution goes back through the builder and review, and needs approval again.
-- **rework `<id>` `<note>`** — for a needs-human or open-PR job: `F rework <id> --note "<note>" --by
-  "<who>"`. It records the note (and the PR's comments), starts a fresh round budget, and state runs a
-  builder round and review again, and the job comes back for approval; the same PR is updated. The
-  job takes the next free build slot (`F next`).
+- **answer** — the answer is in `round-<N>/answer-<A>.md` and spec.md's `## Decided`; state sends the
+  builder on in the same round.
+- **approve** — state takes the job through rebase, the project's checks and `merge_mode`; with
+  `Auto-Complete: yes` in human-approval.md the PR is published with auto-complete. **Integration is
+  one job at a time**: act on `pr`/`merge-local` for one job, and ask the others' state afterwards —
+  once the target has moved, state sends it through rebase and the project's checks again before it
+  is integrated. A rebase that needed conflict resolution goes back through the builder and review,
+  and needs approval again.
+- **rework** — the note (and the PR's comments) starts a fresh round budget; state runs a builder round
+  and review again, and the job comes back for approval; the same PR is updated. The job takes the
+  next free build slot (`F next`).
 - **cancel `<id>` `[reason]`** — first stop that job's running agents (TaskStop on each background
   agent of that job, none of another job's), then `F cancel <id> --reason "<reason>"`: it closes an open
   PR, removes the job's worktree and branches, marks `[-]` and writes the reason to decision.md. For a Jira

@@ -366,9 +366,10 @@ def next_job(paths, cfg, lease):
 WAIT_SECONDS = 540
 
 
-def _woken(paths):
-    """Why the orchestrator should look again now: a command in the inbox, a stop, or a job it can take."""
-    if inbox_list(paths):
+def _woken(paths, applied):
+    """Why the orchestrator should look again now: a cancel in the inbox or a command applied since
+    `applied`, a stop, or a job it can take."""
+    if inbox_list(paths) or _applied(paths) - applied:
         return "inbox"
     if paths.stop_flag.exists():
         return "stop"
@@ -395,14 +396,15 @@ def _merged_while_waiting(paths, cfg, seen):
 
 
 def wait(paths, cfg, timeout=WAIT_SECONDS, interval=2.0):
-    """Blocks until there is something to do — an inbox command, a stop, a job that can be taken, a PR
-    that was merged — or the timeout passes: how the orchestrator waits while no job can be built.
-    Once a minute it fetches the target and checks open PRs against it when it has moved."""
+    """Blocks until there is something to do — a cancel in the inbox or a command applied elsewhere, a
+    stop, a job that can be taken, a PR that was merged — or the timeout passes: how the orchestrator
+    waits while no job can be built. Once a minute it fetches the target and checks open PRs against
+    it when it has moved."""
     import time
     deadline = time.monotonic() + timeout
-    next_fetch, seen = 0.0, None
+    next_fetch, seen, applied = 0.0, None, _applied(paths)
     while True:
-        why = _woken(paths)
+        why = _woken(paths, applied)
         if not why and time.monotonic() >= next_fetch:
             next_fetch = time.monotonic() + FETCH_SECONDS
             seen, why = _merged_while_waiting(paths, cfg, seen)
@@ -478,12 +480,15 @@ def stop(paths, clear=False):
     return {"stop": True}
 
 
-def write_command(paths, command, job_id, text, by, auto=False, test_note=None):
-    """Queues a command for the orchestrator. An approve may carry the test note as the developer left
-    it in the dashboard: it is written to the job's test-note.md now (empty means no note), so what
-    they saw is what the PR and the tracker get."""
+def give_command(paths, cfg, command, job_id, text, by, auto=False, test_note=None):
+    """A command from the dashboard or any session. Approve, answer and rework change only the job
+    folder, which state is derived from, so they are applied at once and recorded as applied or
+    refused; the orchestrator sees the result the next time it asks state. Cancel has to stop the
+    job's running agents, which only the orchestrator can, so it waits in the inbox for it. An approve
+    may carry the test note as the developer left it in the dashboard: it is written once the approval
+    holds (empty means no note), so what they saw is what the PR and the tracker get."""
     if command not in ("approve", "answer", "rework", "cancel"):
-        raise FactoryError("inbox commands are approve, answer, rework and cancel")
+        raise FactoryError("commands are approve, answer, rework and cancel")
     if auto and command != "approve":
         raise FactoryError("only approve can ask for auto-complete")
     if test_note is not None and command != "approve":
@@ -491,18 +496,32 @@ def write_command(paths, command, job_id, text, by, auto=False, test_note=None):
     jobs.check_id(job_id)
     if command in ("rework", "answer") and not (text or "").strip():
         raise FactoryError(f"{command} needs text")
-    if any(c.get("command") == command and c.get("job") == job_id for c in inbox_list(paths)):
-        raise Conflict(f"a {command} for {job_id} is already queued; the orchestrator has not run it yet")
-    if test_note is not None:
-        if not paths.job(job_id).is_dir():
-            raise FactoryError(f"no job {job_id}")
-        jobs.write_atomic(paths.job(job_id) / "test-note.md", test_note.strip() + "\n" if test_note.strip() else "")
-    paths.inbox.mkdir(parents=True, exist_ok=True)
-    name = f"{jobs.now().replace(':', '')}-{command}-{job_id}.json"
     payload = {"command": command, "job": job_id, "text": text or "", "by": by or "", "at": jobs.now(),
                **({"auto": True} if auto else {})}
-    jobs.write_json(paths.inbox / name, payload)
-    return {"queued": name}
+    name = f"{jobs.now().replace(':', '')}-{command}-{job_id}.json"
+    if command == "cancel":
+        if any(c.get("command") == command and c.get("job") == job_id for c in inbox_list(paths)):
+            raise Conflict(f"a cancel for {job_id} is already queued; the orchestrator has not run it yet")
+        paths.inbox.mkdir(parents=True, exist_ok=True)
+        jobs.write_json(paths.inbox / name, payload)
+        return {"queued": name}
+    try:
+        if command == "approve":
+            result = approve(paths, cfg, job_id, by, auto)
+            if test_note is not None:
+                jobs.write_atomic(paths.job(job_id) / "test-note.md", test_note.strip() + "\n" if test_note.strip() else "")
+            outcome = f"approved at {result['head'][:12]}"
+        elif command == "answer":
+            result = answer(paths, cfg, job_id, text, by)
+            outcome = "answered; the builder continues"
+        else:
+            result = rework(paths, cfg, job_id, text, by, pr_mod)
+            outcome = f"rework {result['rework']} from round {result['start_round']}"
+    except FactoryError as e:
+        _record_done(paths, name, payload, str(e), refused=True)
+        raise
+    _record_done(paths, name, payload, outcome)
+    return {"applied": command, "outcome": outcome, **result}
 
 
 def inbox_list(paths):
@@ -517,12 +536,22 @@ def inbox_list(paths):
     return result
 
 
+def _applied(paths):
+    """The commands applied so far, by file name: what the orchestrator learns of without being told."""
+    if not paths.inbox_done.exists():
+        return set()
+    return {f.name for f in paths.inbox_done.glob("*.json") if (jobs.read_json(f) or {}).get("status") == "applied"}
+
+
 def inbox_watch(paths, interval=2.0, out=None):
-    """Prints one line per new inbox file and runs until killed: the orchestrator's Monitor command."""
+    """Prints one line per new inbox file (`inbox:`, a cancel to run) and per command applied elsewhere
+    (`applied:`, a job that may have something to do now), and runs until killed: the orchestrator's
+    Monitor command."""
     import sys
     import time
     out = out or sys.stdout
     seen = {f.name for f in paths.inbox.glob("*.json")} if paths.inbox.exists() else set()
+    applied = _applied(paths)
     for name in sorted(seen):
         print(f"inbox: {name}", file=out, flush=True)
     while True:
@@ -530,19 +559,23 @@ def inbox_watch(paths, interval=2.0, out=None):
         current = {f.name for f in paths.inbox.glob("*.json")} if paths.inbox.exists() else set()
         for name in sorted(current - seen):
             print(f"inbox: {name}", file=out, flush=True)
-        seen = current
+        now_applied = _applied(paths)
+        for name in sorted(now_applied - applied):
+            print(f"applied: {name}", file=out, flush=True)
+        seen, applied = current, now_applied
+
+
+def _record_done(paths, name, data, outcome, refused=False):
+    paths.inbox_done.mkdir(parents=True, exist_ok=True)
+    jobs.write_json(paths.inbox_done / name, {**data, "outcome": outcome,
+                                              "status": "refused" if refused else "applied", "done_at": jobs.now()})
 
 
 def inbox_done(paths, name, outcome, refused=False):
     src = paths.inbox / os.path.basename(name)
     if not src.exists():
         raise FactoryError(f"no inbox file {name}")
-    paths.inbox_done.mkdir(parents=True, exist_ok=True)
-    data = jobs.read_json(src) or {}
-    data["outcome"] = outcome
-    data["status"] = "refused" if refused else "applied"
-    data["done_at"] = jobs.now()
-    jobs.write_json(paths.inbox_done / src.name, data)
+    _record_done(paths, src.name, jobs.read_json(src) or {}, outcome, refused)
     src.unlink()
     return {"done": src.name}
 

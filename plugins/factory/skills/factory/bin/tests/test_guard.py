@@ -102,6 +102,13 @@ class GuardTest(SandboxTest):
         self.assertEqual(self.bash("wiki", f"git -C {self.ws} mv Wiki/Page.md Wiki/Other.md"), 2)
         self.assertEqual(self.bash("wiki", f"factory-cli ws run {self.job} test tests/x.py"), 2)
 
+    def test_no_agent_gives_the_developers_commands_or_writes_their_approval(self):
+        for role in ("builder", "tidy", "wiki", "review-code"):
+            self.running("agent-a", role=role)
+            for command in ("approve", "answer", "rework", "cancel"):
+                self.assertEqual(self.bash(role, f"factory-cli command {command} {self.job} --text x"), 2, (role, command))
+            self.assertEqual(self.write(role, self.jd / "human-approval.md"), 2, role)
+
     def test_the_tidy_pass_works_in_the_workspace_and_writes_only_tidy_md_in_the_job_folder(self):
         self.running("agent-a", role="tidy")
         self.assertEqual(self.bash("tidy", f"git -C {self.ws} rm src/app.py"), 0)

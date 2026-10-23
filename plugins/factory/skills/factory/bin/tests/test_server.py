@@ -117,52 +117,35 @@ class ServerTest(SandboxTest):
         self.assertEqual(self.request("GET", f"/file?job={self.job}&path=../../project.md")[0], 404)
         self.assertEqual(self.request("GET", "/file?job=..&path=project.md")[0], 400)
 
-    def test_commands_land_in_the_inbox(self):
-        body = json.dumps({"command": "rework", "job": self.job, "text": "Use the cache", "by": "dashboard"})
-        status, _ = self.request("POST", "/command", body, {"Content-Type": "application/json"})
-        self.assertEqual(status, 202)
-        pending = actions.inbox_list(self.paths)
-        self.assertEqual((pending[0]["command"], pending[0]["text"]), ("rework", "Use the cache"))
-
     def post(self, command, text=""):
         body = json.dumps({"command": command, "job": self.job, "text": text, "by": "dashboard"})
         return self.request("POST", "/command", body, {"Content-Type": "application/json"})
-
-    def test_an_approve_from_the_dashboard_carries_the_test_note_and_auto_complete(self):
-        body = json.dumps({"command": "approve", "job": self.job, "by": "dashboard", "auto": True,
-                           "test_note": "Öppna katalogen."})
-        self.assertEqual(self.request("POST", "/command", body, {"Content-Type": "application/json"})[0], 202)
-        self.assertEqual((self.paths.job(self.job) / "test-note.md").read_text(), "Öppna katalogen.\n")
-        self.assertTrue(actions.inbox_list(self.paths)[0]["auto"])
 
     def commands(self):
         status, data = self.request("GET", f"/commands?job={self.job}")
         self.assertEqual(status, 200)
         return json.loads(data)["commands"]
 
-    def test_a_second_identical_command_is_refused_while_the_first_waits(self):
-        self.assertEqual(self.post("approve")[0], 202)
-        status, data = self.post("approve")
-        self.assertEqual(status, 409)
-        self.assertIn("already queued", json.loads(data)["error"])
-        self.assertEqual(len(actions.inbox_list(self.paths)), 1)
-
-    def test_a_command_reads_as_queued_then_applied(self):
-        name = json.loads(self.post("approve")[1])["queued"]
-        self.assertEqual([(c["command"], c["status"]) for c in self.commands()], [("approve", "queued")])
-        actions.inbox_done(self.paths, name, "approved at head abc")
+    def test_a_command_the_job_cannot_take_is_refused_at_once_and_reads_as_refused(self):
+        status, data = self.post("rework", "Use the cache")
+        self.assertEqual(status, 400)
+        self.assertIn("rework is for needs-human", json.loads(data)["error"])
         latest = self.commands()[-1]
-        self.assertEqual((latest["status"], latest["outcome"]), ("applied", "approved at head abc"))
+        self.assertEqual((latest["command"], latest["status"], latest["text"]), ("rework", "refused", "Use the cache"))
+        self.assertEqual(actions.inbox_list(self.paths), [])
 
-    def test_a_refused_command_reads_as_refused_and_frees_the_slot(self):
-        name = json.loads(self.post("approve")[1])["queued"]
-        actions.inbox_done(self.paths, name, "already approved; PR 63 is open", refused=True)
-        self.assertEqual(self.commands()[-1]["status"], "refused")
-        self.assertEqual(self.post("approve")[0], 202)
+    def test_a_cancel_waits_for_the_orchestrator_and_a_second_one_is_refused_meanwhile(self):
+        status, data = self.post("cancel", "duplicate")
+        self.assertEqual(status, 202)
+        self.assertEqual([(c["command"], c["status"]) for c in self.commands()], [("cancel", "queued")])
+        self.assertEqual(self.post("cancel")[0], 409)
+        actions.inbox_done(self.paths, json.loads(data)["queued"], "cancelled")
+        latest = self.commands()[-1]
+        self.assertEqual((latest["status"], latest["outcome"]), ("applied", "cancelled"))
 
     def test_commands_lists_only_the_asked_job(self):
-        self.post("approve")
-        actions.write_command(self.paths, "approve", "002-other", "", "terminal")
+        self.post("cancel")
+        actions.give_command(self.paths, self.cfg, "cancel", "002-other", "", "terminal")
         self.assertEqual([c["job"] for c in self.commands()], [self.job])
 
     def test_commands_refuse_forms_cross_origin_and_unknown_verbs(self):

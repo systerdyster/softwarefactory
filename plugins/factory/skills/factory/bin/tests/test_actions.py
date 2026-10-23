@@ -3,8 +3,8 @@ import unittest
 
 from support import SandboxTest, git
 
-from fx import actions, jobs, pr, queue, state, workspace
-from fx.errors import FactoryError
+from fx import actions, jobs, pr, queue, schedule, state, workspace
+from fx.errors import Conflict, FactoryError
 
 
 class ActionsTest(SandboxTest):
@@ -118,30 +118,70 @@ class ActionsTest(SandboxTest):
         with self.assertRaises(FactoryError):
             actions.approve(self.paths, self.cfg, self.job, "dev", auto=True)
 
-    def test_an_approve_command_can_carry_auto_complete_and_nothing_else_can(self):
-        actions.write_command(self.paths, "approve", self.job, "", "dashboard", auto=True)
-        self.assertTrue(actions.inbox_list(self.paths)[0]["auto"])
-        with self.assertRaises(FactoryError):
-            actions.write_command(self.paths, "rework", self.job, "x", "dashboard", auto=True)
+    def ready(self):
+        """Built, verified and passed review: the job waits for the developer's approval."""
+        actions.start(self.paths, self.cfg, self.job)
+        self.sb.write("src/app.py", "def answer():\n    return 42\n", base=self.sb.ws)
+        self.sb.commit("Answer", cwd=self.sb.ws)
+        self.sb.write("build.md", "## Round 1\nStatus: done\n", base=self.paths.job(self.job))
+        actions.verify(self.paths, self.cfg, self.job, 1, 1)
+        schedule.schedule(self.paths, self.cfg, self.job, 1, 1)
+        self.sb.write("round-1/review-code.md", "VERDICT: PASS\n\n## Findings\n", base=self.paths.job(self.job))
+        self.assertTrue(state.state(self.paths, self.cfg, self.job)["next"].get("ready"))
 
-    def test_an_approve_command_stores_the_test_note_as_the_developer_left_it(self):
+    def command(self, command, text="", **kw):
+        return actions.give_command(self.paths, self.cfg, command, self.job, text, "dashboard", **kw)
+
+    def test_approve_answer_and_rework_are_applied_at_once_and_recorded(self):
+        self.ready()
+        result = self.command("approve")
+        self.assertEqual(result["applied"], "approve")
+        self.assertEqual(state.state(self.paths, self.cfg, self.job)["next"]["action"], "rebase")
+        self.assertEqual(actions.inbox_list(self.paths), [])
+        done = actions.job_commands(self.paths, self.job)
+        self.assertEqual([(c["command"], c["status"]) for c in done], [("approve", "applied")])
+        self.assertTrue(done[0]["outcome"].startswith("approved at"))
+
+    def test_a_command_the_job_cannot_take_is_refused_and_recorded(self):
+        with self.assertRaises(FactoryError):
+            self.command("approve")
+        self.assertEqual([c["status"] for c in actions.job_commands(self.paths, self.job)], ["refused"])
+        self.assertFalse((self.paths.job(self.job) / "human-approval.md").exists())
+
+    def test_a_cancel_waits_in_the_inbox_for_the_orchestrator(self):
+        queued = self.command("cancel", "duplicate")
+        self.assertEqual(actions.inbox_list(self.paths)[0]["command"], "cancel")
+        with self.assertRaises(Conflict):
+            self.command("cancel", "again")
+        actions.inbox_done(self.paths, queued["queued"], "cancelled")
+        self.assertEqual(actions.inbox_list(self.paths), [])
+        self.assertTrue((self.paths.inbox_done / queued["queued"]).exists())
+
+    def test_only_approve_can_carry_auto_complete(self):
+        with self.assertRaises(FactoryError):
+            self.command("rework", "x", auto=True)
+
+    def test_an_approve_stores_the_test_note_as_the_developer_left_it(self):
+        self.ready()
         note = self.paths.job(self.job) / "test-note.md"
         note.write_text("Builder's draft.\n")
-        actions.write_command(self.paths, "approve", self.job, "", "dashboard", test_note="  My own words.\n\n")
+        self.command("approve", test_note="  My own words.\n\n")
         self.assertEqual(note.read_text(), "My own words.\n")
-        for f in self.paths.inbox.glob("*.json"):
-            f.unlink()
-        actions.write_command(self.paths, "approve", self.job, "", "dashboard", test_note="  \n")
+
+    def test_an_emptied_test_note_means_no_note(self):
+        self.ready()
+        note = self.paths.job(self.job) / "test-note.md"
+        note.write_text("Builder's draft.\n")
+        self.command("approve", test_note="  \n")
         self.assertEqual(note.read_text(), "")
 
     def test_only_approve_carries_a_test_note_and_a_refused_command_leaves_the_note(self):
         note = self.paths.job(self.job) / "test-note.md"
         note.write_text("Draft.\n")
         with self.assertRaises(FactoryError):
-            actions.write_command(self.paths, "rework", self.job, "x", "dashboard", test_note="y")
-        actions.write_command(self.paths, "approve", self.job, "", "dashboard")
-        with self.assertRaises(Exception):
-            actions.write_command(self.paths, "approve", self.job, "", "dashboard", test_note="other")
+            self.command("rework", "x", test_note="y")
+        with self.assertRaises(FactoryError):
+            self.command("approve", test_note="other")
         self.assertEqual(note.read_text(), "Draft.\n")
 
     def test_approve_is_only_for_needs_human_jobs(self):
@@ -153,14 +193,6 @@ class ActionsTest(SandboxTest):
         self.started_with_tests()
         with self.assertRaises(FactoryError):
             actions.rework(self.paths, self.cfg, self.job, "change it", "dev", pr)
-
-    def test_inbox_round_trip(self):
-        queued = actions.write_command(self.paths, "rework", self.job, "use the other API", "dev")
-        pending = actions.inbox_list(self.paths)
-        self.assertEqual(pending[0]["command"], "rework")
-        actions.inbox_done(self.paths, queued["queued"], "done")
-        self.assertEqual(actions.inbox_list(self.paths), [])
-        self.assertTrue((self.paths.inbox_done / queued["queued"]).exists())
 
     def test_stop_flag_stops_only_when_nothing_is_active(self):
         lease = actions.acquire_lease(self.paths)["lease"]

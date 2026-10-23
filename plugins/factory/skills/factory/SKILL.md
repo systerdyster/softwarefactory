@@ -31,15 +31,15 @@ standard library only; every command prints JSON and exits non-zero on failure).
 | `add <KEY or text>` | [reference/intake.md](reference/intake.md) |
 | `run` | [reference/orchestrator.md](reference/orchestrator.md) |
 | `stop` | `F stop` — the orchestrator takes no new job and finishes the active ones. Say so. |
-| `approve <id>` | In the orchestrator session: as in orchestrator.md. Anywhere else: `F command approve <id> --by "<name>"` and say the orchestrator will act on it. |
-| `answer <id> <text>` | Same split: orchestrator acts; elsewhere `F command answer <id> --text "<text>" --by "<name>"`. For a job whose objection waits for the developer's decision. |
-| `rework <id> <note>` | Same split: orchestrator acts; elsewhere `F command rework <id> --text "<note>" --by "<name>"`. |
-| `cancel <id> [reason]` | Same split: orchestrator acts; elsewhere `F command cancel <id> --text "<reason>" --by "<name>"`. |
+| `approve <id>` | `F command approve <id> --by "<name>"`, in any session. Report its outcome or why it was refused. |
+| `answer <id> <text>` | `F command answer <id> --text "<text>" --by "<name>"`, in any session. For a job whose objection waits for the developer's decision. |
+| `rework <id> <note>` | `F command rework <id> --text "<note>" --by "<name>"`, in any session. |
+| `cancel <id> [reason]` | In the orchestrator session: as in orchestrator.md. Anywhere else: `F command cancel <id> --text "<reason>" --by "<name>"` and say the orchestrator will act on it. |
 | `status` | `F board --print`, then show a compact table: id, title, stage, round, verdicts of the latest round, next action or waiting reason, PR link. Needs-human jobs first, with their reason. |
 
-Only the orchestrator executes approve, answer, rework and cancel, because only it can stop a job's running
-agents and it owns the jobs' worktrees. Any other session queues the command in `factory/inbox/`, exactly as
-the dashboard does, and the orchestrator runs it on its next step (or on its next start).
+Approve, answer and rework are applied at once by whoever gives them, the dashboard included: they only
+write the job folder, and the orchestrator reads where a job stands from it. Only a cancel waits in
+`factory/inbox/` for the orchestrator, because only it can stop the job's running agents.
 
 ## Rules that bind every session
 

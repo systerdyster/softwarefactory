@@ -23,8 +23,8 @@ standard library only. It was first built from a blueprint prompt; this repo is 
 | `/factory stop` · `/factory status` | Take no new job · show the board in the terminal. |
 | `factory-dashboard` | The dashboard without a run, to read the queue and jobs. |
 
-Approve, answer, rework and cancel work from any session and from the dashboard: they wait in
-`factory/inbox/` until the orchestrator runs them.
+Approve, answer, rework and cancel work from any session and from the dashboard. The first three take
+effect at once; a cancel waits in `factory/inbox/` until the orchestrator runs it.
 
 ## Architecture
 
@@ -61,13 +61,16 @@ flowchart LR
     CLI --> EXT
     Dev -->|approve · answer · rework| DB
     DB -->|reads board| ST
-    DB -->|queues command| IN
+    DB -->|approve · answer · rework| CLI
+    DB -->|queues cancel| IN
     IN -->|watched by| SK
 ```
 
 - **State lives on disk**, in `factory/`; nothing is held in the session, so a restart resumes where the
   folders say it stopped.
-- **One orchestrator** holds a lease; the dashboard never changes a job, it only queues commands.
+- **One orchestrator** holds a lease and does all the building. The developer's approve, answer and
+  rework only write the job folder, so they apply at once from anywhere; a cancel waits for the
+  orchestrator, which alone can stop the job's agents.
 - **Agents never compose their own prompt or choose their own files**: `F brief` writes the prompt from
   state, and the hook allows a write only inside that run's job and role.
 
@@ -286,8 +289,14 @@ the repo root (or `-s tests` from `skills/factory/bin`).
   so branch policies still apply. **`local-merge`** builds the `--no-ff` merge with plumbing and refuses
   when the target branch is checked out anywhere (moving the ref under a checkout would touch the
   developer's checkout); the job then goes to needs-human with the command to run.
-- **approve / rework / cancel run only in the orchestrator.** Other sessions and the dashboard queue
-  them in `factory/inbox/`; the orchestrator watches it with Monitor (`F inbox watch`).
+- **Approve, answer and rework apply at once; only cancel goes through the orchestrator.** They first
+  all waited in `factory/inbox/` for the orchestrator to run them, so without a run the dashboard's
+  approve did nothing, and the run needed a refused/done round trip for each. But they only write the
+  job folder, and state is derived from it, so whoever gives one — the dashboard, any session — applies
+  it and records it as applied or refused in `factory/inbox/done/`. A cancel must stop the job's
+  running agents, which only the orchestrator can, so it still waits in the inbox. The orchestrator
+  watches both with Monitor (`F inbox watch`): a cancel to run, or an applied command that may give a
+  job something to do.
 - **Jira is done by the orchestrator through the session's Jira tools**, not by scripts; `state`
   lists the pending transitions and the one hand-back comment, and `jira-log` makes them idempotent
   across restarts.
@@ -315,9 +324,9 @@ the repo root (or `-s tests` from `skills/factory/bin`).
   listed in tidy.md) plus anything the change orphaned. Anything short of clean and green is
   discarded rather than repaired: the builder never fixes the tidy pass's mistakes.
 - **The run ends when the queue is empty and every job is finished**, not when nothing can be built:
-  only the orchestrator runs inbox commands and polls PRs, so a run that ended on a job waiting for
-  approval left the dashboard's approve unread until the next `/factory run`. `next` now says `wait`
-  while jobs wait for a human or a PR, and the orchestrator blocks in `F wait` until an inbox command,
+  only the orchestrator builds and polls PRs, so a run that ended on a job waiting for approval left
+  the approved job unbuilt until the next `/factory run`. `next` now says `wait` while jobs wait for a
+  human or a PR, and the orchestrator blocks in `F wait` until a command is applied or a cancel queued,
   a stop or a takeable job arrives, or nine minutes pass (under Bash's ten-minute limit, so PRs are still polled).
 - **Approval is where the developer chooses how the PR is published, and reads the test note.** With
   gh or az and `merge_mode = pr` the dashboard offers *Publish PR* and *Publish PR with autocomplete*
@@ -389,8 +398,8 @@ the repo root (or `-s tests` from `skills/factory/bin`).
   attribution in a commit or a description.
 - **One dashboard per project**, recorded in `factory/dashboard.json` (URL, pid, port; mode 0600,
   removed on exit). `/factory run` starts it, or links to the one already running; started by hand
-  it reads the queue and jobs without an orchestrator, and its header says so, since commands then
-  wait in the inbox for the next run.
+  it reads the queue and jobs without an orchestrator, and its header says so: what you decide there
+  is kept, but nothing is built and a cancel waits until the next run.
 
 ## Proven, and not yet
 
