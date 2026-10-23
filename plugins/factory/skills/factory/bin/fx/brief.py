@@ -9,7 +9,7 @@ from .paths import branch_name
 
 RULE_FILES = ["CLAUDE.md", "AGENTS.md", "PROJECT-RULES.md", ".claude/CLAUDE.md"]
 REVIEWER_AGENTS = {"security", "code", "performance", "stability", "platform", "ux", "ui"}
-EXPECTED = {"builder": "spawn-builder", "tidy": "spawn-tidy", "reviewer": "spawn-reviewers",
+EXPECTED = {"builder": "spawn-builder", "tidy": "spawn-tidy", "wiki": "spawn-wiki", "reviewer": "spawn-reviewers",
             "codex-fallback": "spawn-reviewers"}
 
 
@@ -157,6 +157,37 @@ def tidy(paths, cfg, job_id, s, nxt):
     return lines
 
 
+def wiki(paths, cfg, job_id, s, nxt):
+    jd = paths.job(job_id)
+    ws = paths.workspace(job_id)
+    head = s["head"]
+    base = gitutil.merge_base(cfg.base_ref, head, paths.root)
+    pages = sorted(str(p.relative_to(ws)) for pattern in cfg.wiki_globs for p in ws.glob(pattern) if p.is_file())
+    lines = ["## Wiki", "",
+             "The developer approved this job. Bring the project's wiki up to date with what the change does now, "
+             "if it is worth documenting — most changes are not. Read "
+             f"`git -C factory/workspaces/{job_id} diff {base}..{head}` and the spec and plan, then the pages "
+             "that describe what changed.", "",
+             f"Pages you may edit ({len(pages)} existing files matching {', '.join(cfg.wiki_globs)}); you may not "
+             "create, rename or delete a page, and may not touch anything else:", ""]
+    lines += [f"- {p}" for p in pages[:200]]
+    if len(pages) > 200:
+        lines += [f"- … and {len(pages) - 200} more"]
+    lines += [""]
+    if cfg.wiki_guide:
+        lines += [f"The project's own wiki conventions are the rules for how you write: {ws / cfg.wiki_guide}. "
+                  "Where they are a procedure for a person, follow the parts that apply to editing existing pages.", ""]
+    if cfg.wiki_external:
+        lines += [f"Wikis in other repos that you may not edit: {', '.join(cfg.wiki_external)}. If the change affects "
+                  "what one of them describes, say which and what, in your report.", ""]
+    lines += _files("Read", [jd / "spec.md", jd / "plan.md", paths.project])
+    lines += _commits(cfg)
+    lines += [f"Commit your page changes, then write {jd / 'wiki.md'} as your agent file shows, with `Status: done` — "
+              "also when nothing needed changing.", ""]
+    lines += ["Return one line: `DONE: <n> pages changed` or `DONE: nothing to document`."]
+    return lines
+
+
 def reviewer(paths, cfg, job_id, s, nxt, name):
     jd = paths.job(job_id)
     n = nxt["round"]
@@ -224,6 +255,8 @@ def brief(paths, cfg, job_id, agent, reviewer_name=None):
         lines += builder(paths, cfg, job_id, s, nxt)
     elif agent == "tidy":
         lines += tidy(paths, cfg, job_id, s, nxt)
+    elif agent == "wiki":
+        lines += wiki(paths, cfg, job_id, s, nxt)
     else:
         name = "codex" if agent == "codex-fallback" else reviewer_name
         if name not in nxt.get("reviewers", []):
@@ -231,7 +264,8 @@ def brief(paths, cfg, job_id, agent, reviewer_name=None):
         if agent == "reviewer" and name not in REVIEWER_AGENTS:
             raise FactoryError(f"{name} has no reviewer agent; codex runs through `codex-review`")
         lines += reviewer(paths, cfg, job_id, s, nxt, name)
-    role = {"builder": "builder", "tidy": "tidy", "codex-fallback": "review-codex"}.get(agent, f"review-{reviewer_name}")
+    role = {"builder": "builder", "tidy": "tidy", "wiki": "wiki",
+            "codex-fallback": "review-codex"}.get(agent, f"review-{reviewer_name}")
     run = runs.reserve(paths, cfg, job_id, role, nxt.get("round"), nxt.get("attempt"), s["head"])
     actions.log_spawn(paths, job_id, agent if agent != "reviewer" else f"review-{reviewer_name}",
                       nxt.get("round"), nxt.get("attempt"), s["head"],

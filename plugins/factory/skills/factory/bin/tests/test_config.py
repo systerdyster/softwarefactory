@@ -46,6 +46,12 @@ class ConfigTest(unittest.TestCase):
         cfg = parse("[rules]\ndocs = Wiki/*.md, docs/adr/**\n\n[reviewers]\ncommands = test-components")
         self.assertEqual((cfg.docs, cfg.reviewer_commands), (["Wiki/*.md", "docs/adr/**"], ["test-components"]))
 
+    def test_the_wiki_settings_are_read_and_empty_means_no_wiki_agent(self):
+        cfg = parse("[rules]\nwiki = Wiki/*.md, docs/**/*.md\nwiki_external = Project.wiki\nwiki_guide = Wiki/Rules.md")
+        self.assertEqual((cfg.wiki_globs, cfg.wiki_external, cfg.wiki_guide),
+                         (["Wiki/*.md", "docs/**/*.md"], ["Project.wiki"], "Wiki/Rules.md"))
+        self.assertEqual((parse("[rules]\n").wiki_globs, parse("[rules]\n").wiki_guide), ([], None))
+
     def test_the_test_note_follows_the_pr_language_unless_it_has_its_own(self):
         self.assertEqual(parse("[handoff]\nlanguage = sv").test_note_language, "sv")
         self.assertEqual(parse("[handoff]\nlanguage = en\ntest_note_language = sv").test_note_language, "sv")

@@ -242,6 +242,7 @@ def approve(paths, cfg, job_id, by, auto=False):
     if not current["head"]:
         raise FactoryError(f"{job_id} has no branch to approve")
     _archive(paths, job_id, "human-approval.md")
+    _archive(paths, job_id, "wiki.md")
     jobs.write_atomic(paths.job(job_id) / "human-approval.md",
                       f"Head: {current['head']}\nApproved-By: {by or 'a human'}\nAt: {jobs.now()}\n"
                       f"Was: {current.get('reason')}\n" + ("Auto-Complete: yes\n" if auto else ""))

@@ -85,6 +85,13 @@ comments =
 ; how agents write documentation (wiki pages, READMEs); empty = plain framing, then the exact
 ; ingredients, then the gotcha; present tense, no pasted code, one page per fact
 writing =
+; the wiki pages in this repo that a wiki agent keeps true after you approve a job (globs; existing pages
+; only); empty = no wiki agent
+wiki =
+; wikis in other repos that a change may affect: named in the agent's report, never edited
+wiki_external =
+; the project's own wiki conventions (a file in the repo, e.g. a skill) the wiki agent follows
+wiki_guide =
 
 [reviewers]
 ; code (main) runs on every job; security, performance, stability are specialists everywhere

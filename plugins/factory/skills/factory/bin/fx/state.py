@@ -45,6 +45,30 @@ def _tidy_facts(paths, job_id, spawns):
             "discarded": jobs.field(text, "Discarded")}
 
 
+WIKI_ATTEMPTS = 2
+
+
+def _wiki_facts(paths, cfg, job_id, head, human_text, spawns):
+    """The wiki agent runs once the developer has approved, before the rebase. What matters to state: how
+    many times it was started since that approval, whether its report says it finished, and whether
+    what it committed stays inside the wiki globs, in which case the approved head and the head after
+    it are the same work."""
+    facts = {"enabled": bool(cfg.wiki_globs), "attempts": 0, "status": None, "approved": None,
+             "only_wiki": None, "stray": []}
+    if not cfg.wiki_globs or not human_text:
+        return facts
+    jd = paths.job(job_id)
+    approved, since = jobs.field(human_text, "Head"), jobs.field(human_text, "At") or ""
+    facts.update(approved=approved, status=(jobs.field(jobs.read(jd / "wiki.md"), "Status") or "").lower() or None,
+                 attempts=sum(1 for s in spawns if s.get("agent") == "wiki" and (s.get("at") or "") >= since))
+    ws = paths.workspace(job_id)
+    if head and approved and head != approved and ws.exists() and gitutil.is_ancestor(approved, head, paths.root):
+        allowed = {str(p.relative_to(ws)) for pattern in cfg.wiki_globs for p in ws.glob(pattern) if p.is_file()}
+        facts["stray"] = [c for c in gitutil.changed_files(approved, head, paths.root) if c not in allowed]
+        facts["only_wiki"] = not facts["stray"]
+    return facts
+
+
 MERGE_RETRY_SECONDS = 60
 
 
@@ -102,6 +126,7 @@ def gather(paths, cfg, job_id):
         "rebase": jobs.read_json(jd / "rebase.json") or {"history": []},
         "pr": jobs.read_json(jd / "pr.json"),
         "test_note": (jobs.read(jd / "test-note.md") or "").strip(),
+        "wiki": _wiki_facts(paths, cfg, job_id, head, human_text, spawns),
         "merge": merge_record,
         "merged_locally": merged_locally,
         "merge_retry": _merge_retry(merge_record),
@@ -133,6 +158,9 @@ def _jira_log(jd):
 
 def _equivalent_heads(f, head):
     heads = {head}
+    wiki = f.get("wiki") or {}
+    if wiki.get("only_wiki") and wiki.get("approved"):
+        heads.add(wiki["approved"])
     changed = True
     while changed:
         changed = False
@@ -224,6 +252,12 @@ def decide(f):
     ws = f["workspace"]
     if ws.get("on_branch") and ws.get("rebase"):
         return _rebase_in_progress(f)
+
+    wiki = f.get("wiki") or {}
+    if wiki.get("enabled") and wiki.get("only_wiki") is False:
+        return _out(f, "needs-human", "needs-human",
+                    f"the wiki agent committed changes outside the wiki ({', '.join(wiki['stray'][:5])}), so the "
+                    "approval no longer covers this branch; rework it, or cancel the job")
 
     start = _cycle_start(f)
     rounds_done = [s["round"] for s in f["build"]]
@@ -371,10 +405,33 @@ def _round(f, n, start):
     return None
 
 
+def _wiki_step(f):
+    """After approval and before the rebase: bring the project's wiki up to date, at most
+    WIKI_ATTEMPTS times; a wiki the agent could not finish never holds the job."""
+    wiki = f.get("wiki") or {}
+    if not wiki.get("enabled"):
+        return None
+    ws = f["workspace"]
+    if wiki.get("status") == "done":
+        return None
+    if wiki["attempts"] >= WIKI_ATTEMPTS:
+        if ws.get("on_branch") and ws.get("dirty"):
+            return _out(f, "needs-human", "needs-human",
+                        f"the wiki agent left uncommitted changes in the workspace: {', '.join(ws['dirty'][:5])}")
+        return None
+    if not ws.get("on_branch"):
+        return _out(f, "rebasing", "open-workspace", "the wiki agent works in the workspace")
+    return _out(f, "rebasing", "spawn-wiki", "bring the wiki up to date before the branch is rebased",
+                round=0, attempt=wiki["attempts"] + 1)
+
+
 def _approval(f, human):
     if not human:
         return _out(f, "needs-human", "needs-human", READY, ready=True)
 
+    step = _wiki_step(f)
+    if step:
+        return step
     pr = f["pr"]
     last = _latest_rebase(f)
     rebased = last and last.get("after") == f["head"] and last.get("result") == "green" \
@@ -448,7 +505,7 @@ def hold_for_runs(f, result):
     runs, its round isn't judged — it may still rewrite the file it already wrote."""
     nxt = result["next"]
     live = f.get("live_runs") or []
-    writer = next((r for r in live if r["role"] in ("builder", "tidy")), None)
+    writer = next((r for r in live if r["role"] in ("builder", "tidy", "wiki")), None)
     if writer and nxt["action"] not in PASS_THROUGH:
         result["next"] = {"action": "wait-agent", "run": writer["run"]}
         result["reason"] = f"{writer['role']} run {writer['run']} is {writer['status']}"

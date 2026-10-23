@@ -83,6 +83,25 @@ class GuardTest(SandboxTest):
         self.assertEqual(self.write("builder", self.jd / "baseline.json"), 2)
         self.assertEqual(self.bash("builder", f"git -C {self.ws} commit --amend -m x"), 2)
 
+    def test_the_wiki_agent_edits_existing_wiki_pages_and_its_report_and_nothing_else(self):
+        self.sb.write("project.md", self.paths.project.read_text().replace("[jira]", "[rules]\nwiki = Wiki/*.md\n\n[jira]"),
+                      base=self.paths.factory)
+        self.sb.write("Wiki/Page.md", "# Page\n", base=self.sb.ws)
+        self.running("agent-a", role="wiki")
+        self.assertEqual(self.write("wiki", self.sb.ws / "Wiki" / "Page.md"), 0)
+        self.assertEqual(self.write("wiki", self.jd / "wiki.md"), 0)
+        for path in (self.sb.ws / "Wiki" / "New.md", self.sb.ws / "src" / "app.py", self.jd / "build.md",
+                     self.jd / "spec.md"):
+            self.assertEqual(self.write("wiki", path), 2, path)
+
+    def test_the_wiki_agent_commits_but_cannot_delete_move_or_run_project_commands(self):
+        self.running("agent-a", role="wiki")
+        self.assertEqual(self.bash("wiki", f"git -C {self.ws} add Wiki/Page.md"), 0)
+        self.assertEqual(self.bash("wiki", f"git -C {self.ws} commit -m 'Wiki'"), 0)
+        self.assertEqual(self.bash("wiki", f"git -C {self.ws} rm Wiki/Page.md"), 2)
+        self.assertEqual(self.bash("wiki", f"git -C {self.ws} mv Wiki/Page.md Wiki/Other.md"), 2)
+        self.assertEqual(self.bash("wiki", f"factory-cli ws run {self.job} test tests/x.py"), 2)
+
     def test_the_tidy_pass_works_in_the_workspace_and_writes_only_tidy_md_in_the_job_folder(self):
         self.running("agent-a", role="tidy")
         self.assertEqual(self.bash("tidy", f"git -C {self.ws} rm src/app.py"), 0)

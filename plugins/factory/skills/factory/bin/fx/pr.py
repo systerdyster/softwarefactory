@@ -75,6 +75,15 @@ def details(paths, cfg, job_id):
         done = "\n".join(s for s in (_section(tidy, "Removed"), _section(tidy, "Simplified")) if s)
         lines += ["", "### Tidy pass", "", f"Discarded: {discarded}" if discarded else (done or "Nothing changed.")]
     lines += ["", "### Least sure is correct", "", least or "Nothing named."]
+    if cfg.wiki_globs:
+        report = jobs.read(jd / "wiki.md")
+        if report and (jobs.field(report, "Status") or "").lower() == "done":
+            body = "\n\n".join(f"**{h}**\n{_section(report, h)}" for h in ("Changed", "Nothing to document",
+                                                                          "Wanted pages", "Other wikis affected")
+                               if _section(report, h))
+            lines += ["", "### Wiki", "", body or "Nothing to document."]
+        else:
+            lines += ["", "### Wiki", "", "The wiki was not updated: the wiki agent did not finish."]
     note = (jobs.read(jd / "test-note.md") or "").strip()
     if note:
         lines += ["", "### Test note", "", note]

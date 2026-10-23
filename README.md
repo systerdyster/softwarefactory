@@ -325,6 +325,16 @@ the repo root (or `-s tests` from `skills/factory/bin`).
   it as a text field the developer may edit or empty; the text goes with the click, is written to
   test-note.md when the command is queued, and is what the PR comment or the Jira comment carries.
   An empty note posts nothing. The builder keeps the developer's wording on a later round.
+- **A wiki agent keeps the project's wiki true.** With `[rules] wiki` set (globs of existing pages in
+  the repo), a job that the developer approved first gets one `factory-wiki` pass, before the
+  rebase: it edits only existing pages matching the globs, commits on the job's branch, and writes
+  `wiki.md` (pages changed, "nothing to document", pages it thinks are missing, other wikis in
+  `wiki_external` the change makes stale). The guard lets it write nothing else and forbids `git rm`
+  and `git mv`. The approved head and the head after a wiki-only commit count as the same work, so the
+  approval and the reviews stay valid (the diff is checked against the globs; anything else stops the
+  job for the developer). Two tries, then the job goes on and the PR comment says the wiki was not
+  updated. `wiki_guide` points at the project's own wiki conventions, which the agent follows. The
+  reviewers never see the wiki change, and the developer does not approve it; the PR comment lists it.
 - **A target batched locally** (gitflow: finished cases merge into a local `develop` that stays ahead
   of origin) uses `merge_mode = local-merge` with `remote = none`. The base is then the local target;
   nothing is fetched, pushed or deleted remotely, and the developer pulls the target themselves.

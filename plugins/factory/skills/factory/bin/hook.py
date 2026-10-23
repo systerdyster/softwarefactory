@@ -18,6 +18,7 @@ PREFIX = "factory:"
 ROLES = {
     "factory-builder": "builder",
     "factory-tidy": "tidy",
+    "factory-wiki": "wiki",
     "factory-codex-fallback": "review-codex",
 }
 REVIEWER_PREFIX = "factory-review-"

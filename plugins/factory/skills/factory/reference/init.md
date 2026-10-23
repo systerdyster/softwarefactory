@@ -70,6 +70,16 @@ section of `factory/project.md`:
   present tense, no pasted code, one page per fact that needs upkeep, the neighbours' language. Note
   a wiki-conventions page or skill if the project has one — its rules win — and let the developer
   confirm.
+- **The wiki** — look for documentation the project keeps about its own code: a `Wiki/` or `docs/`
+  folder in the repo, a wiki repo next to it, the project's rule files naming one. Ask which pages the
+  factory may keep true and set `[rules] wiki` to their globs (existing pages only, e.g. `Wiki/Tech/**/*.md`).
+  A wiki in another repo goes in `[rules] wiki_external` by name: the wiki agent reports what a change
+  makes stale there and never edits it. If the project has its own wiki conventions or a skill for
+  syncing the wiki, set `[rules] wiki_guide` to that file: the agent follows it instead of guessing.
+  Explain what the agent does: after the developer approves a job and before it is rebased, it edits
+  existing pages that the change made false, commits them on the job's branch, and lists in the PR
+  comment what it changed and what pages or other wikis it thinks are missing. Nothing in the wiki is
+  reviewed by the reviewers. Leave `wiki` empty for a project without a wiki in the repo.
 - **Reviewers** — every job gets the main review (`code`); security, performance and stability are
   specialists available everywhere. Enable the optional ones that fit (`platform` for a CMS or
   framework with traps, `ux` and `ui` for user-facing front ends). Leave `codex` off and say why: it

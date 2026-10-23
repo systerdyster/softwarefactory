@@ -187,6 +187,22 @@ class Config:
         """Globs of the project's written rules beyond CLAUDE.md/AGENTS.md, e.g. Wiki/*.md."""
         return self.getlist("rules", "docs")
 
+    @property
+    def wiki_globs(self):
+        """Globs of the wiki pages inside the repo that the wiki agent may edit, e.g. Wiki/Tech/**/*.md.
+        Empty: the project has no in-repo wiki and the wiki agent never runs."""
+        return self.getlist("rules", "wiki")
+
+    @property
+    def wiki_external(self):
+        """Wikis that live in other repos: named in the wiki agent's report, never edited."""
+        return self.getlist("rules", "wiki_external")
+
+    @property
+    def wiki_guide(self):
+        """The project's own wiki conventions (a file in the repo) that the wiki agent follows, if any."""
+        return self.get("rules", "wiki_guide")
+
     def path_patterns(self, reviewer):
         return self.getlist("paths", reviewer)
 

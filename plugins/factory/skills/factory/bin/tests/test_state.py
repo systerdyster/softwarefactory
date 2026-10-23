@@ -260,6 +260,34 @@ class ApprovalAndMergeTest(unittest.TestCase):
         self.assertEqual((r["stage"], r["next"].get("ready")), ("needs-human", True))
         self.assertEqual(r["reason"], state.READY)
 
+    def wiki(self, **over):
+        return {"enabled": True, "attempts": 0, "status": None, "approved": H1, "only_wiki": None, "stray": [], **over}
+
+    def test_after_approval_a_project_with_a_wiki_gets_the_wiki_pass_before_the_rebase(self):
+        r = state.decide(self.approved_facts(wiki=self.wiki()))
+        self.assertEqual((r["next"]["action"], r["next"]["attempt"]), ("spawn-wiki", 1))
+        self.assertEqual(nxt(self.approved_facts(wiki=self.wiki(enabled=False))), "rebase")
+        self.assertEqual(nxt(self.approved_facts()), "rebase")
+
+    def test_the_wiki_pass_is_tried_twice_and_then_the_job_goes_on_without_it(self):
+        self.assertEqual(state.decide(self.approved_facts(wiki=self.wiki(attempts=1)))["next"]["attempt"], 2)
+        self.assertEqual(nxt(self.approved_facts(wiki=self.wiki(attempts=2))), "rebase")
+
+    def test_a_wiki_commit_stays_the_approved_work_and_the_job_goes_on_to_the_rebase(self):
+        f = self.approved_facts(head=H2, wiki=self.wiki(status="done", only_wiki=True))
+        self.assertEqual(nxt(f), "rebase")
+
+    def test_a_wiki_pass_that_changed_other_files_stops_for_a_human(self):
+        f = self.approved_facts(head=H2, wiki=self.wiki(status="done", only_wiki=False, stray=["src/a.ts"]))
+        r = state.decide(f)
+        self.assertEqual(r["stage"], "needs-human")
+        self.assertIn("src/a.ts", r["reason"])
+
+    def test_a_wiki_pass_that_gave_up_with_uncommitted_pages_stops_for_a_human(self):
+        ws = {"exists": True, "on_branch": True, "dirty": ["Wiki/a.md"], "rebase": False, "unmerged": []}
+        r = state.decide(self.approved_facts(workspace=ws, wiki=self.wiki(attempts=2)))
+        self.assertEqual(r["stage"], "needs-human")
+
     def test_approval_of_an_older_head_does_not_count(self):
         f = base_facts(head=H2, build=[done(1)], rounds={1: passing(head=H2)}, human_approval={"head": H1})
         self.assertEqual(state.decide(f)["stage"], "needs-human")
