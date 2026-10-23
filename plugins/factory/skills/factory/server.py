@@ -141,7 +141,8 @@ def make_handler(paths, token, port):
                 body = json.loads(self.rfile.read(length))
                 result = actions.write_command(paths, str(body.get("command", "")), str(body.get("job", "")),
                                                str(body.get("text", ""))[:4000], str(body.get("by", ""))[:200],
-                                               body.get("auto") is True)
+                                               body.get("auto") is True,
+                                               str(body["test_note"])[:4000] if isinstance(body.get("test_note"), str) else None)
             except (json.JSONDecodeError, AttributeError):
                 return self._json(400, {"error": "invalid JSON"})
             except Conflict as e:

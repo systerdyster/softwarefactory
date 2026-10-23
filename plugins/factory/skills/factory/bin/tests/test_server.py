@@ -128,6 +128,13 @@ class ServerTest(SandboxTest):
         body = json.dumps({"command": command, "job": self.job, "text": text, "by": "dashboard"})
         return self.request("POST", "/command", body, {"Content-Type": "application/json"})
 
+    def test_an_approve_from_the_dashboard_carries_the_test_note_and_auto_complete(self):
+        body = json.dumps({"command": "approve", "job": self.job, "by": "dashboard", "auto": True,
+                           "test_note": "Öppna katalogen."})
+        self.assertEqual(self.request("POST", "/command", body, {"Content-Type": "application/json"})[0], 202)
+        self.assertEqual((self.paths.job(self.job) / "test-note.md").read_text(), "Öppna katalogen.\n")
+        self.assertTrue(actions.inbox_list(self.paths)[0]["auto"])
+
     def commands(self):
         status, data = self.request("GET", f"/commands?job={self.job}")
         self.assertEqual(status, 200)

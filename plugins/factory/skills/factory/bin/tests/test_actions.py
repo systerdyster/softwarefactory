@@ -124,6 +124,26 @@ class ActionsTest(SandboxTest):
         with self.assertRaises(FactoryError):
             actions.write_command(self.paths, "rework", self.job, "x", "dashboard", auto=True)
 
+    def test_an_approve_command_stores_the_test_note_as_the_developer_left_it(self):
+        note = self.paths.job(self.job) / "test-note.md"
+        note.write_text("Builder's draft.\n")
+        actions.write_command(self.paths, "approve", self.job, "", "dashboard", test_note="  My own words.\n\n")
+        self.assertEqual(note.read_text(), "My own words.\n")
+        for f in self.paths.inbox.glob("*.json"):
+            f.unlink()
+        actions.write_command(self.paths, "approve", self.job, "", "dashboard", test_note="  \n")
+        self.assertEqual(note.read_text(), "")
+
+    def test_only_approve_carries_a_test_note_and_a_refused_command_leaves_the_note(self):
+        note = self.paths.job(self.job) / "test-note.md"
+        note.write_text("Draft.\n")
+        with self.assertRaises(FactoryError):
+            actions.write_command(self.paths, "rework", self.job, "x", "dashboard", test_note="y")
+        actions.write_command(self.paths, "approve", self.job, "", "dashboard")
+        with self.assertRaises(Exception):
+            actions.write_command(self.paths, "approve", self.job, "", "dashboard", test_note="other")
+        self.assertEqual(note.read_text(), "Draft.\n")
+
     def test_approve_is_only_for_needs_human_jobs(self):
         self.started_with_tests()
         with self.assertRaises(FactoryError):

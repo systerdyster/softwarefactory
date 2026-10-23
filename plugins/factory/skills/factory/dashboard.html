@@ -1628,8 +1628,8 @@ const Scene = (() => {
             + d.findings.map((f) => `<li><strong>${esc(f.reviewer)}</strong> — ${markdown(f.text).replace(/^<p>|<\/p>$/g, "")}</li>`).join("") + `</ul>` : "")
         + ((d.exemptions || []).length ? `<p class="lead">Not covered by an automated test — check by hand:</p><ul class="least">`
             + d.exemptions.map((e) => `<li>${markdown(e).replace(/^<p>|<\/p>$/g, "")}</li>`).join("") + `</ul>` : "")
-        + (d.test_note ? `<p class="lead">Test note — posted with the PR, or to Jira when you merge:</p><div class="ctx">${markdown(d.test_note)}</div>`
-                       : `<p class="note">No test note: nobody but you needs to verify this by hand.</p>`)
+        + `<p class="lead">Test note — posted with the PR, or to Jira when you merge. Empty posts nothing:</p>`
+        + `<textarea id="act-note" aria-label="Test note" placeholder="No test note. Write one if someone other than you should check this.">${esc(d.test_note)}</textarea>`
         + `<textarea id="act-text" aria-label="Rework note" placeholder="Rework note — what to change"></textarea>`,
         acts: [...(d.publish === "both" ? [["approve", "Publish PR", "primary"], ["approve-auto", "Publish PR with autocomplete", ""]]
                  : d.publish === "auto" ? [["approve-auto", "Publish PR with autocomplete", "primary"]]
@@ -1697,7 +1697,8 @@ const Scene = (() => {
     $("act-status").textContent = `Sending ${command}…`;
     try {
       await api("/command", { method: "POST", headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ command, job: job.id, text, by: "dashboard", auto }) });
+                              body: JSON.stringify({ command, job: job.id, text, by: "dashboard", auto,
+                                                     test_note: command === "approve" && $("act-note") ? $("act-note").value : undefined }) });
       $("act-status").textContent = "";
       pending = true;
     } catch (e) { $("act-status").textContent = e.message; }

@@ -322,7 +322,9 @@ the repo root (or `-s tests` from `skills/factory/bin`).
   tool that can). With `auto-merge` only the autocomplete button; otherwise plain *Approve*. The
   builder keeps `test-note.md` true to the change in `[handoff] test_note_language` (default: the PR
   language): how someone else checks it by hand, empty when nothing needs it. The approval view shows
-  it and the PR comment carries it.
+  it as a text field the developer may edit or empty; the text goes with the click, is written to
+  test-note.md when the command is queued, and is what the PR comment or the Jira comment carries.
+  An empty note posts nothing. The builder keeps the developer's wording on a later round.
 - **A target batched locally** (gitflow: finished cases merge into a local `develop` that stays ahead
   of origin) uses `merge_mode = local-merge` with `remote = none`. The base is then the local target;
   nothing is fetched, pushed or deleted remotely, and the developer pulls the target themselves.

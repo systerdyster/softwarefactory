@@ -478,16 +478,25 @@ def stop(paths, clear=False):
     return {"stop": True}
 
 
-def write_command(paths, command, job_id, text, by, auto=False):
+def write_command(paths, command, job_id, text, by, auto=False, test_note=None):
+    """Queues a command for the orchestrator. An approve may carry the test note as the developer left
+    it in the dashboard: it is written to the job's test-note.md now (empty means no note), so what
+    they saw is what the PR and the tracker get."""
     if command not in ("approve", "answer", "rework", "cancel"):
         raise FactoryError("inbox commands are approve, answer, rework and cancel")
     if auto and command != "approve":
         raise FactoryError("only approve can ask for auto-complete")
+    if test_note is not None and command != "approve":
+        raise FactoryError("only approve can carry a test note")
     jobs.check_id(job_id)
     if command in ("rework", "answer") and not (text or "").strip():
         raise FactoryError(f"{command} needs text")
     if any(c.get("command") == command and c.get("job") == job_id for c in inbox_list(paths)):
         raise Conflict(f"a {command} for {job_id} is already queued; the orchestrator has not run it yet")
+    if test_note is not None:
+        if not paths.job(job_id).is_dir():
+            raise FactoryError(f"no job {job_id}")
+        jobs.write_atomic(paths.job(job_id) / "test-note.md", test_note.strip() + "\n" if test_note.strip() else "")
     paths.inbox.mkdir(parents=True, exist_ok=True)
     name = f"{jobs.now().replace(':', '')}-{command}-{job_id}.json"
     payload = {"command": command, "job": job_id, "text": text or "", "by": by or "", "at": jobs.now(),
