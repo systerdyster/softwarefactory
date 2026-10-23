@@ -8,7 +8,7 @@ import re
 import subprocess
 import tempfile
 
-from . import gitutil, jobs, schedule
+from . import findings, gitutil, jobs, schedule
 from .errors import FactoryError
 from .paths import branch_name
 
@@ -74,6 +74,9 @@ def details(paths, cfg, job_id):
         done = "\n".join(s for s in (_section(tidy, "Removed"), _section(tidy, "Simplified")) if s)
         lines += ["", "### Tidy pass", "", f"Discarded: {discarded}" if discarded else (done or "Nothing changed.")]
     lines += ["", "### Least sure is correct", "", least or "Nothing named."]
+    left = findings.remaining(paths, job_id)
+    lines += ["", "### Findings the reviewers left", ""]
+    lines += [f"- **{name}** — {item}" for name, item in left] or ["None."]
     if human:
         lines += ["", f"Approved by {jobs.field(human, 'Approved-By') or 'a human'} at "
                       f"`{(jobs.field(human, 'Head') or '')[:12]}`."]

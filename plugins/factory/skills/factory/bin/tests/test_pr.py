@@ -31,6 +31,18 @@ class PrTest(SandboxTest):
                          "The rounding in app.py:2.", "FALLBACK: claude", "Approved by Fredrik at `0123456789ab`"):
             self.assertIn(expected, text)
 
+    def test_the_comment_lists_what_each_reviewer_still_holds_after_the_fix_rounds(self):
+        self.sb.write("round-1/review-code.md", "VERDICT: CHANGES\n\n## Findings\n"
+                      "- 🔴 BLOCKING `src/app.py:2` — wrong.\n- 🟡 NOTE `docs.md:1` — stale docs.\n", base=self.jd)
+        self.sb.write("round-1/review-ui.md", "VERDICT: PASS\n\n## Findings\n- 🟡 NOTE `a.css:3` — not rendered.\n",
+                      base=self.jd)
+        self.sb.write("round-2/review-code.md", "VERDICT: PASS\n\n## Findings\n- 🟡 NOTE `docs.md:1` — stale docs.\n",
+                      base=self.jd)
+        text = pr.details(self.paths, self.cfg, self.job)
+        self.assertIn("- **code** — 🟡 NOTE `docs.md:1` — stale docs.", text)
+        self.assertIn("- **ui** — 🟡 NOTE `a.css:3` — not rendered.", text)
+        self.assertNotIn("wrong.", text)
+
     def test_a_description_with_ai_attribution_is_refused(self):
         self.sb.write("pr-body.md", "## Answer\n\nThe answer is 42.\n\n🤖 Generated with [Claude Code](https://x)\n",
                       base=self.jd)

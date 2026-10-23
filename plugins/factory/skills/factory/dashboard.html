@@ -1622,6 +1622,8 @@ const Scene = (() => {
         + (job.confidence != null ? `<p class="note">The reviewer's confidence: ${esc(job.confidence)}/10</p>` : "")
         + (least ? `<p class="lead">Check before you approve — the reviewer is least sure of:</p><ol class="least">${least}</ol>`
                  : `<p class="note">The reviewer named nothing it is unsure of.</p>`)
+        + ((d.findings || []).length ? `<p class="lead">The reviewers left these for you:</p><ul class="least">`
+            + d.findings.map((f) => `<li><strong>${esc(f.reviewer)}</strong> — ${markdown(f.text).replace(/^<p>|<\/p>$/g, "")}</li>`).join("") + `</ul>` : "")
         + ((d.exemptions || []).length ? `<p class="lead">Not covered by an automated test — check by hand:</p><ul class="least">`
             + d.exemptions.map((e) => `<li>${markdown(e).replace(/^<p>|<\/p>$/g, "")}</li>`).join("") + `</ul>` : "")
         + `<textarea id="act-text" aria-label="Rework note" placeholder="Rework note — what to change"></textarea>`,

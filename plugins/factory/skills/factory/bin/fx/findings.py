@@ -71,3 +71,14 @@ def write(paths, job_id, round_number):
     out = rd / "findings.md"
     jobs.write_atomic(out, "\n".join(lines) + "\n")
     return {"file": out, "blocking": len(blocking), "notes": len(notes)}
+
+
+def remaining(paths, job_id):
+    """What the reviewers still say when the job reaches the developer: each reviewer's findings from
+    its latest review (a fix round's review lists again whatever it holds as not resolved), as
+    [(reviewer, finding)]. Notes the builder fixed are gone because their reviewer no longer lists them."""
+    latest = {}
+    for n in jobs.rounds_on_disk(paths.job(job_id)):
+        for f in sorted(paths.round_dir(job_id, n).glob("review-*.md")):
+            latest[f.stem[len("review-"):]] = jobs.finding_items(f.read_text(encoding="utf-8"))
+    return [(name, item) for name, items in sorted(latest.items()) for item in items]
