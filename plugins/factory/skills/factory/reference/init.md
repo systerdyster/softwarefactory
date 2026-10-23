@@ -141,6 +141,11 @@ hook, which recognises each factory agent by name, not by the allowlist.
 checks (`[factory] verify`) once, then removed. Each job later gets its own worktree,
 `factory/workspaces/<id>/`, when it starts.
 
+**If `dirty` lists files, report them** — setup or the checks left what git doesn't ignore (a
+`node_modules`, a copied `.env`, a build folder), and a job's worktree with them never reads as
+clean. Name each file and the `.gitignore` line it needs; the project's `.gitignore` is the
+developer's to change, so add nothing yourself.
+
 **If a check is red, stop.** Report the failing check and what failed from the log it names. The factory does not
 start on a red target; fixing it is human work that comes first. If setup fails, report which step and
 its output.

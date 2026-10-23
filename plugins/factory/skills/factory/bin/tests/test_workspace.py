@@ -178,6 +178,13 @@ class WorkspaceTest(SandboxTest):
         self.sb.push_target_change("BROKEN", "")
         self.assertEqual(workspace.probe(self.paths, self.cfg)["failed"], "suite")
 
+    def test_probe_names_what_setup_leaves_that_git_does_not_ignore(self):
+        self.assertEqual(workspace.probe(self.paths, self.cfg)["dirty"], [])
+        self.paths.project.write_text(self.paths.project.read_text().replace(
+            "setup = echo setup >> setup.log", "setup = echo x > node_modules.tmp"), encoding="utf-8")
+        result = workspace.probe(self.paths, config.load(self.paths))
+        self.assertEqual((result["green"], result["dirty"]), (True, ["node_modules.tmp"]))
+
 
 if __name__ == "__main__":
     unittest.main()

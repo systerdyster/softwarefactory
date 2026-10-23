@@ -293,7 +293,9 @@ def verify(paths, cfg, job_id):
 
 
 def probe(paths, cfg):
-    """For /factory init: a throwaway worktree at the target, set up and checked, then removed."""
+    """For /factory init: a throwaway worktree at the target, set up and checked, then removed. `dirty`
+    is what setup and the checks left that git doesn't ignore: a job's worktree would never read as
+    clean with those files, so init reports them while the project's .gitignore can still be fixed."""
     ws = paths.workspaces / PROBE
     if gitutil.is_worktree(ws):
         gitutil.run(["worktree", "remove", "--force", str(ws)], paths.root)
@@ -304,6 +306,6 @@ def probe(paths, cfg):
     gitutil.run(["worktree", "add", "--detach", str(ws), cfg.base_ref], paths.root)
     try:
         ran = _setup(paths, cfg, ws, None)
-        return {**_verify(paths, cfg, ws, None), "setup": ran}
+        return {**_verify(paths, cfg, ws, None), "setup": ran, "dirty": gitutil.dirty_files(ws)}
     finally:
         gitutil.run(["worktree", "remove", "--force", str(ws)], paths.root, check=False)

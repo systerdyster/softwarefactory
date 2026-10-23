@@ -385,4 +385,6 @@ UI/UX pass never reached the approval (all three fixed since).
   `.gitignore` themselves, or no ignore file at all (some watchers, linters, test globs, IDE indexers),
   don't see `.git/info/exclude` and will see it; init checks for this and reports it.
 - `workspace_setup` output (node_modules, copied `.env`) must be gitignored in the project, or the
-  workspace never reads as clean.
+  workspace never reads as clean. `/factory init` checks it: its proving run lists the files setup
+  and the checks left that git doesn't ignore (`dirty`), so the missing `.gitignore` lines are named
+  before the first job. It reports and changes nothing in the project.
