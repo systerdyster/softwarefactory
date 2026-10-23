@@ -1600,6 +1600,17 @@ const Scene = (() => {
       + `${(c.lockfiles || []).length ? ` · lockfiles: ${esc(c.lockfiles.join(", "))}` : ""}</p>`;
   }
 
+  // What the wiki pass changed in the pages you approve with the change; nothing for a project without a wiki.
+  function wikiPart(w) {
+    if (!w) return "";
+    if (!w.done) return `<p class="note">The wiki was not updated: the wiki agent did not finish.</p>`;
+    const list = (items) => items.map((i) => `<li>${markdown(i).replace(/^<p>|<\/p>$/g, "")}</li>`).join("");
+    return ((w.changed || []).length ? `<p class="lead">Wiki pages changed — you approve them with the change:</p><ul class="least">${list(w.changed)}</ul>`
+             : `<p class="note">Wiki: nothing to document${w.nothing ? ` — ${esc(w.nothing)}` : ""}.</p>`)
+      + ((w.wanted || []).length ? `<p class="lead">Wiki pages it thinks are missing:</p><ul class="least">${list(w.wanted)}</ul>` : "")
+      + ((w.other || []).length ? `<p class="lead">Other wikis the change makes stale:</p><ul class="least">${list(w.other)}</ul>` : "");
+  }
+
   // What the developer decides now, and only the buttons that answer it.
   function decision(job) {
     const d = job.decision;
@@ -1628,6 +1639,7 @@ const Scene = (() => {
             + d.findings.map((f) => `<li><strong>${esc(f.reviewer)}</strong> — ${markdown(f.text).replace(/^<p>|<\/p>$/g, "")}</li>`).join("") + `</ul>` : "")
         + ((d.exemptions || []).length ? `<p class="lead">Not covered by an automated test — check by hand:</p><ul class="least">`
             + d.exemptions.map((e) => `<li>${markdown(e).replace(/^<p>|<\/p>$/g, "")}</li>`).join("") + `</ul>` : "")
+        + wikiPart(d.wiki)
         + `<p class="lead">Test note — posted with the PR, or to Jira when you merge. Empty posts nothing:</p>`
         + `<textarea id="act-note" aria-label="Test note" placeholder="No test note. Write one if someone other than you should check this.">${esc(d.test_note)}</textarea>`
         + `<textarea id="act-text" aria-label="Rework note" placeholder="Rework note — what to change"></textarea>`,

@@ -112,6 +112,17 @@ def publish_choice(cfg):
     return "both" if cfg.merge_mode == "pr" else "auto"
 
 
+def _wiki(paths, job_id, rounds, cfg):
+    """What the wiki pass of the round being approved did, for a project with a wiki; None otherwise."""
+    if not cfg.wiki_globs:
+        return None
+    report = jobs.read(paths.round_dir(job_id, max(rounds, default=0)) / "wiki.md")
+    if (jobs.field(report, "Status") or "").lower() != "done":
+        return {"done": False}
+    return {"done": True, "changed": _items(report, "Changed"), "nothing": _first_line(jobs.section(report, "Nothing to document")),
+            "wanted": _items(report, "Wanted pages"), "other": _items(report, "Other wikis affected")}
+
+
 def decision(paths, job_id, s, cfg):
     """None unless the job waits for the developer; then what they decide and how they answer."""
     if s.get("stage") != "needs-human":
@@ -131,5 +142,6 @@ def decision(paths, job_id, s, cfg):
                 "checks": s.get("checks"), "least_sure": least[:ITEM_LIMIT], "exemptions": exemptions,
                 "publish": publish_choice(cfg), "test_note": (jobs.read(jd / "test-note.md") or "").strip(),
                 "findings": [{"reviewer": name, "text": item} for name, item in findings.remaining(paths, job_id)],
-                "unrendered": [{"reviewer": name, "why": why} for name, why in findings.unrendered(paths, job_id)]}
+                "unrendered": [{"reviewer": name, "why": why} for name, why in findings.unrendered(paths, job_id)],
+                "wiki": _wiki(paths, job_id, rounds, cfg)}
     return {"kind": "stopped", "reason": s.get("reason")}

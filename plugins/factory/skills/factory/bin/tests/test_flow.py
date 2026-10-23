@@ -175,6 +175,9 @@ class FlowTest(SandboxTest):
         self.sb.write("round-1/wiki.md", "Status: done\n\n## Changed\n- Wiki/Page.md — says 42\n", base=self.jd)
         s = self.cli("state", self.job)
         self.assertTrue(s["next"].get("ready"), s)
+        card = next(c for c in self.cli("board", "--print")["jobs"] if c["id"] == self.job)
+        self.assertEqual((card["decision"]["wiki"]["done"], card["decision"]["wiki"]["changed"]),
+                         (True, ["Wiki/Page.md — says 42"]))
         self.assertEqual(self.cli("approve", self.job, "--by", "Fredrik")["head"], s["head"])
 
         self.sb.push_target_change("README.md", "Someone else's change\n")
