@@ -232,6 +232,15 @@ class Config:
         return self.get("handoff", "language", "en")
 
     @property
+    def auto_complete_available(self):
+        """Auto-complete is the PR tool's own setting, so it needs a PR tool and a PR."""
+        return self.pr_tool in ("gh", "az") and self.merge_mode in ("pr", "auto-merge")
+
+    @property
+    def test_note_language(self):
+        return self.get("handoff", "test_note_language") or self.pr_language
+
+    @property
     def pr_template(self):
         return self.get("handoff", "pr_template")
 

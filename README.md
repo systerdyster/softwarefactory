@@ -316,6 +316,13 @@ the repo root (or `-s tests` from `skills/factory/bin`).
   approval left the dashboard's approve unread until the next `/factory run`. `next` now says `wait`
   while jobs wait for a human or a PR, and the orchestrator blocks in `F wait` until an inbox command,
   a stop or a takeable job arrives, or nine minutes pass (under Bash's ten-minute limit, so PRs are still polled).
+- **Approval is where the developer chooses how the PR is published, and reads the test note.** With
+  gh or az and `merge_mode = pr` the dashboard offers *Publish PR* and *Publish PR with autocomplete*
+  (`F approve --auto`, recorded as `Auto-Complete: yes` in human-approval.md; refused without a PR
+  tool that can). With `auto-merge` only the autocomplete button; otherwise plain *Approve*. The
+  builder keeps `test-note.md` true to the change in `[handoff] test_note_language` (default: the PR
+  language): how someone else checks it by hand, empty when nothing needs it. The approval view shows
+  it and the PR comment carries it.
 - **A merged PR is noticed without being told.** While it waits, `F wait` fetches the target once a
   minute and, when the target moved, checks each open PR against it (`pr.check_merged`). With gh or
   az, git only says when to ask: the PR tool's state decides, since the same change can reach the

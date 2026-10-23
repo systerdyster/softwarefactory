@@ -161,9 +161,10 @@ def check_write(paths, role, raw_path):
         if target == jd / "round-1" / "tidy.md":
             return job
         raise Blocked("the tidy pass may write only inside factory/workspaces/<job>/ and round-1/tidy.md in its job folder")
-    if target in (jd / "build.md", jd / "tests.md"):
+    if target in (jd / "build.md", jd / "tests.md", jd / "test-note.md"):
         return job
-    raise Blocked(f"the {role} may write only inside factory/workspaces/<job>/ and build.md and tests.md in its job folder")
+    raise Blocked(f"the {role} may write only inside factory/workspaces/<job>/ and build.md, tests.md and "
+                  "test-note.md in its job folder")
 
 
 def authorize(paths, cfg, agent_id, role, job):

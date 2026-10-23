@@ -229,7 +229,9 @@ def cancel(paths, cfg, job_id, reason, pr_module):
     return {"cancelled": job_id, "pr_closed": closed, "cleanup": result, "previous_decision": archived}
 
 
-def approve(paths, cfg, job_id, by):
+def approve(paths, cfg, job_id, by, auto=False):
+    if auto and not cfg.auto_complete_available:
+        raise FactoryError("auto-complete needs pr_tool gh or az and merge_mode pr or auto-merge")
     current = state_mod.state(paths, cfg, job_id)
     if current["stage"] != "needs-human":
         raise FactoryError(f"{job_id} is {current['stage']}, not needs-human; nothing to approve")
@@ -242,8 +244,8 @@ def approve(paths, cfg, job_id, by):
     _archive(paths, job_id, "human-approval.md")
     jobs.write_atomic(paths.job(job_id) / "human-approval.md",
                       f"Head: {current['head']}\nApproved-By: {by or 'a human'}\nAt: {jobs.now()}\n"
-                      f"Was: {current.get('reason')}\n")
-    return {"approved": job_id, "head": current["head"], "was": current.get("reason")}
+                      f"Was: {current.get('reason')}\n" + ("Auto-Complete: yes\n" if auto else ""))
+    return {"approved": job_id, "head": current["head"], "was": current.get("reason"), "auto_complete": auto}
 
 
 def answer(paths, cfg, job_id, text, by):
@@ -476,9 +478,11 @@ def stop(paths, clear=False):
     return {"stop": True}
 
 
-def write_command(paths, command, job_id, text, by):
+def write_command(paths, command, job_id, text, by, auto=False):
     if command not in ("approve", "answer", "rework", "cancel"):
         raise FactoryError("inbox commands are approve, answer, rework and cancel")
+    if auto and command != "approve":
+        raise FactoryError("only approve can ask for auto-complete")
     jobs.check_id(job_id)
     if command in ("rework", "answer") and not (text or "").strip():
         raise FactoryError(f"{command} needs text")
@@ -486,7 +490,8 @@ def write_command(paths, command, job_id, text, by):
         raise Conflict(f"a {command} for {job_id} is already queued; the orchestrator has not run it yet")
     paths.inbox.mkdir(parents=True, exist_ok=True)
     name = f"{jobs.now().replace(':', '')}-{command}-{job_id}.json"
-    payload = {"command": command, "job": job_id, "text": text or "", "by": by or "", "at": jobs.now()}
+    payload = {"command": command, "job": job_id, "text": text or "", "by": by or "", "at": jobs.now(),
+               **({"auto": True} if auto else {})}
     jobs.write_json(paths.inbox / name, payload)
     return {"queued": name}
 

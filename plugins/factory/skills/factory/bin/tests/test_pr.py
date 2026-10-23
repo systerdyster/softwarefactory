@@ -43,6 +43,11 @@ class PrTest(SandboxTest):
         self.assertIn("- **ui** — 🟡 NOTE `a.css:3` — not rendered.", text)
         self.assertNotIn("wrong.", text)
 
+    def test_the_test_note_goes_in_the_comment_and_an_empty_one_leaves_it_out(self):
+        self.assertNotIn("Test note", pr.details(self.paths, self.cfg, self.job))
+        self.sb.write("test-note.md", "Öppna katalogen och byt vy.\n", base=self.jd)
+        self.assertIn("### Test note\n\nÖppna katalogen och byt vy.", pr.details(self.paths, self.cfg, self.job))
+
     def test_a_review_that_never_rendered_the_change_is_flagged_for_the_developer(self):
         self.sb.write("round-1/review-ui.md", "VERDICT: PASS\n\nRENDERED: no — the project lists no render commands\n",
                       base=self.jd)
@@ -88,6 +93,29 @@ class PrTest(SandboxTest):
         self.assertEqual((first["details_comment"], second["details_comment"], second.get("details_error")), (77, 77, None))
         self.assertEqual(sum("api -X POST repos/{owner}/{repo}/issues/5/comments" in c for c in calls), 1)
         self.assertEqual(sum("api -X PATCH repos/{owner}/{repo}/issues/comments/77" in c for c in calls), 1)
+
+    def test_a_pr_is_opened_with_auto_complete_only_when_the_developer_chose_it(self):
+        log = self.sb.tmp / "gh.log"
+        fake = self.sb.write("bin/gh", "#!/bin/sh\n"
+                             f'echo "$@" >> {log}\n'
+                             'case "$1 $2" in\n'
+                             '  "pr view") echo \'{"number": 5, "url": "https://gh/pr/5", "state": "OPEN"}\' ;;\n'
+                             '  "api -X") echo \'{"id": 77}\' ;;\n'
+                             'esac\n', base=self.sb.tmp)
+        fake.chmod(0o755)
+        self.paths.project.write_text(self.paths.project.read_text().replace("pr_tool = other", "pr_tool = gh")
+                                      .replace("merge_mode = local-merge", "merge_mode = pr"), encoding="utf-8")
+        cfg = config.load(self.paths)
+        old_path = os.environ["PATH"]
+        os.environ["PATH"] = f"{fake.parent}:{old_path}"
+        try:
+            pr.open_or_update(self.paths, cfg, self.job)
+            self.assertNotIn("pr merge", log.read_text())
+            self.sb.write("human-approval.md", "Head: abc\nApproved-By: Fredrik\nAuto-Complete: yes\n", base=self.jd)
+            self.assertTrue(pr.open_or_update(self.paths, cfg, self.job)["auto"])
+        finally:
+            os.environ["PATH"] = old_path
+        self.assertIn("pr merge 5 --auto --merge", log.read_text())
 
     def test_other_tool_pushes_and_leaves_the_pr_to_a_human(self):
         record = pr.open_or_update(self.paths, self.cfg, self.job)

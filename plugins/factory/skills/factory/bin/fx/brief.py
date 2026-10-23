@@ -126,6 +126,10 @@ def builder(paths, cfg, job_id, s, nxt):
                   "Make the full suite green.", ""]
     lines += _files("Read", reads)
     lines += _commits(cfg)
+    lines += [f"Test note: keep {jd / 'test-note.md'} true to the change as it stands after this round, in "
+              f"{cfg.test_note_language}: a few lines telling someone other than the developer how to check the "
+              "change by hand — where to go, what to do, what they should see. Leave the file empty when nothing "
+              "needs checking by hand beyond the automated tests. It is posted with the PR, so no internals.", ""]
     lines += [f"Append a section that starts with the line `{heading}` to {jd / 'build.md'}, and end it with "
               "`Status: done` or `Status: objection` (plus `Objection: plan`).", ""]
     lines += ["Return one line: `DONE: <summary>` or `OBJECTION: <one line>`."]

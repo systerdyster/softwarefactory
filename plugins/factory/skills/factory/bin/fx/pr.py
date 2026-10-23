@@ -74,6 +74,9 @@ def details(paths, cfg, job_id):
         done = "\n".join(s for s in (_section(tidy, "Removed"), _section(tidy, "Simplified")) if s)
         lines += ["", "### Tidy pass", "", f"Discarded: {discarded}" if discarded else (done or "Nothing changed.")]
     lines += ["", "### Least sure is correct", "", least or "Nothing named."]
+    note = (jobs.read(jd / "test-note.md") or "").strip()
+    if note:
+        lines += ["", "### Test note", "", note]
     unseen = findings.unrendered(paths, job_id)
     if unseen:
         lines += ["", "### Not looked at in a browser", "",
@@ -201,7 +204,7 @@ def open_or_update(paths, cfg, job_id):
     title = title_for(cfg, meta)
     branch = branch_name(paths, job_id)
     tool = cfg.pr_tool
-    auto = cfg.merge_mode == "auto-merge"
+    auto = cfg.merge_mode == "auto-merge" or (jobs.field(jobs.read(jd / "human-approval.md"), "Auto-Complete") == "yes")
     record = dict(existing or {}, tool=tool, head=head, branch=branch, auto=auto, updated_at=jobs.now())
     if tool == "other":
         record.update(state="MANUAL", url=None)

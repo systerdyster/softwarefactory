@@ -114,6 +114,16 @@ class ActionsTest(SandboxTest):
         self.assertIn("duplicate of OPT-2", decision)
         self.assertEqual(state.state(self.paths, self.cfg, self.job)["stage"], "cancelled")
 
+    def test_auto_complete_is_refused_without_a_pr_tool_to_complete_it(self):
+        with self.assertRaises(FactoryError):
+            actions.approve(self.paths, self.cfg, self.job, "dev", auto=True)
+
+    def test_an_approve_command_can_carry_auto_complete_and_nothing_else_can(self):
+        actions.write_command(self.paths, "approve", self.job, "", "dashboard", auto=True)
+        self.assertTrue(actions.inbox_list(self.paths)[0]["auto"])
+        with self.assertRaises(FactoryError):
+            actions.write_command(self.paths, "rework", self.job, "x", "dashboard", auto=True)
+
     def test_approve_is_only_for_needs_human_jobs(self):
         self.started_with_tests()
         with self.assertRaises(FactoryError):

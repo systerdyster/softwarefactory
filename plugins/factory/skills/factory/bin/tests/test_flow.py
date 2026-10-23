@@ -127,6 +127,7 @@ class FlowTest(SandboxTest):
         card = next(c for c in self.cli("board", "--print")["jobs"] if c["id"] == self.job)
         self.assertEqual(card["decision"]["kind"], "approve")
         self.assertNotIn("returns 43", str(card["decision"]["findings"]))
+        self.assertEqual((card["decision"]["publish"], card["decision"]["test_note"]), ("approve", ""))
         self.cli("approve", self.job, "--by", "Fredrik")
 
         self.sb.push_target_change("README.md", "Someone else's change\n")

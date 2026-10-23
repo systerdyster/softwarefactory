@@ -101,7 +101,16 @@ def confidence(paths, job_id):
     return None
 
 
-def decision(paths, job_id, s):
+def publish_choice(cfg):
+    """Which approval buttons the dashboard offers: both ways of publishing a PR when the project
+    publishes plain ones and the PR tool can auto-complete, the auto one alone when the project always
+    does, otherwise the plain approval."""
+    if not cfg.auto_complete_available:
+        return "approve"
+    return "both" if cfg.merge_mode == "pr" else "auto"
+
+
+def decision(paths, job_id, s, cfg):
     """None unless the job waits for the developer; then what they decide and how they answer."""
     if s.get("stage") != "needs-human":
         return None
@@ -118,6 +127,7 @@ def decision(paths, job_id, s):
         exemptions = [e for e in _items(jobs.read(jd / "tests.md"), "Exemptions") if e.lower() != "none"]
         return {"kind": "approve", "summary": jobs.section(jobs.read(jd / "spec.md"), "Summary"),
                 "checks": s.get("checks"), "least_sure": least[:ITEM_LIMIT], "exemptions": exemptions,
+                "publish": publish_choice(cfg), "test_note": (jobs.read(jd / "test-note.md") or "").strip(),
                 "findings": [{"reviewer": name, "text": item} for name, item in findings.remaining(paths, job_id)],
                 "unrendered": [{"reviewer": name, "why": why} for name, why in findings.unrendered(paths, job_id)]}
     return {"kind": "stopped", "reason": s.get("reason")}

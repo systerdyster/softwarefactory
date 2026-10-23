@@ -1628,8 +1628,13 @@ const Scene = (() => {
             + d.findings.map((f) => `<li><strong>${esc(f.reviewer)}</strong> — ${markdown(f.text).replace(/^<p>|<\/p>$/g, "")}</li>`).join("") + `</ul>` : "")
         + ((d.exemptions || []).length ? `<p class="lead">Not covered by an automated test — check by hand:</p><ul class="least">`
             + d.exemptions.map((e) => `<li>${markdown(e).replace(/^<p>|<\/p>$/g, "")}</li>`).join("") + `</ul>` : "")
+        + (d.test_note ? `<p class="lead">Test note — goes in the PR comment:</p><div class="ctx">${markdown(d.test_note)}</div>`
+                       : `<p class="note">No test note: nobody but you needs to verify this by hand.</p>`)
         + `<textarea id="act-text" aria-label="Rework note" placeholder="Rework note — what to change"></textarea>`,
-        acts: [["approve", "Approve", "primary"], ["rework", "Rework", ""], ...cancel] };
+        acts: [...(d.publish === "both" ? [["approve", "Publish PR", "primary"], ["approve-auto", "Publish PR with autocomplete", ""]]
+                 : d.publish === "auto" ? [["approve-auto", "Publish PR with autocomplete", "primary"]]
+                 : [["approve", "Approve", "primary"]]),
+               ["rework", "Rework", ""], ...cancel] };
     }
     if (d && d.kind === "stopped") {
       return { html: `<h3>Stopped — needs you</h3><p class="q">${esc(d.reason)}</p>`
@@ -1675,8 +1680,10 @@ const Scene = (() => {
     } catch (e) { /* the next refresh tries again */ }
   }
 
-  async function send(job, command) {
+  async function send(job, picked) {
     if (sending || pending) return;
+    const auto = picked === "approve-auto";
+    const command = auto ? "approve" : picked;
     let text = ($("act-text") || {}).value || "";
     if (command === "answer") {
       const picked = document.querySelector('#dlg-acts input[name="answer"]:checked');
@@ -1689,7 +1696,7 @@ const Scene = (() => {
     $("act-status").textContent = `Sending ${command}…`;
     try {
       await api("/command", { method: "POST", headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ command, job: job.id, text, by: "dashboard" }) });
+                              body: JSON.stringify({ command, job: job.id, text, by: "dashboard", auto }) });
       $("act-status").textContent = "";
       pending = true;
     } catch (e) { $("act-status").textContent = e.message; }

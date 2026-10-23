@@ -114,7 +114,7 @@ def build(paths, cfg, write=True):
         s["pipeline"] = pipeline(s)
         s["waits_for"] = queue.blocked_by(paths, job_id, statuses) if s["stage"] == "queued" else []
         s["story"] = story.story(paths, job_id, s)
-        s["decision"] = story.decision(paths, job_id, s)
+        s["decision"] = story.decision(paths, job_id, s, cfg)
         s["confidence"] = story.confidence(paths, job_id)
         jd = paths.job(job_id)
         s["files"] = sorted(str(p.relative_to(jd)) for p in jd.rglob("*.md")) if jd.exists() else []

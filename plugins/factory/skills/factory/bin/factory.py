@@ -176,7 +176,7 @@ def cmd_cancel(a, p):
 
 
 def cmd_approve(a, p):
-    return actions.approve(p, _cfg(p), a.job, a.by)
+    return actions.approve(p, _cfg(p), a.job, a.by, a.auto)
 
 
 def cmd_answer(a, p):
@@ -232,7 +232,7 @@ def cmd_stop(a, p):
 
 
 def cmd_command(a, p):
-    return actions.write_command(p, a.command, a.job, a.text, a.by)
+    return actions.write_command(p, a.command, a.job, a.text, a.by, a.auto)
 
 
 def cmd_inbox(a, p):
@@ -324,6 +324,7 @@ def parser():
     sp = add("approve", cmd_approve, "record a human approval of a needs-human job's head")
     sp.add_argument("job")
     sp.add_argument("--by", default="")
+    sp.add_argument("--auto", action="store_true", help="the PR is opened with auto-complete (gh or az)")
     sp = add("answer", cmd_answer, "answer a job's open question; it goes into spec.md's Decided")
     sp.add_argument("job")
     sp.add_argument("--text", required=True)
@@ -354,6 +355,7 @@ def parser():
     sp.add_argument("job")
     sp.add_argument("--text", default="")
     sp.add_argument("--by", default="")
+    sp.add_argument("--auto", action="store_true", help="approve: open the PR with auto-complete")
     sp = add("inbox", cmd_inbox, "list pending commands, mark one done, or watch (one line per new command)")
     sp.add_argument("action", choices=["list", "done", "watch"])
     sp.add_argument("file", nargs="?")

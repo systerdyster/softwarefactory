@@ -184,7 +184,8 @@ The inbox refuses a second identical command for a job while the first is still 
 - **answer `<id>` `<text>`** — for a job with an open question (`next.question`): `F answer <id> --text
   "<text>" --by "<who>"`. It records the answer and adds it to spec.md's `## Decided`; state then
   sends the builder on in the same round.
-- **approve `<id>`** — for a job ready for approval (`next.ready`; refused otherwise): `F approve <id> --by "<who>"`. State then takes it
+- **approve `<id>`** — for a job ready for approval (`next.ready`; refused otherwise): `F approve <id> --by "<who>"`, with `--auto` when the inbox file says `"auto": true` (the developer chose to
+  publish the PR with auto-complete; gh and az only, refused otherwise). State then takes it
   through rebase, the project's checks and `merge_mode`. **Integration is one job at a time**: act on
   `pr`/`merge-local` for one job, and ask the others' state afterwards — once the target has moved,
   state sends it through rebase and the project's checks again before it is integrated. A rebase

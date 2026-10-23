@@ -46,6 +46,17 @@ class ConfigTest(unittest.TestCase):
         cfg = parse("[rules]\ndocs = Wiki/*.md, docs/adr/**\n\n[reviewers]\ncommands = test-components")
         self.assertEqual((cfg.docs, cfg.reviewer_commands), (["Wiki/*.md", "docs/adr/**"], ["test-components"]))
 
+    def test_the_test_note_follows_the_pr_language_unless_it_has_its_own(self):
+        self.assertEqual(parse("[handoff]\nlanguage = sv").test_note_language, "sv")
+        self.assertEqual(parse("[handoff]\nlanguage = en\ntest_note_language = sv").test_note_language, "sv")
+
+    def test_publish_choice_depends_on_the_pr_tool_and_merge_mode(self):
+        from fx import story
+        for body, expected in (("[factory]\npr_tool = az", "both"), ("[factory]\npr_tool = gh\nmerge_mode = auto-merge", "auto"),
+                               ("[factory]\npr_tool = other", "approve"),
+                               ("[factory]\npr_tool = az\nmerge_mode = local-merge", "approve")):
+            self.assertEqual(story.publish_choice(parse(body)), expected, body)
+
     def test_unknown_reviewer_is_refused(self):
         with self.assertRaises(FactoryError):
             parse("[reviewers]\nenabled = vibes").enabled_reviewers

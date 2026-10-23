@@ -56,6 +56,11 @@ rule files the brief lists. Where they say nothing:
   repeated boilerplate.
 - **One test file per source file**, unless the project does it differently.
 
+**The test note** — `test-note.md` in the job folder, in the language the brief names: a few lines
+for someone other than the developer on how to check the change by hand (where to go, what to do,
+what they should see), no internals. Rewrite it whenever the change moves; leave it empty when
+nothing needs checking by hand. The developer reads it before approving, and it is posted with the PR.
+
 In tests.md in the job folder keep the traceability, nothing more:
 
 ```markdown
