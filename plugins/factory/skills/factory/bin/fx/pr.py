@@ -265,6 +265,20 @@ def status(paths, cfg, job_id):
     return record
 
 
+def detect_merged(paths, cfg, job_id):
+    """Marks an open PR merged when its branch is already in the target, without asking the PR
+    tool: a human merged it. Reads the refs as they are; the caller fetches."""
+    jd = paths.job(job_id)
+    record = jobs.read_json(jd / "pr.json")
+    if not record or record.get("state") not in ("OPEN", "MANUAL") or not record.get("head"):
+        return False
+    if not gitutil.is_merged(record["head"], cfg.base_ref, paths.root):
+        return False
+    record.update(state="MERGED", merged_detected_by="git", checked_at=jobs.now())
+    jobs.write_json(jd / "pr.json", record)
+    return True
+
+
 def comments(paths, cfg, job_id):
     record = jobs.read_json(paths.job(job_id) / "pr.json") or {}
     if record.get("tool") == "gh":

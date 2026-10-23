@@ -7,7 +7,7 @@ import secrets
 import subprocess
 from datetime import datetime
 
-from . import gitutil, jobs, queue, runs, state as state_mod, workspace
+from . import gitutil, jobs, pr as pr_mod, queue, runs, state as state_mod, workspace
 from .errors import Conflict, FactoryError
 from .paths import branch_name
 
@@ -373,14 +373,34 @@ def _woken(paths):
     return None
 
 
-def wait(paths, timeout=WAIT_SECONDS, interval=2.0):
-    """Blocks until there is something to do — an inbox command, a stop, a job that can be taken — or
-    the timeout passes: how the orchestrator waits while no job can be built, still polling open PRs
-    every few minutes."""
+FETCH_SECONDS = 60
+
+
+def _merged_while_waiting(paths, cfg, seen):
+    """Fetches the target and, when it moved since `seen`, marks every open PR whose branch is now
+    in it. Returns the target's head and the jobs marked."""
+    if cfg.remote:
+        gitutil.run(["fetch", cfg.remote], paths.root, check=False, timeout=300)
+    head = gitutil.rev(cfg.base_ref, paths.root)
+    if head == seen:
+        return head, []
+    return head, [e["id"] for e in queue.entries(paths)
+                  if e["status"] == "taken" and pr_mod.detect_merged(paths, cfg, e["id"])]
+
+
+def wait(paths, cfg, timeout=WAIT_SECONDS, interval=2.0):
+    """Blocks until there is something to do — an inbox command, a stop, a job that can be taken, a PR
+    that was merged — or the timeout passes: how the orchestrator waits while no job can be built.
+    Once a minute it fetches the target and checks open PRs against it when it has moved."""
     import time
     deadline = time.monotonic() + timeout
+    next_fetch, seen = 0.0, None
     while True:
         why = _woken(paths)
+        if not why and time.monotonic() >= next_fetch:
+            next_fetch = time.monotonic() + FETCH_SECONDS
+            seen, merged = _merged_while_waiting(paths, cfg, seen)
+            why = "merged" if merged else None
         if why or time.monotonic() >= deadline:
             return {"woken_by": why or "timeout"}
         time.sleep(interval)

@@ -190,7 +190,7 @@ def cmd_next(a, p):
 
 
 def cmd_wait(a, p):
-    return actions.wait(p, a.timeout)
+    return actions.wait(p, _cfg(p), a.timeout)
 
 
 def cmd_dashboard(a, p):

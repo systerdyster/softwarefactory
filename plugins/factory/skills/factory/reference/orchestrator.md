@@ -55,7 +55,8 @@ Repeat:
    `F lease release --lease <lease>` and end the run. `action` is `wait` when nothing can be built
    now but jobs wait for a human or a PR: report once (the first time), then run `F wait` (Bash
    timeout 600000) — it returns when an inbox command is pending, a stop is requested or a queued job
-   can be taken, or after nine minutes — and go
+   can be taken, a PR was merged (it fetches the target and checks open PRs itself), or after nine
+   minutes — and go
    round the loop again. Don't end the run on `wait`.
 4. **Act** — for **each** job in `jobs`, ask `F state <id>` and perform its `next.action` from the
    table below, then its **Jira** to-dos. Spawn agents in the background, so one job's agents run

@@ -3,7 +3,7 @@ import unittest
 
 from support import SandboxTest, git
 
-from fx import config, jobs, pr, workspace
+from fx import actions, config, jobs, pr, queue, state, workspace
 from fx.errors import FactoryError
 
 
@@ -86,6 +86,64 @@ class PrTest(SandboxTest):
         self.assertEqual(len(parents), 3)
         self.assertEqual(parents[2], self.head)
         self.assertEqual(jobs.read_json(self.jd / "merge.json")["commit"], parents[0])
+
+
+class MergedDetectionTest(SandboxTest):
+    def setUp(self):
+        super().setUp()
+        self.job = self.sb.queue_job()
+        queue.take(self.paths)
+        workspace.open_(self.paths, self.cfg, self.job)
+        self.sb.write("src/app.py", "def answer():\n    return 42\n", base=self.sb.ws)
+        self.sb.commit("Answer", cwd=self.sb.ws)
+        self.sb.write("src/extra.py", "X = 1\n", base=self.sb.ws)
+        self.sb.commit("Extra", cwd=self.sb.ws)
+        self.record = pr.open_or_update(self.paths, self.cfg, self.job)
+        self.branch = "factory/001-answer"
+
+    def merge_on_target(self, *args):
+        git(self.sb.root, "fetch", "origin")
+        git(self.sb.root, "switch", "--detach", "origin/main")
+        git(self.sb.root, *args)
+        git(self.sb.root, "push", "origin", "HEAD:main")
+        git(self.sb.root, "fetch", "origin")
+
+    def state(self):
+        return jobs.read_json(self.jd / "pr.json")["state"]
+
+    @property
+    def jd(self):
+        return self.paths.job(self.job)
+
+    def test_a_branch_that_is_not_in_the_target_stays_open(self):
+        self.assertFalse(pr.detect_merged(self.paths, self.cfg, self.job))
+        self.assertEqual(self.state(), "MANUAL")
+
+    def test_a_merge_commit_is_detected(self):
+        self.merge_on_target("merge", "--no-ff", "-m", "Merge", self.branch)
+        self.assertTrue(pr.detect_merged(self.paths, self.cfg, self.job))
+        self.assertEqual(self.state(), "MERGED")
+
+    def test_a_squash_merge_is_detected(self):
+        self.merge_on_target("merge", "--squash", self.branch)
+        git(self.sb.root, "commit", "-m", "Squash")
+        git(self.sb.root, "push", "origin", "HEAD:main")
+        git(self.sb.root, "fetch", "origin")
+        self.assertTrue(pr.detect_merged(self.paths, self.cfg, self.job))
+
+    def test_a_closed_pr_is_left_alone(self):
+        record = jobs.read_json(self.jd / "pr.json")
+        jobs.write_json(self.jd / "pr.json", {**record, "state": "CLOSED"})
+        self.merge_on_target("merge", "--no-ff", "-m", "Merge", self.branch)
+        self.assertFalse(pr.detect_merged(self.paths, self.cfg, self.job))
+
+    def test_wait_wakes_when_the_target_took_the_branch(self):
+        self.merge_on_target("merge", "--no-ff", "-m", "Merge", self.branch)
+        self.assertEqual(actions.wait(self.paths, self.cfg, timeout=5, interval=0.1), {"woken_by": "merged"})
+        self.assertEqual(state.state(self.paths, self.cfg, self.job)["next"]["action"], "finish")
+
+    def test_wait_times_out_while_the_target_has_not_moved(self):
+        self.assertEqual(actions.wait(self.paths, self.cfg, timeout=0.3, interval=0.1), {"woken_by": "timeout"})
 
 
 if __name__ == "__main__":
