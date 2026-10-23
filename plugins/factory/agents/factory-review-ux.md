@@ -18,6 +18,9 @@ commands` — browser tests, an accessibility scan), run the ones that cover the
 their output and screenshots: keyboard order, focus, names, states. Line 3 of your file is
 `RENDERED: <what you ran>` or `RENDERED: no — <why>` (the factory reads it: a `no` is shown to the
 developer at approval and in the PR); a finding that rests only on reading the code says so.
+Run only what the brief lists; the project decides what it has. When one of those commands is an
+accessibility check (axe or similar), quote what it reported, passes and violations alike. When none
+is, say "no automated accessibility check in this project" in your file — never imply a scan ran.
 
 **The accessibility bar is WCAG 2.2 Level AA.** A regression against it is BLOCKING. Where the
 project's rules or design system say more, they win.

@@ -10,7 +10,7 @@ import unittest
 from support import SandboxTest, agent_starts, agent_stops, git
 
 import factory
-from fx import jobs
+from fx import brief, config, jobs
 
 TEST = "import sys\nsys.path.insert(0, 'src')\nfrom app import answer\nassert answer() == 42\n"
 
@@ -238,6 +238,24 @@ class FlowTest(SandboxTest):
         brief = self.cli("brief", self.job, "builder")
         self.assertIn("Code comments, unless a project rule above says otherwise: Write none by default", brief)
         self.assertIn("unless a project rule above says otherwise: Frame it plainly first", brief)
+
+    def schedule_round_one(self, reviewer):
+        self.sb.write("round-1/scheduled.md", f"Reviewers: {reviewer}\nHead: abc\nBase: def\nPrevious-Head: -\n",
+                      base=self.jd)
+
+    def test_a_ui_reviewer_without_render_commands_is_told_to_say_it_saw_nothing(self):
+        self.schedule_round_one("ui")
+        text = "\n".join(brief.reviewer(self.paths, self.cfg, self.job, {}, {"round": 1}, "ui"))
+        self.assertIn("RENDERED: no — the project lists no render commands", text)
+        self.assertNotIn("Render before you judge", text)
+
+    def test_a_ui_reviewer_with_render_commands_is_told_to_quote_the_accessibility_check(self):
+        self.schedule_round_one("ux")
+        self.paths.project.write_text(self.paths.project.read_text().replace(
+            "[reviewers]", "[reviewers]\ncommands = echo"), encoding="utf-8")
+        text = "\n".join(brief.reviewer(self.paths, config.load(self.paths), self.job, {}, {"round": 1}, "ux"))
+        self.assertIn("Render before you judge", text)
+        self.assertIn("no automated accessibility check", text)
 
     def test_brief_refuses_an_agent_state_did_not_ask_for(self):
         self.cli("next", "--lease", self.lease)

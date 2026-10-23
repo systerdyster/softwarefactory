@@ -190,7 +190,12 @@ def reviewer(paths, cfg, job_id, s, nxt, name):
     if name in ("ui", "ux") and cfg.reviewer_commands:
         lines += [f"Render before you judge: run `factory-cli ws run {job_id} <name> [args]` with one of "
                   f"{', '.join(cfg.reviewer_commands)} (project.md says what each renders and where the screenshots "
-                  "land), then look at the screenshots with Read.", ""]
+                  "land), then look at the screenshots with Read. Quote what an accessibility check reported; "
+                  "when none of the commands is one, say the project has no automated accessibility check.", ""]
+    elif name in ("ui", "ux"):
+        lines += ["The project lists no render commands, so you can't run or look at the change: your file's "
+                  "`RENDERED:` line is `RENDERED: no — the project lists no render commands`, and your verdict "
+                  "rests on reading the code. Say so, and name what the developer should look at.", ""]
     lines += _files("Read", reads)
     if name == "codex":
         lines += ["You are the fallback for the Codex second opinion: Codex was unavailable. Give the same brief "

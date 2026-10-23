@@ -83,7 +83,14 @@ section of `factory/project.md`:
   to see the change, e.g. a browser test project that screenshots components (Playwright, Vitest
   browser mode). Say in project.md what each one renders and where its screenshots land; their output
   must be ignored by git, or the workspace check discards the round. Without one the reviewers can
-  only read code, and say so.
+  only read code, and say so. **Find what the project already has, and propose only that:** read
+  `package.json` and the test config for scripts that run component or browser tests, for an
+  accessibility check (`axe-core`, `vitest-axe`, `jest-axe`, `@axe-core/*`, a `a11y` script), and for
+  screenshot support (Vitest browser mode, Playwright, Storybook). List each as a candidate command
+  with what it covers, and say plainly what is missing. A command that only repeats what `verify`
+  already runs adds the reviewers nothing: leave it out. **Never add a dependency or a script to the
+  project to make this work**; what a project tests with is the project's decision. Leave `commands`
+  empty when nothing qualifies.
 - **Platform** — for the platform reviewer: the platform, version, and any project-specific traps.
 - `max_rounds` (default 3), `max_diff` (changed lines flagged to the approving developer; default 800), remote,
   PR tool (`gh`, `az` or `other`, from the remote URL).
