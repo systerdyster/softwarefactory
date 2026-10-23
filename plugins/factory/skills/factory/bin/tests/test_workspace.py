@@ -17,6 +17,12 @@ class WorkspaceTest(SandboxTest):
     def setup_runs(self, job_id="001-answer"):
         return (self.sb.ws_of(job_id) / "setup.log").read_text().count("setup")
 
+    def test_a_changed_setup_changes_the_verify_fingerprint_for_the_same_commands(self):
+        before = workspace.fingerprint(self.cfg)
+        self.paths.project.write_text(self.paths.project.read_text().replace(
+            "setup = echo setup >> setup.log", "setup = echo other >> setup.log"), encoding="utf-8")
+        self.assertNotEqual(workspace.fingerprint(config.load(self.paths)), before)
+
     def test_open_creates_the_job_branch_from_the_target_and_runs_setup_once(self):
         result = workspace.open_(self.paths, self.cfg, self.job)
         self.assertTrue(result["created"] and result["branch_created"])

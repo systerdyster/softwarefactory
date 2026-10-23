@@ -363,12 +363,17 @@ agents bound to their runs through the Agent call's `agentId` (it is the hooks' 
 parallel reviewers, the tidy pass, an objection going to the developer, rework, `az` PR create and
 status, and a merge moving the target.
 
+Jobs 005–007 (2026-10-22/23, same project): two builders working at the same moment from separate
+worktrees, the question/answer flow, verify and the developer's approval, all with real agents.
+Jobs 006 and 007 were then merged by the developer; Codex's review of the run is what found the
+first merge detection finishing a PR on the content match alone, and that findings and an unrendered
+UI/UX pass never reached the approval (all three fixed since).
+
 **Not yet run for real** — each is proven on a real job before it is relied on:
 
-- Two jobs building at the same moment with real agents (so far a queued job has always waited for
-  its `--after`), and more than two; two `pnpm install`s in parallel; the project's dev server and
-  browser tests honouring `$FACTORY_PORT` / `$FACTORY_OUTPUT`.
-- The question/answer flow, the live dashboard pipeline and `F wait` keeping a run alive.
+- More than two jobs at once; two `pnpm install`s in parallel; the project's dev server and browser
+  tests honouring `$FACTORY_PORT` / `$FACTORY_OUTPUT`.
+- The live dashboard pipeline, `F wait` keeping a run alive, and the merge detection in `F wait`.
 - `gh` PR calls and `auto-merge`; comments via `az devops invoke`.
 - A real `codex exec` review (detection is verified; the call sends code to OpenAI, so it waits for a
   project that has enabled it).

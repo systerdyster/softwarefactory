@@ -263,9 +263,11 @@ def run(paths, cfg, job_id, name, args):
 
 
 def fingerprint(cfg):
-    """Identifies what a verify ran: the command names and their exact command lines. A verify result
-    counts only for the same code and the same fingerprint."""
-    text = "\n".join(f"{name}={cfg.command(name)}" for name in cfg.verify_commands)
+    """Identifies what a verify ran and what it ran on: the command names and their exact command lines,
+    and the workspace setup that built the dependencies they use. A verify result counts only for the
+    same code and the same fingerprint."""
+    text = "\n".join([f"{name}={cfg.command(name)}" for name in cfg.verify_commands]
+                     + [f"setup={line}" for line in cfg.setup_commands])
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
 
