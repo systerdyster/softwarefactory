@@ -338,6 +338,9 @@ the repo root (or `-s tests` from `skills/factory/bin`).
   uncommitted is tried again, then stops the job. Two tries, then the job goes on and the PR comment
   says the wiki was not updated. `wiki_guide` points at the project's own wiki conventions, which the agent follows. The
   reviewers never see the wiki change, and the developer does not approve it; the PR comment lists it.
+- **`finish` and `cancel` record what they removed** in `factory/jobs/<id>/cleanup.json`, including
+  `remote_branch_found: false` when the remote branch was already gone, so a `remote_deleted: false`
+  can be told from a branch left behind.
 - **A target batched locally** (gitflow: finished cases merge into a local `develop` that stays ahead
   of origin) uses `merge_mode = local-merge` with `remote = none`. The base is then the local target;
   nothing is fetched, pushed or deleted remotely, and the developer pulls the target themselves.
@@ -411,6 +414,12 @@ UI/UX pass never reached the approval (all three fixed since).
 - More than two jobs at once; two `pnpm install`s in parallel; the project's dev server and browser
   tests honouring `$FACTORY_PORT` / `$FACTORY_OUTPUT`.
 - The live dashboard pipeline, `F wait` keeping a run alive, and the merge detection in `F wait`.
+- The approval view's test note field, *Publish PR with autocomplete* against a real Azure DevOps PR, and
+  whether the orchestrator is allowed to run it (auto mode once blocked `az repos pr update`).
+- `local-merge` in a real checkout (`F merge` with `git merge --no-ff`, a project's commit hooks, `remote =
+  none` with a local target ahead of origin), and its Jira comment.
+- The wiki agent with a real agent: whether it follows a project's own wiki conventions, and the whole
+  chain approve → wiki → `wiki-record` → rebase → PR.
 - `gh` PR calls and `auto-merge`; comments via `az devops invoke`.
 - A real `codex exec` review (detection is verified; the call sends code to OpenAI, so it waits for a
   project that has enabled it).
