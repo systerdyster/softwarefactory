@@ -25,7 +25,7 @@ class RoleTest(unittest.TestCase):
         self.assertEqual(hook.role_for("factory:factory-tidy"), "tidy")
         self.assertEqual(hook.role_for("factory:factory-wiki"), "wiki")
         self.assertEqual(hook.role_for("factory:factory-codex-fallback"), "review-codex")
-        self.assertEqual(hook.role_for("factory:factory-review-security"), "review-security")
+        self.assertEqual(hook.role_for("factory:factory-mage"), "mage")
 
     def test_anything_else_is_not_the_factory(self):
         self.assertIsNone(hook.role_for(None))
@@ -36,6 +36,7 @@ class RoleTest(unittest.TestCase):
     def test_an_unknown_factory_agent_fails_closed(self):
         self.assertEqual(hook.role_for("factory:factory-renamed"), "unknown")
         self.assertEqual(hook.role_for("factory:factory-test-writer"), "unknown")
+        self.assertEqual(hook.role_for("factory:factory-review-security"), "unknown")
         self.assertEqual(hook.main(stream=event("factory:factory-renamed")), 2)
 
 
@@ -56,9 +57,9 @@ class HookTest(SandboxTest):
     def test_unreadable_input_never_blocks_other_sessions(self):
         self.assertEqual(hook.main(stream=io.StringIO("not json")), 0)
 
-    def test_a_factory_reviewer_is_held_to_its_role(self):
-        self.assertEqual(self.run_hook("factory:factory-review-security"), 2)
-        self.assertEqual(self.run_hook("factory:factory-review-security",
+    def test_a_mage_is_held_to_a_reviewers_limits(self):
+        self.assertEqual(self.run_hook("factory:factory-mage"), 2)
+        self.assertEqual(self.run_hook("factory:factory-mage",
                                        command="git -C factory/workspaces/001-answer diff HEAD~1"), 0)
 
 

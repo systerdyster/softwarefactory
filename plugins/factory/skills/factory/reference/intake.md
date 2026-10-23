@@ -73,7 +73,7 @@ approving the plan approves them.
 **Specialist reviewers.** Every job gets the main review. Decide with the developer which specialists
 this case needs — security (auth, data access, input reaching an interpreter, personal data),
 performance (queries, loops over remote calls, payload), stability (jobs, subscriptions, external
-calls), and ui, ux, platform where project.md enables them — and name them on the plan's
+calls), and the other Mages project.md's `[mages]` lists — and name them on the plan's
 `Specialists:` line, or `none`. project.md's `[paths]` patterns add more when the change touches them.
 
 **Settled decisions.** Everything the developer decided during intake and grill goes in spec.md's

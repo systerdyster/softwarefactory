@@ -93,15 +93,22 @@ wiki_external =
 ; the project's own wiki conventions (a file in the repo, e.g. a skill) the wiki agent follows
 wiki_guide =
 
+[mages]
+; <name> = the rulebook the Mage reviews by: skill:<a skill in .claude/skills> or default:<the factory's
+; defaults/skills/review-<name>>; codex = codex for the Codex CLI (it sends code to OpenAI: check the
+; client agreement first). code is the main Mage and reviews every job; the others join when [paths]
+; or the plan's Specialists line calls them. The rulebook's model: front matter picks the model.
+code = default:code
+security = default:security
+performance = default:performance
+stability = default:stability
+
 [reviewers]
-; code (main) runs on every job; security, performance, stability are specialists everywhere
-; optional: platform, ux, ui, codex (codex sends code to OpenAI: check the client agreement first)
-enabled =
-; project commands ui/ux reviewers may run to see the change (screenshots must be ignored by git)
+; project commands the ui and ux Mages may run to see the change (screenshots must be ignored by git)
 commands =
 
 [paths]
-; a specialist joins a job's first round when one of these matches the change (or the plan names it)
+; a Mage joins a job's first round when one of these matches the change (or the plan names it)
 ; globs, or re:<regex> matched against the diff text
 security =
 performance =

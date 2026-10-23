@@ -21,7 +21,7 @@ One skill, two kinds of session:
 The factory is a plugin. Its machinery is `factory-cli`, which the plugin puts on PATH (Python
 standard library only; every command prints JSON and exits non-zero on failure). Below, `F` means
 `factory-cli`. Run `F --help` for the full list. Agents are scoped by the plugin: spawn them as
-`factory:factory-builder`, `factory:factory-review-security` and so on.
+`factory:factory-builder`, `factory:factory-mage` and so on.
 
 ## Route the command
 
@@ -62,8 +62,9 @@ write the job folder, and the orchestrator reads where a job stands from it. Onl
 
 ```
 plugin skills/factory/    SKILL.md, reference/, bin/ (factory.py, hook.py, fx/, tests/), server.py, dashboard.html
-plugin agents/factory-*   builder, review-code (the main reviewer), specialists
-                          review-{security,performance,stability,platform,ux,ui}, codex-fallback
+plugin agents/factory-*   builder, tidy, wiki, mage (every reviewer, by the rulebook its brief names),
+                          codex-fallback
+plugin defaults/skills/   rulebooks review-{code,security,performance,stability,platform,ux,ui}, case-status
 factory/                  project.md, backlog.md, board.json, orchestrator.json (lease and slots), inbox/,
                           workspaces/<id>/, logs/<id>/, out/<id>/, runs/ (agent runs), binding.json (a failed
                           agent binding), locks/, jobs/<id>/

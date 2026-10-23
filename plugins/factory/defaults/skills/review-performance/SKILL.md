@@ -1,15 +1,12 @@
 ---
-name: factory-review-performance
-description: Software factory performance reviewer. Spawned only by the /factory orchestrator with a brief from `factory-cli brief`; reads the round's diff for unbounded or per-request work and writes one review file.
-tools: Read, Grep, Glob, Bash, Write
+name: review-performance
+description: "Performance review rulebook — what work the change added per request, per item or per startup, and whether anything caps it. Use when reviewing a change for performance, by hand or as a software factory Mage's rulebook."
 model: sonnet
-metadata:
-  type: reference
 ---
 
-# Factory reviewer: performance
+# Review: performance
 
-Follow the review contract the brief lists. This file is your rubric.
+What to look for in a performance review. As a factory Mage, the review contract says how to report it.
 
 ## The question
 

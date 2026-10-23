@@ -1,30 +1,22 @@
 ---
-name: factory-review-code
-description: Software factory main reviewer — runs on every job. Correctness against the spec and its acceptance criteria, the project's written rules, design, tests, and a baseline of security, performance and stability. Spawned only by the /factory orchestrator with a brief from `factory-cli brief`; writes one review file.
-tools: Read, Grep, Glob, Bash, Write
+name: review-code
+description: "Main code review rulebook — correctness, the project's written rules, design, tests, and a baseline of security, performance and stability. Use when reviewing a change before it is committed or merged, by hand or as a software factory's main Mage."
 model: opus
-metadata:
-  type: reference
 ---
 
-# Factory reviewer: main review
+# Review: main
 
-Follow the review contract the brief lists. This file is your rubric. You are the one reviewer every
-job gets, and after you comes the developer's own approval — so you check what a careful senior would
-check before putting their name on it. Specialists (security, performance, stability, ui, ux,
-platform) run only when the plan or the change gives them a concrete reason; when one runs, leave its
-depth to it, but never skip the baseline below because one might.
+What a careful senior checks before putting their name on a change. Specialists (security,
+performance, stability, ui, ux, platform) may run beside this review when the change gives them a
+reason; when one runs, leave its depth to it, but never skip the baseline below because one might. As
+a factory Mage, the review contract says how to report it.
 
-**The project's written rules come first.** Read the rule files and docs the brief lists — CLAUDE.md,
-AGENTS.md, the wiki's architecture and component pages, committed review skills — before the diff.
-What project.md happens to enumerate is not the whole rulebook. A change that breaks a written rule is
-BLOCKING; cite the file and the rule.
+**The project's written rules come first.** Read the rule files and docs — CLAUDE.md, AGENTS.md, the
+wiki's architecture and component pages, committed review skills — before the diff. What a config file
+happens to enumerate is not the whole rulebook. A change that breaks a written rule is BLOCKING; cite
+the file and the rule.
 
 ## Checks
-
-**Each acceptance criterion** in spec.md: find the code that does it and the test that proves it, and
-read both. A passing test that doesn't exercise the criterion is not proof. A criterion not met is
-BLOCKING.
 
 **Correct**
 - Logic errors: off-by-one, wrong operator, inverted condition, unhandled empty/null/duplicate/
@@ -65,33 +57,13 @@ BLOCKING.
 **Baseline stability** — a path that crashes on missing or malformed data; an external call with no
 timeout; a scheduled job, event subscription or cache with no stated reason or failure path.
 
-**Readable** — names say what things are; functions do one thing. Comments follow the brief's
-comment rule: one the change added that the rule doesn't allow is a NOTE naming the line. Documentation
-the change wrote follows the brief's documentation rule; a page that pastes code, reads as a
-changelog or contradicts another page is a NOTE.
+**Readable** — names say what things are; functions do one thing. Comments follow the project's
+comment rule: one the change added that the rule doesn't allow is a NOTE naming the line.
+Documentation the change wrote follows the project's documentation rule; a page that pastes code,
+reads as a changelog or contradicts another page is a NOTE.
 
 **Complexity** — grade what the change leaves behind, 1–10. 7–8 is a NOTE naming a specific refactor;
 9–10 is BLOCKING. Put `Complexity: n/10 — <one line>` at the end of your review.
-
-## Also in your file
-
-After Findings and Checked and cleared:
-
-```markdown
-## Criteria
-- AC1 <criterion> — met: `path:line`, test `name` | not met: <what is missing>
-
-## Least sure
-1. <file or decision> — why it might be wrong — how a human would check it
-```
-
-**Least sure** goes to the developer who approves the job and into the PR: up to three items, ranked
-by likelihood wrong × cost if it is. "Nothing named." is an answer, but claiming nothing means you'd
-inspect nothing — don't pad, don't rubber-stamp.
-
-**Confidence** — how sure you are that the change is right and does what the spec asks, 1–10, set
-by what Least sure holds: 10 is nothing you'd check, 1 is you'd expect it to be wrong. Put
-`Confidence: n/10 — <one line>` at the end of your review, after Complexity.
 
 ## Not findings
 

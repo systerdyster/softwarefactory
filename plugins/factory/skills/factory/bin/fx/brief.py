@@ -3,12 +3,11 @@ freshly spawned agent. It is derived from `state`, so the round, attempt and rea
 the job folder, and it refuses when `state` does not call for that agent. Every brief is logged
 to spawns.jsonl, which `state` reads to notice an agent that keeps making no progress."""
 
-from . import actions, findings, gitutil, jobs, runs, state as state_mod
+from . import actions, findings, gitutil, jobs, mages, runs, state as state_mod
 from .errors import FactoryError
 from .paths import branch_name
 
 RULE_FILES = ["CLAUDE.md", "AGENTS.md", "PROJECT-RULES.md", ".claude/CLAUDE.md"]
-REVIEWER_AGENTS = {"security", "code", "performance", "stability", "platform", "ux", "ui"}
 EXPECTED = {"builder": "spawn-builder", "tidy": "spawn-tidy", "wiki": "spawn-wiki", "reviewer": "spawn-reviewers",
             "codex-fallback": "spawn-reviewers"}
 
@@ -196,7 +195,14 @@ def reviewer(paths, cfg, job_id, s, nxt, name):
     rd = paths.round_dir(job_id, n)
     sched = jobs.scheduled(rd)
     out = rd / f"review-{name}.md"
-    lines = [f"## Reviewer: {name}, round {n}", ""]
+    lines = [f"## Mage: {name}, round {n}", ""]
+    if name != "codex":
+        book = mages.rulebook(paths, cfg, job_id, name)
+        lines += [f"Your rulebook: {book}. Read it first; review by it."]
+        if name == mages.MAIN:
+            lines += ["You are the main Mage: the one every job gets. Do the main Mage's part of the review "
+                      "contract too — the acceptance criteria, the least-sure list and the confidence line."]
+        lines += [""]
     rejected = (jobs.reviews(rd).get(name) or {}).get("problem")
     if rejected:
         lines += [f"Your review file {out} was rejected: {rejected}. Rewrite the whole file to the contract; "
@@ -263,8 +269,8 @@ def brief(paths, cfg, job_id, agent, reviewer_name=None):
         name = "codex" if agent == "codex-fallback" else reviewer_name
         if name not in nxt.get("reviewers", []):
             raise FactoryError(f"{name} is not waiting in round {nxt.get('round')}: {nxt.get('reviewers')}")
-        if agent == "reviewer" and name not in REVIEWER_AGENTS:
-            raise FactoryError(f"{name} has no reviewer agent; codex runs through `codex-review`")
+        if agent == "reviewer" and name == "codex":
+            raise FactoryError("codex runs through `codex-review`; its fallback is `brief <job> codex-fallback`")
         lines += reviewer(paths, cfg, job_id, s, nxt, name)
     role = {"builder": "builder", "tidy": "tidy", "wiki": "wiki",
             "codex-fallback": "review-codex"}.get(agent, f"review-{reviewer_name}")

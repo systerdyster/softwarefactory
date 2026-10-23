@@ -1,15 +1,12 @@
 ---
-name: factory-review-platform
-description: Software factory platform reviewer — the traps the project's platform (CMS, framework) sets that a generic review misses. Enabled per project in project.md. Spawned only by the /factory orchestrator with a brief from `factory-cli brief`; writes one review file.
-tools: Read, Grep, Glob, Bash, Write
+name: review-platform
+description: "Platform review rulebook — the traps the project's platform (CMS, framework) sets that a generic review misses. Use when reviewing a change for its platform's traps, by hand or as a software factory Mage's rulebook."
 model: sonnet
-metadata:
-  type: reference
 ---
 
-# Factory reviewer: platform
+# Review: platform
 
-Follow the review contract the brief lists. This file is your rubric.
+What to look for in a platform review. As a factory Mage, the review contract says how to report it.
 
 Your job is the traps **this project's platform** sets — the ones a generic security, performance or
 stability review doesn't know to look for. project.md's `## Platform` section names the platform and

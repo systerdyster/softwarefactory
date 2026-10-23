@@ -132,8 +132,9 @@ flowchart TD
    change touches, and whatever the change left without a user, wherever it lives. Then verify again;
    red, unfinished or uncommitted resets the branch to the builder's result. round-1/tidy.md lists each
    removal for the reviewer and the PR.
-4. **Review**: the main reviewer (`code`) always; a specialist (security, performance, stability, ui,
-   ux, platform, codex) when plan.md's `Specialists:` line names it or its `[paths]` pattern matches.
+4. **Review** by Mages, each by the rulebook `[mages]` gives it — a skill of the project's or one of the
+   factory's defaults: the main Mage (`code`) always; another when plan.md's `Specialists:` line names
+   it or its `[paths]` pattern matches.
    The factory reads each verdict from the findings — CHANGES only for a BLOCKING one — and merges all
    findings into one `findings.md`, same `path:line` = one item.
 5. **Fix rounds** rerun only the reviewers that blocked, on the diff since their last look.
@@ -250,9 +251,9 @@ plugins/factory/
     bin/factory.py, hook.py, fx/          every mechanical step; prints JSON, exits non-zero on failure
     bin/tests/                            unittest, real temp git repos with a bare origin
     server.py, dashboard.html             dashboard + inbox, 127.0.0.1 with a token
-  agents/factory-*.md                     builder, tidy, review-code (main), review-{security,performance,
-                                          stability,platform,ux,ui}, codex-fallback
-  defaults/skills/                        skills a project copies into its .claude/skills/ (case-status)
+  agents/factory-*.md                     builder, tidy, wiki, mage (every reviewer), codex-fallback
+  defaults/skills/                        review-{code,security,performance,stability,platform,ux,ui}
+                                          rulebooks, case-status; used in place or copied into a project
 ```
 
 A personal tool: in a project the factory changes no committed file. It leaves only `factory/`
@@ -272,6 +273,17 @@ the repo root (or `-s tests` from `skills/factory/bin`).
   `--no-verify`. No agent may edit the plugin's files or spawn agents.
   Shell operators are refused, so every command matches the allowlist plainly. `workspace check`
   after review stays as the second line of defence.
+- **Every reviewer is one agent, `factory-mage`, reviewing by a rulebook.** There was an agent per
+  reviewer, with its rubric in the agent file, so a project's own review skill could only be read as
+  a rule beside the factory's rubric. Now `[mages]` names each Mage and its rulebook: a skill of the
+  project's (read from the job's worktree, so the branch's version applies) or one of the factory's
+  defaults, `defaults/skills/review-<name>`, used in place. The rulebook says what to look for; the
+  review contract says how to report, and gives the main Mage its acceptance criteria, least-sure list
+  and confidence line whatever its rulebook. The rulebook's `model:` front matter picks the model
+  (`next.models`). Since the agent no longer says which reviewer it is, the guard takes a Mage's role
+  from the run its brief reserved; before the run is attached it may read, and write nothing. A
+  rulebook that is missing stops the job for the developer. Without `[mages]`, `[reviewers] enabled`
+  still picks the defaults, until init rewrites project.md.
 - **Agents run project commands through `factory-cli ws run <job> <name>`**, named in project.md's
   `[commands]`, so one allowlist rule (`Bash(factory-cli:*)`) covers every project's build, lint and
   test without listing free-form shell, and it does not change between plugin versions.

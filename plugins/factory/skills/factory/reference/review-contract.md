@@ -1,14 +1,17 @@
 ---
 name: factory-review-contract
-description: The output contract every factory reviewer follows — verdict line, BLOCKING or NOTE, kill-before-report, settled decisions, fix rounds
+description: The output contract every factory Mage follows — verdict line, BLOCKING or NOTE, kill-before-report, settled decisions, fix rounds, and the main Mage's criteria, least-sure list and confidence
 metadata:
   type: reference
 ---
 
-# Review contract — shared by every factory reviewer
+# Review contract — shared by every factory Mage
 
-Your agent file holds your rubric. This file holds what every reviewer's output must look like, so
-the scripts can read all of them the same way and merge them into one list for the builder.
+Your rulebook — the skill the brief names — says what to look for. This file says what every Mage's
+output must look like, so the scripts can read all of them the same way and merge them into one list
+for the builder. Where the rulebook grades findings its own way (must-fix and smell, or levels), a
+finding that must change before the job reaches the developer is BLOCKING and everything else is a
+NOTE; its own report format gives way to the one below.
 
 ## What you review
 
@@ -85,6 +88,31 @@ From round 2 the brief gives you the previous round's findings.md and the diff s
 Say for each of your own findings whether it is resolved. Report a new BLOCKING only for a defect the
 fixes introduced, or one you can show was missed and breaks something. No new notes on code the round
 didn't change.
+
+## The main Mage
+
+The brief says when you are the main Mage: the one every job gets, before the developer's own
+approval. Whatever your rulebook, you also:
+
+- **Check each acceptance criterion** in spec.md: find the code that does it and the test that proves
+  it, and read both. A passing test that doesn't exercise the criterion is not proof. A criterion not
+  met is BLOCKING.
+- After Findings and Checked and cleared, add:
+
+  ```markdown
+  ## Criteria
+  - AC1 <criterion> — met: `path:line`, test `name` | not met: <what is missing>
+
+  ## Least sure
+  1. <file or decision> — why it might be wrong — how a human would check it
+  ```
+
+  **Least sure** goes to the developer who approves the job and into the PR: up to three items,
+  ranked by likelihood wrong × cost if it is. "Nothing named." is an answer, but claiming nothing
+  means you'd inspect nothing — don't pad, don't rubber-stamp.
+- End the file with `Confidence: n/10 — <one line>`: how sure you are that the change is right and
+  does what the spec asks, set by what Least sure holds — 10 is nothing you'd check, 1 is you'd expect
+  it to be wrong. The dashboard shows it to the developer.
 
 ## Scope
 

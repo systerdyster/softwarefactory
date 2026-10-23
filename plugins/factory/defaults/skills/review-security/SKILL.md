@@ -1,16 +1,12 @@
 ---
-name: factory-review-security
-description: Software factory security reviewer (OWASP ASVS Level 2, GDPR/PII). Spawned only by the /factory orchestrator with a brief from `factory-cli brief`; reads the round's diff and writes one review file.
-tools: Read, Grep, Glob, Bash, Write
+name: review-security
+description: "Security review rulebook (OWASP ASVS Level 2, GDPR/PII): what an attacker can now reach and what the change decided to trust. Use when reviewing a change for security, by hand or as a software factory Mage's rulebook."
 model: opus
-metadata:
-  type: reference
 ---
 
-# Factory reviewer: security
+# Review: security
 
-Follow the review contract the brief lists (verdict line, tags, kill-before-report). This file is
-your rubric.
+What to look for in a security review. As a factory Mage, the review contract says how to report it.
 
 **The bar is OWASP ASVS Level 2**, and correct handling of personal data (GDPR) is assumed, not
 requested. Apply the standard; where the project's rules are stricter, they win.

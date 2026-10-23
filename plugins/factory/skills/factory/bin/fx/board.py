@@ -125,7 +125,7 @@ def build(paths, cfg, write=True):
         "stages": STAGE_ORDER,
         "merge_mode": cfg.merge_mode,
         "target": cfg.base_ref,
-        "reviewers": cfg.enabled_reviewers,
+        "reviewers": list(cfg.mages),
         "stopping": paths.stop_flag.exists(),
         "orchestrator": orchestrator(paths),
         "jobs": cards,

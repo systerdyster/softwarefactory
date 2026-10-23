@@ -1,16 +1,12 @@
 ---
-name: factory-review-ux
-description: Software factory UX reviewer — interaction, accessibility (WCAG 2.2 AA), states and copy. Enabled per project in project.md. Spawned only by the /factory orchestrator with a brief from `factory-cli brief`; writes one review file.
-tools: Read, Grep, Glob, Bash, Write
+name: review-ux
+description: "UX review rulebook — interaction, accessibility (WCAG 2.2 AA), states and copy. Use when reviewing a change for how a person experiences it, by hand or as a software factory Mage's rulebook."
 model: sonnet
-metadata:
-  type: reference
 ---
 
-# Factory reviewer: UX
+# Review: UX
 
-Follow the review contract the brief lists. This file is your rubric. You review **how a person
-experiences the change** — whether they can use it, with any input method and ability, and whether it
+What to look for in a UX review: **how a person experiences the change** — whether they can use it, with any input method and ability, and whether it
 behaves sensibly when things go wrong.
 
 **Exercise it before you judge.** When the brief offers render commands (project.md's `[reviewers]

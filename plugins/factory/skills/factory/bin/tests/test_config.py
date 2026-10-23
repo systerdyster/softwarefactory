@@ -17,12 +17,27 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(cfg.merge_mode, "pr")
         self.assertEqual(cfg.max_rounds, 3)
         self.assertEqual(cfg.base_ref, "origin/main")
-        self.assertEqual(cfg.enabled_reviewers, ["code", "security", "performance", "stability"])
+        self.assertEqual(list(cfg.mages), ["code", "security", "performance", "stability"])
+        self.assertEqual(cfg.mages["security"], {"kind": "default", "name": "security"})
         self.assertEqual((cfg.reviewer_commands, cfg.docs), ([], []))
 
-    def test_optional_reviewers_keep_a_fixed_order_and_codex_is_off_unless_listed(self):
+    def test_without_mages_the_optional_reviewers_keep_a_fixed_order_and_codex_is_off_unless_listed(self):
         cfg = parse("[reviewers]\nenabled = codex, ui")
-        self.assertEqual(cfg.enabled_reviewers, ["code", "security", "performance", "stability", "ui", "codex"])
+        self.assertEqual(list(cfg.mages), ["code", "security", "performance", "stability", "ui", "codex"])
+        self.assertEqual(cfg.mages["codex"], {"kind": "codex"})
+
+    def test_mages_name_their_rulebook_and_the_project_picks_them(self):
+        cfg = parse("[mages]\ncode = skill:code-review\na11y = default:ux\ncodex = codex")
+        self.assertEqual(cfg.mages, {"code": {"kind": "skill", "name": "code-review"},
+                                     "a11y": {"kind": "default", "name": "ux"},
+                                     "codex": {"kind": "codex"}})
+
+    def test_mages_need_the_main_one_and_a_rulebook_each(self):
+        for body in ("[mages]\nsecurity = default:security", "[mages]\ncode = code-review",
+                     "[mages]\ncode = skill:", "[mages]\nCode Review = skill:code-review",
+                     "[mages]\ncode = default:code\nsecond = codex", "[mages]\ncode = default:code\ncodex = default:code"):
+            with self.assertRaises(FactoryError, msg=body):
+                parse(body).mages
 
     def test_verify_defaults_to_lint_build_and_suite_where_defined(self):
         cfg = parse("[commands]\nsuite = make test\nlint = make lint\ntest = make test {target}")
@@ -65,7 +80,7 @@ class ConfigTest(unittest.TestCase):
 
     def test_unknown_reviewer_is_refused(self):
         with self.assertRaises(FactoryError):
-            parse("[reviewers]\nenabled = vibes").enabled_reviewers
+            parse("[reviewers]\nenabled = vibes").mages
 
     def test_unknown_merge_mode_is_refused(self):
         with self.assertRaises(FactoryError):

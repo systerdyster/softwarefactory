@@ -10,7 +10,7 @@ import unittest
 from support import SandboxTest, agent_starts, agent_stops, git
 
 import factory
-from fx import brief, config, jobs
+from fx import brief, config, jobs, mages
 
 TEST = "import sys\nsys.path.insert(0, 'src')\nfrom app import answer\nassert answer() == 42\n"
 
@@ -38,8 +38,7 @@ class FlowTest(SandboxTest):
     def brief(self, *args):
         """A brief, and the agent it starts doing its work at once: attached and stopped through the hooks."""
         text = self.cli("brief", self.job, *args)
-        agent_type = f"factory:factory-{args[0]}" if args[0] in ("builder", "tidy", "wiki") \
-            else f"factory:factory-review-{args[-1]}"
+        agent_type = f"factory:factory-{args[0]}" if args[0] in ("builder", "tidy", "wiki") else "factory:factory-mage"
         self.agents = getattr(self, "agents", 0) + 1
         agent_id = f"agent-{self.agents}"
         self.assertEqual(agent_starts(self.paths.root, text, agent_id, agent_type), 0)
@@ -273,23 +272,58 @@ class FlowTest(SandboxTest):
         self.assertIn("Code comments, unless a project rule above says otherwise: Write none by default", brief)
         self.assertIn("unless a project rule above says otherwise: Frame it plainly first", brief)
 
-    def schedule_round_one(self, reviewer):
+    def with_mages(self, mages="", commands=""):
+        self.paths.project.write_text(self.paths.project.read_text().replace(
+            "[reviewers]\n", f"[mages]\ncode = default:code\n{mages}\n\n[reviewers]\ncommands = {commands}\n"),
+            encoding="utf-8")
+        return config.load(self.paths)
+
+    def schedule_round_one(self, reviewer, mages="", commands=""):
         self.sb.write("round-1/scheduled.md", f"Reviewers: {reviewer}\nHead: abc\nBase: def\nPrevious-Head: -\n",
                       base=self.jd)
+        return self.with_mages(mages, commands)
 
     def test_a_ui_reviewer_without_render_commands_is_told_to_say_it_saw_nothing(self):
-        self.schedule_round_one("ui")
-        text = "\n".join(brief.reviewer(self.paths, self.cfg, self.job, {}, {"round": 1}, "ui"))
+        cfg = self.schedule_round_one("ui", "ui = default:ui")
+        text = "\n".join(brief.reviewer(self.paths, cfg, self.job, {}, {"round": 1}, "ui"))
         self.assertIn("RENDERED: no — the project lists no render commands", text)
         self.assertNotIn("Render before you judge", text)
 
     def test_a_ui_reviewer_with_render_commands_is_told_to_quote_the_accessibility_check(self):
-        self.schedule_round_one("ux")
-        self.paths.project.write_text(self.paths.project.read_text().replace(
-            "[reviewers]", "[reviewers]\ncommands = echo"), encoding="utf-8")
-        text = "\n".join(brief.reviewer(self.paths, config.load(self.paths), self.job, {}, {"round": 1}, "ux"))
+        cfg = self.schedule_round_one("ux", "ux = default:ux", "echo")
+        text = "\n".join(brief.reviewer(self.paths, cfg, self.job, {}, {"round": 1}, "ux"))
         self.assertIn("Render before you judge", text)
         self.assertIn("no automated accessibility check", text)
+
+    def test_a_mage_reviews_by_the_projects_own_skill_and_only_the_main_one_has_the_main_part(self):
+        self.cli("next", "--lease", self.lease)
+        self.cli("start", self.job)
+        self.sb.write(".claude/skills/review-rules/SKILL.md", "---\nname: review-rules\nmodel: opus\n---\n# Rules\n",
+                      base=self.sb.ws)
+        cfg = self.schedule_round_one("code, rules", "rules = skill:review-rules")
+        main = "\n".join(brief.reviewer(self.paths, cfg, self.job, {}, {"round": 1}, "code"))
+        self.assertIn("defaults/skills/review-code/SKILL.md", main)
+        self.assertIn("You are the main Mage", main)
+        own = "\n".join(brief.reviewer(self.paths, cfg, self.job, {}, {"round": 1}, "rules"))
+        self.assertIn(str(self.sb.ws / ".claude/skills/review-rules/SKILL.md"), own)
+        self.assertNotIn("You are the main Mage", own)
+        self.assertEqual(mages.models(self.paths, cfg, self.job, ["code", "rules"]), {"code": "opus", "rules": "opus"})
+
+    def test_a_mage_whose_skill_is_missing_stops_the_job_for_the_developer(self):
+        self.cli("next", "--lease", self.lease)
+        self.cli("start", self.job)
+        self.with_mages("rules = skill:review-rules")
+        self.sb.write("src/app.py", "def answer():\n    return 42\n", base=self.sb.ws)
+        self.sb.commit("Answer", cwd=self.sb.ws)
+        self.log("## Round 1")
+        self.cli("verify", self.job)
+        self.tidy()
+        self.cli("schedule", self.job)
+        self.sb.write("round-1/scheduled.md", (self.jd / "round-1" / "scheduled.md").read_text().replace(
+            "Reviewers: code", "Reviewers: code, rules"), base=self.jd)
+        s = self.cli("state", self.job)
+        self.assertEqual(s["stage"], "needs-human")
+        self.assertIn("no rulebook", s["reason"])
 
     def test_brief_refuses_an_agent_state_did_not_ask_for(self):
         self.cli("next", "--lease", self.lease)

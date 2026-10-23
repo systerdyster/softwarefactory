@@ -169,14 +169,25 @@ class Config:
         return self.getlist("workspace", "lockfiles")
 
     @property
-    def enabled_reviewers(self):
-        """Every reviewer that may run: the main reviewer, the specialists, and the optional ones the
-        project enabled. Which of them a round runs is schedule's call."""
-        listed = self.getlist("reviewers", "enabled")
-        unknown = [r for r in listed if r not in REQUIRED_REVIEWERS + SPECIALISTS + OPTIONAL_REVIEWERS]
-        if unknown:
-            raise FactoryError(f"project.md: unknown reviewers in [reviewers] enabled: {unknown}")
-        return REQUIRED_REVIEWERS + SPECIALISTS + [r for r in OPTIONAL_REVIEWERS if r in listed]
+    def mages(self):
+        """Every Mage that may review, name → the rulebook it reviews by: `skill:<name>` (a skill of the
+        project's), `default:<name>` (the factory's defaults/skills/review-<name>) or `codex` (the Codex
+        CLI). `code` is the main Mage and reviews every job; which others a round runs is schedule's
+        call. Without [mages]: the factory's defaults for code, security, performance and stability,
+        and for the optional ones [reviewers] enabled lists."""
+        if self._p.has_section("mages") and self._p.items("mages"):
+            result = {name: _rulebook(name, value.strip()) for name, value in self._p.items("mages")}
+        else:
+            listed = self.getlist("reviewers", "enabled")
+            unknown = [r for r in listed if r not in REQUIRED_REVIEWERS + SPECIALISTS + OPTIONAL_REVIEWERS]
+            if unknown:
+                raise FactoryError(f"project.md: unknown reviewers in [reviewers] enabled: {unknown}")
+            names = REQUIRED_REVIEWERS + SPECIALISTS + [r for r in OPTIONAL_REVIEWERS if r in listed]
+            result = {name: _rulebook(name, "codex" if name == "codex" else f"default:{name}") for name in names}
+        missing = [r for r in REQUIRED_REVIEWERS if r not in result]
+        if missing:
+            raise FactoryError(f"project.md: [mages] needs {missing[0]}, the main Mage that reviews every job")
+        return result
 
     @property
     def reviewer_commands(self):
@@ -291,6 +302,19 @@ class Config:
                 raise FactoryError(f"project.md: [events] {event} names no skill")
             return {"kind": "skill", "skill": name, "args": args.strip()}
         return {"kind": "command", "command": value}
+
+
+def _rulebook(name, value):
+    if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", name):
+        raise FactoryError(f"project.md: [mages] {name!r} is not a name (lower-case letters, digits, dashes)")
+    if (value == "codex") != (name == "codex"):
+        raise FactoryError(f"project.md: [mages] {name} = {value!r}; codex, and only codex, is the Codex CLI")
+    if value == "codex":
+        return {"kind": "codex"}
+    kind, _, skill = value.partition(":")
+    if kind not in ("skill", "default") or not re.fullmatch(r"[A-Za-z0-9][\w.-]*", skill.strip()):
+        raise FactoryError(f"project.md: [mages] {name} = {value!r}; expected skill:<name>, default:<name> or codex")
+    return {"kind": kind, "name": skill.strip()}
 
 
 def parse_text(text):

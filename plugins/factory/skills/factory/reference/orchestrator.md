@@ -121,8 +121,9 @@ any specialist the plan names or the change's paths call for; in later rounds on
 findings blocked. **Spawn all of them in one message, in parallel**, then wait until every one has
 finished:
 
-- For each name except `codex`: `F brief <id> reviewer --reviewer <name>` → spawn
-  `factory-review-<name>` with it. Generate every brief before spawning any.
+- For each name except `codex`: `F brief <id> reviewer --reviewer <name>` → spawn `factory-mage` with
+  it, on the model `next.models` names for it (the Agent tool's `model`). Every Mage is the same
+  agent; the brief names the rulebook it reviews by. Generate every brief before spawning any.
 - For `codex`: `F codex-review <id>`. Exit 3 means Codex is unavailable (not installed, not logged
   in, flags changed, failed): spawn `factory-codex-fallback` with `F brief <id> codex-fallback`.
 

@@ -20,19 +20,14 @@ ROLES = {
     "factory-tidy": "tidy",
     "factory-wiki": "wiki",
     "factory-codex-fallback": "review-codex",
+    "factory-mage": "mage",
 }
-REVIEWER_PREFIX = "factory-review-"
 
 
 def role_for(agent_type):
     if not agent_type or not agent_type.startswith(PREFIX):
         return None
-    name = agent_type[len(PREFIX):]
-    if name in ROLES:
-        return ROLES[name]
-    if name.startswith(REVIEWER_PREFIX):
-        return "review-" + name[len(REVIEWER_PREFIX):]
-    return "unknown"
+    return ROLES.get(agent_type[len(PREFIX):], "unknown")
 
 
 def _paths():

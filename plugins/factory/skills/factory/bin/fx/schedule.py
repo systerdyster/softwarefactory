@@ -105,8 +105,9 @@ def schedule(paths, cfg, job_id, round_number, cycle_start):
     changed = gitutil.changed_files(since, head, paths.root)
     diff_text = gitutil.out(["diff", since, head], paths.root) if changed and first else ""
     verdicts = latest_verdicts(paths, job_id, round_number - 1, cycle_start)
-    patterns = {name: cfg.path_patterns(name) for name in cfg.enabled_reviewers}
-    chosen = decide(cfg.enabled_reviewers, first, changed, diff_text, verdicts, patterns,
+    mages = list(cfg.mages)
+    patterns = {name: cfg.path_patterns(name) for name in mages}
+    chosen = decide(mages, first, changed, diff_text, verdicts, patterns,
                     named_specialists(paths, job_id))
     lines = [
         f"# Round {round_number} — scheduled reviewers",

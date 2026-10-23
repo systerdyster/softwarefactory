@@ -33,6 +33,17 @@ class GuardTest(SandboxTest):
     def write(self, role, path, agent_id="agent-a"):
         return self.call(role, "Write", agent_id, file_path=str(path), content="x")
 
+    def test_a_mage_takes_its_role_from_the_run_it_is_bound_to(self):
+        self.running("agent-a", role="review-rules")
+        self.assertEqual(self.write("mage", self.jd / "round-1" / "review-rules.md"), 0)
+        self.assertEqual(self.write("mage", self.jd / "round-1" / "review-code.md"), 2)
+        self.assertEqual(self.write("mage", self.sb.ws / "src" / "app.py"), 2)
+
+    def test_an_unbound_mage_reads_and_writes_nothing(self):
+        self.assertEqual(self.bash("mage", f"git -C {self.ws} diff abc..def", "agent-z"), 0)
+        self.assertEqual(self.write("mage", self.jd / "round-1" / "review-unbound.md", "agent-z"), 2)
+        self.assertEqual(self.write("mage", self.jd / "round-1" / "review-code.md", "agent-z"), 2)
+
     def test_reviewers_may_only_read_git(self):
         self.assertEqual(self.bash("review-security", f"git -C {self.ws} diff abc..def", None), 0)
         self.assertEqual(self.bash("review-security", f"git -C {self.ws} log --oneline -5", None), 0)

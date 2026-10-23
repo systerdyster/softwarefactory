@@ -81,12 +81,15 @@ section of `factory/project.md`:
   developer approves the pages with the change. It lists in the PR comment what it changed and what
   pages or other wikis it thinks are missing. Nothing in the wiki is reviewed by the reviewers. Leave
   `wiki` empty for a project without a wiki in the repo.
-- **Reviewers** — every job gets the main review (`code`); security, performance and stability are
-  specialists available everywhere. Enable the optional ones that fit (`platform` for a CMS or
-  framework with traps, `ux` and `ui` for user-facing front ends). Leave `codex` off and say why: it
-  sends code to OpenAI, so the client agreement must allow it, and each developer needs the Codex CLI
-  and their own OpenAI access.
-- **Path patterns** per specialist — globs (`src/components/**`, `*.scss`) or `re:` patterns matched
+- **Mages** — `[mages]`: who reviews, each by a rulebook. `code` is the main Mage and reviews every
+  job; the factory's defaults give security, performance and stability beside it. Look for the
+  project's own review skills (`.claude/skills/*review*`) and offer them as rulebooks
+  (`code = skill:code-review`): the project's own rules then decide what a Mage looks for. Add the
+  optional defaults that fit (`default:platform` for a CMS or framework with traps, `default:ux` and
+  `default:ui` for user-facing front ends). Leave `codex` out and say why: it sends code to OpenAI, so
+  the client agreement must allow it, and each developer needs the Codex CLI and their own OpenAI
+  access. A default can be copied into `.claude/skills/` and adjusted; the factory never copies it.
+- **Path patterns** per Mage — globs (`src/components/**`, `*.scss`) or `re:` patterns matched
   against the diff text (`re:\bIMemoryCache\b`). A specialist runs in a job's first round when the plan
   names it or one of its patterns matches the change, so set patterns for security (auth, endpoints,
   data access), performance and stability too.

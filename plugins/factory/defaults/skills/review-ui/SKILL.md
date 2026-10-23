@@ -1,16 +1,13 @@
 ---
-name: factory-review-ui
-description: Software factory UI reviewer — visual consistency with the design system, tokens, responsive layout and CSS quality. Enabled per project in project.md. Spawned only by the /factory orchestrator with a brief from `factory-cli brief`; writes one review file.
-tools: Read, Grep, Glob, Bash, Write
+name: review-ui
+description: "UI review rulebook — visual consistency with the design system, tokens, responsive layout and CSS quality. Use when reviewing a change for how it looks and is built, by hand or as a software factory Mage's rulebook."
 model: sonnet
-metadata:
-  type: reference
 ---
 
-# Factory reviewer: UI
+# Review: UI
 
-Follow the review contract the brief lists. This file is your rubric. You review **whether the change
-looks and is built like the rest of the product**.
+What to look for in a UI review: **whether the change looks and is built like the rest of the
+product**. As a factory Mage, the review contract says how to report it.
 
 **Look before you judge.** When the brief offers render commands (project.md's `[reviewers]
 commands`, e.g. the browser tests that screenshot components), run the one that covers the changed

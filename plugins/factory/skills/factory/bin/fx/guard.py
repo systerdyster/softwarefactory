@@ -3,8 +3,9 @@ calling agent to its role. Agent frontmatter can grant or withhold a whole tool,
 Bash command or a single path, so this enforces the per-role limits mechanically. Exit 0 allows the
 call; exit 2 blocks it with the reason on stderr, which the agent sees.
 
-Roles: builder, tidy (the builder's limits, writing tidy.md instead of build.md and tests.md), and
-review-<name> for reviewers (review-codex for the codex fallback). Reviewers may
+Roles: builder, tidy (the builder's limits, writing tidy.md instead of build.md and tests.md), wiki,
+and review-<name> for Mages (review-codex for the codex fallback); every Mage is one agent, so its
+role comes from the run it is bound to. Mages may
 run the project commands project.md lists under [reviewers] commands, e.g. the browser tests that
 render components; nothing else that executes.
 
@@ -208,6 +209,13 @@ def _review_commands(paths, role):
         return []
 
 
+def mage_role(paths, agent_id):
+    """Every Mage is the same agent, so its role is its run's: the brief that reserved the run named the
+    Mage. Before the run is attached, it is an unbound reviewer: it may read, and write nothing."""
+    run = runs.for_agent(paths, agent_id) if agent_id else None
+    return run["role"] if run and run["role"].startswith("review-") else "review-unbound"
+
+
 def run(role, stream=None, paths=None):
     paths = paths or Paths()
     raw = (stream or sys.stdin).read()
@@ -216,6 +224,8 @@ def run(role, stream=None, paths=None):
     except json.JSONDecodeError:
         print("factory guard: unreadable hook input", file=sys.stderr)
         return 2
+    if role == "mage":
+        role = mage_role(paths, event.get("agent_id"))
     tool = event.get("tool_name", "")
     tool_input = event.get("tool_input") or {}
     try:
