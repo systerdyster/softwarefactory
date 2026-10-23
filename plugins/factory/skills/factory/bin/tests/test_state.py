@@ -261,51 +261,50 @@ class ApprovalAndMergeTest(unittest.TestCase):
         self.assertEqual(r["reason"], state.READY)
 
     def wiki(self, **over):
-        return {"enabled": True, "attempts": 0, "status": None, "approved": H1, "only_wiki": None, "stray": [], **over}
+        return {"enabled": True, "round": 1, "attempts": 0, "status": None, "before": None, "only_wiki": None,
+                "stray": [], **over}
 
-    def test_after_approval_a_project_with_a_wiki_gets_the_wiki_pass_before_the_rebase(self):
-        r = state.decide(self.approved_facts(wiki=self.wiki()))
-        self.assertEqual((r["next"]["action"], r["next"]["attempt"]), ("spawn-wiki", 1))
-        self.assertEqual(nxt(self.approved_facts(wiki=self.wiki(enabled=False))), "rebase")
-        self.assertEqual(nxt(self.approved_facts()), "rebase")
+    def passed(self, **over):
+        f = base_facts(build=[done(1)], rounds={1: passing()})
+        f.update(over)
+        return f
 
-    def test_the_wiki_pass_is_tried_twice_and_then_the_job_goes_on_without_it(self):
-        self.assertEqual(state.decide(self.approved_facts(wiki=self.wiki(attempts=1)))["next"]["attempt"], 2)
-        self.assertEqual(nxt(self.approved_facts(wiki=self.wiki(attempts=2))), "wiki-record")
-        self.assertEqual(nxt(self.approved_facts(wiki=self.wiki(attempts=2, recorded=True, after=H1))), "rebase")
+    def test_a_project_with_a_wiki_gets_the_wiki_pass_once_every_review_passed(self):
+        r = state.decide(self.passed(wiki=self.wiki()))
+        self.assertEqual((r["stage"], r["next"]["action"], r["next"]["round"], r["next"]["attempt"]),
+                         ("reviewing", "spawn-wiki", 1, 1))
+        self.assertTrue(state.decide(self.passed(wiki=self.wiki(enabled=False)))["next"].get("ready"))
 
-    def test_a_finished_wiki_pass_is_recorded_before_the_rebase(self):
-        f = self.approved_facts(head=H2, wiki=self.wiki(status="done", only_wiki=True))
-        self.assertEqual(nxt(f), "wiki-record")
-        f["wiki"].update(recorded=True, after=H2)
+    def test_the_developer_approves_the_head_the_wiki_pass_ended_on(self):
+        f = self.passed(head=H2, wiki=self.wiki(attempts=1, status="done", before=H1, only_wiki=True))
+        self.assertTrue(state.decide(f)["next"].get("ready"))
+        f["human_approval"] = {"head": H2}
         self.assertEqual(nxt(f), "rebase")
 
-    def test_a_recorded_wiki_commit_keeps_the_approval_through_a_rebase_that_rewrites_it(self):
-        history = [{"before": H2, "after": H3, "result": "green", "target": T1, "fingerprint": FP}]
-        f = self.approved_facts(head=H3, rounds={1: passing(head=H1)}, rebase={"history": history},
-                                wiki=self.wiki(status="done", recorded=True, after=H2))
-        r = state.decide(f)
-        self.assertEqual((r["stage"], r["next"]["action"]), ("merging", "pr"))
-        f["wiki"].update(recorded=False, after=None)
-        self.assertNotEqual(state.decide(f)["next"]["action"], "pr")
+    def test_the_wiki_pass_is_tried_twice_and_then_the_job_goes_on_without_it(self):
+        self.assertEqual(state.decide(self.passed(wiki=self.wiki(attempts=1)))["next"]["attempt"], 2)
+        self.assertTrue(state.decide(self.passed(wiki=self.wiki(attempts=2)))["next"].get("ready"))
 
     def test_a_wiki_pass_that_says_done_with_uncommitted_pages_is_tried_again_and_then_stops(self):
         ws = {"exists": True, "on_branch": True, "dirty": ["Wiki/a.md"], "rebase": False, "unmerged": []}
-        r = state.decide(self.approved_facts(workspace=ws, wiki=self.wiki(status="done", attempts=1)))
+        r = state.decide(self.passed(workspace=ws, wiki=self.wiki(status="done", attempts=1)))
         self.assertEqual((r["next"]["action"], r["next"]["attempt"]), ("spawn-wiki", 2))
-        r = state.decide(self.approved_facts(workspace=ws, wiki=self.wiki(status="done", attempts=2)))
+        r = state.decide(self.passed(workspace=ws, wiki=self.wiki(status="done", attempts=2)))
         self.assertEqual(r["stage"], "needs-human")
+        self.assertFalse(r["next"].get("ready"))
 
     def test_a_wiki_pass_that_changed_other_files_stops_for_a_human(self):
-        f = self.approved_facts(head=H2, wiki=self.wiki(status="done", only_wiki=False, stray=["src/a.ts"]))
+        f = self.passed(head=H2, wiki=self.wiki(attempts=1, status="done", before=H1, only_wiki=False,
+                                                stray=["src/a.ts"]))
         r = state.decide(f)
         self.assertEqual(r["stage"], "needs-human")
+        self.assertFalse(r["next"].get("ready"))
         self.assertIn("src/a.ts", r["reason"])
 
-    def test_a_wiki_pass_that_gave_up_with_uncommitted_pages_stops_for_a_human(self):
-        ws = {"exists": True, "on_branch": True, "dirty": ["Wiki/a.md"], "rebase": False, "unmerged": []}
-        r = state.decide(self.approved_facts(workspace=ws, wiki=self.wiki(attempts=2)))
-        self.assertEqual(r["stage"], "needs-human")
+    def test_a_rework_after_the_wiki_pass_builds_and_reviews_again_before_the_next_one(self):
+        f = self.passed(head=H2, build=[done(1), done(2)], rounds={1: passing(), 2: rnd(head=H2)},
+                        reworks=[{"number": 1, "start_round": 2}], wiki=self.wiki(round=2))
+        self.assertEqual(nxt(f), "schedule")
 
     def test_approval_of_an_older_head_does_not_count(self):
         f = base_facts(head=H2, build=[done(1)], rounds={1: passing(head=H2)}, human_approval={"head": H1})

@@ -229,19 +229,6 @@ def cancel(paths, cfg, job_id, reason, pr_module):
     return {"cancelled": job_id, "pr_closed": closed, "cleanup": result, "previous_decision": archived}
 
 
-def wiki_record(paths, cfg, job_id):
-    """Writes down which head the wiki pass ended on, for the head the developer approved. A rebase
-    rewrites commits, and without this record nothing connects the approval to the rewritten branch.
-    Refuses unless state asks for it: the pass finished or gave up, and the workspace is clean."""
-    current = state_mod.state(paths, cfg, job_id)
-    if current["next"]["action"] != "wiki-record":
-        raise FactoryError(f"state says {current['next']['action']}, not wiki-record", state=current)
-    approved = jobs.field(jobs.read(paths.job(job_id) / "human-approval.md"), "Head")
-    record ={"approved": approved, "after": current["head"], "at": jobs.now()}
-    jobs.write_json(paths.job(job_id) / "wiki.json", record)
-    return record
-
-
 def approve(paths, cfg, job_id, by, auto=False):
     if auto and not cfg.auto_complete_available:
         raise FactoryError("auto-complete needs pr_tool gh or az and merge_mode pr or auto-merge")
@@ -255,8 +242,6 @@ def approve(paths, cfg, job_id, by, auto=False):
     if not current["head"]:
         raise FactoryError(f"{job_id} has no branch to approve")
     _archive(paths, job_id, "human-approval.md")
-    _archive(paths, job_id, "wiki.md")
-    _archive(paths, job_id, "wiki.json")
     jobs.write_atomic(paths.job(job_id) / "human-approval.md",
                       f"Head: {current['head']}\nApproved-By: {by or 'a human'}\nAt: {jobs.now()}\n"
                       f"Was: {current.get('reason')}\n" + ("Auto-Complete: yes\n" if auto else ""))

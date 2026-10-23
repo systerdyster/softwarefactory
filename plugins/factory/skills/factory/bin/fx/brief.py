@@ -159,12 +159,14 @@ def tidy(paths, cfg, job_id, s, nxt):
 
 def wiki(paths, cfg, job_id, s, nxt):
     jd = paths.job(job_id)
+    rd = paths.round_dir(job_id, nxt["round"])
     ws = paths.workspace(job_id)
     head = s["head"]
     base = gitutil.merge_base(cfg.base_ref, head, paths.root)
     pages = sorted(str(p.relative_to(ws)) for pattern in cfg.wiki_globs for p in ws.glob(pattern) if p.is_file())
     lines = ["## Wiki", "",
-             "The developer approved this job. Bring the project's wiki up to date with what the change does now, "
+             "Every review of this job passed; the developer approves it next, wiki pages included. Bring the "
+             "project's wiki up to date with what the change does now, "
              "if it is worth documenting — most changes are not. Read "
              f"`git -C factory/workspaces/{job_id} diff {base}..{head}` and the spec and plan, then the pages "
              "that describe what changed.", "",
@@ -182,7 +184,7 @@ def wiki(paths, cfg, job_id, s, nxt):
                   "what one of them describes, say which and what, in your report.", ""]
     lines += _files("Read", [jd / "spec.md", jd / "plan.md", paths.project])
     lines += _commits(cfg)
-    lines += [f"Commit your page changes, then write {jd / 'wiki.md'} as your agent file shows, with `Status: done` — "
+    lines += [f"Commit your page changes, then write {rd / 'wiki.md'} as your agent file shows, with `Status: done` — "
               "also when nothing needed changing.", ""]
     lines += ["Return one line: `DONE: <n> pages changed` or `DONE: nothing to document`."]
     return lines

@@ -106,7 +106,8 @@ flowchart TD
     TV -->|red or unfinished:<br/>discard the tidy pass| R
     R["review<br/>code + specialists"] --> F{blocking<br/>findings?}
     F -->|yes| B
-    F -->|no| H{{you approve}}
+    F -->|no| W["wiki pass<br/>with [rules] wiki"]
+    W --> H{{you approve}}
     B -.->|objection: the plan<br/>can't be followed| J{orchestrator<br/>rules}
     J -.->|within the approved plan| B
     J -.->|changes scope or design| Q{{you answer<br/>the question}}
@@ -133,7 +134,9 @@ flowchart TD
    The factory reads each verdict from the findings — CHANGES only for a BLOCKING one — and merges all
    findings into one `findings.md`, same `path:line` = one item.
 5. **Fix rounds** rerun only the reviewers that blocked, on the diff since their last look.
-6. **Needs-human, ready** — every job stops for the developer's approval, with the diff size against
+6. **Wiki** — with `[rules] wiki`, once the round's reviews all passed: a fresh agent makes the
+   project's existing wiki pages true to the change and commits them, so you approve them with it.
+7. **Needs-human, ready** — every job stops for the developer's approval, with the diff size against
    `max_diff` and the main review's least-sure list. Then rebase, the project's checks, PR.
 
 spec.md's `## Decided` is settled for every agent; project.md's `[rules] docs` (a wiki's
@@ -326,18 +329,19 @@ the repo root (or `-s tests` from `skills/factory/bin`).
   test-note.md when the command is queued, and is what the PR comment or the Jira comment carries.
   An empty note posts nothing. The builder keeps the developer's wording on a later round.
 - **A wiki agent keeps the project's wiki true.** With `[rules] wiki` set (globs of existing pages in
-  the repo), a job that the developer approved first gets one `factory-wiki` pass, before the
-  rebase: it edits only existing pages matching the globs, commits on the job's branch, and writes
-  `wiki.md` (pages changed, "nothing to document", pages it thinks are missing, other wikis in
+  the repo), a round whose reviews all passed gets one `factory-wiki` pass before the developer
+  approves: it edits only existing pages matching the globs, commits on the job's branch, and writes
+  `round-N/wiki.md` (pages changed, "nothing to document", pages it thinks are missing, other wikis in
   `wiki_external` the change makes stale). The guard lets it write nothing else and forbids `git rm`
-  and `git mv`. The approved head and the head after a wiki-only commit count as the same work, so the
-  approval and the reviews stay valid (the diff is checked against the globs; anything else stops the
-  job for the developer). Once the pass is done and the workspace clean, `F wiki-record` writes
-  wiki.json (approved head → head after the pass): a rebase rewrites the commits, and without the
-  record nothing would tie the approval to the rewritten branch. A pass that says done but left pages
-  uncommitted is tried again, then stops the job. Two tries, then the job goes on and the PR comment
-  says the wiki was not updated. `wiki_guide` points at the project's own wiki conventions, which the agent follows. The
-  reviewers never see the wiki change, and the developer does not approve it; the PR comment lists it.
+  and `git mv`. Once the pass has started, the round's build and reviews are settled, so its commit
+  doesn't reopen them; what it commits is checked against the globs, and anything else stops the job
+  for the developer. A pass that says done but left pages uncommitted is tried again, then stops the
+  job. Two tries, then the job goes on and the PR comment says the wiki was not updated. `wiki_guide`
+  points at the project's own wiki conventions, which the agent follows. The reviewers never see the
+  wiki change; the developer approves it with the change, and the PR comment lists it. It first ran
+  after approval, which kept the approval valid across a wiki commit only through a record of heads
+  and a second equivalence rule, and left the pages unseen by anyone before the PR; before approval,
+  a rework costs one more wiki pass instead.
 - **`finish` and `cancel` record what they removed** in `factory/jobs/<id>/cleanup.json`, including
   `remote_branch_found: false` when the remote branch was already gone, so a `remote_deleted: false`
   can be told from a branch left behind.
@@ -419,7 +423,7 @@ UI/UX pass never reached the approval (all three fixed since).
 - `local-merge` in a real checkout (`F merge` with `git merge --no-ff`, a project's commit hooks, `remote =
   none` with a local target ahead of origin), and its Jira comment.
 - The wiki agent with a real agent: whether it follows a project's own wiki conventions, and the whole
-  chain approve → wiki → `wiki-record` → rebase → PR.
+  chain review → wiki → approve → rebase → PR.
 - `gh` PR calls and `auto-merge`; comments via `az devops invoke`.
 - A real `codex exec` review (detection is verified; the call sends code to OpenAI, so it waits for a
   project that has enabled it).

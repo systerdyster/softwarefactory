@@ -76,7 +76,7 @@ def details(paths, cfg, job_id):
         lines += ["", "### Tidy pass", "", f"Discarded: {discarded}" if discarded else (done or "Nothing changed.")]
     lines += ["", "### Least sure is correct", "", least or "Nothing named."]
     if cfg.wiki_globs:
-        report = jobs.read(jd / "wiki.md")
+        report = jobs.read(paths.round_dir(job_id, max(rounds, default=0)) / "wiki.md")
         if report and (jobs.field(report, "Status") or "").lower() == "done":
             body = "\n\n".join(f"**{h}**\n{_section(report, h)}" for h in ("Changed", "Nothing to document",
                                                                           "Wanted pages", "Other wikis affected")

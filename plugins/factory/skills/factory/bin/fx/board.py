@@ -13,12 +13,12 @@ STEPS = [("start", "Start"), ("build", "Build"), ("verify", "Verify"), ("tidy", 
 KEYS = [k for k, _ in STEPS]
 ACTION_STEP = {"start": "start", "spawn-builder": "build", "judge-objection": "build", "verify": "verify",
                "spawn-tidy": "tidy", "tidy-discard": "tidy", "schedule": "review", "spawn-reviewers": "review",
-               "review-reset": "review", "spawn-wiki": "pr", "wiki-record": "pr", "rebase": "pr", "rebase-continue": "pr", "pr": "pr",
+               "review-reset": "review", "spawn-wiki": "review", "rebase": "pr", "rebase-continue": "pr", "pr": "pr",
                "merge-local": "pr", "wait-pr": "pr", "finish": "pr"}
 
 
 def _run_step(role):
-    return "build" if role == "builder" else "tidy" if role == "tidy" else "pr" if role == "wiki" else "review"
+    return "build" if role == "builder" else "tidy" if role == "tidy" else "review"
 
 
 def _at(s):

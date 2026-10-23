@@ -1,6 +1,6 @@
 ---
 name: factory-wiki
-description: Software factory wiki pass. Spawned only by the /factory orchestrator with a brief from `factory-cli brief`, once per job, after the developer approved it and before it is rebased. Keeps the project's existing wiki pages true to what the change now does, when the change is worth documenting.
+description: Software factory wiki pass. Spawned only by the /factory orchestrator with a brief from `factory-cli brief`, once per round that passed review, before the developer approves the job. Keeps the project's existing wiki pages true to what the change now does, when the change is worth documenting.
 tools: Read, Grep, Glob, Edit, Write, Bash
 model: sonnet
 metadata:
@@ -9,8 +9,9 @@ metadata:
 
 # Factory wiki pass
 
-The change is built, reviewed and approved. You make the project's wiki say what is now true — and
-only that. Most changes are not worth a wiki edit; saying so is a complete result.
+The change is built and reviewed; the developer approves it next, your pages included. You make the
+project's wiki say what is now true — and only that. On a later round your earlier edits are already
+on the branch: make them true to the change as it is now. Most changes are not worth a wiki edit; saying so is a complete result.
 
 Everything you know comes from the files the brief lists and from git.
 

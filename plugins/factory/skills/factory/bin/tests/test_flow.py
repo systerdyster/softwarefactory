@@ -38,7 +38,8 @@ class FlowTest(SandboxTest):
     def brief(self, *args):
         """A brief, and the agent it starts doing its work at once: attached and stopped through the hooks."""
         text = self.cli("brief", self.job, *args)
-        agent_type = f"factory:factory-{args[0]}" if args[0] in ("builder", "tidy") else f"factory:factory-review-{args[-1]}"
+        agent_type = f"factory:factory-{args[0]}" if args[0] in ("builder", "tidy", "wiki") \
+            else f"factory:factory-review-{args[-1]}"
         self.agents = getattr(self, "agents", 0) + 1
         agent_id = f"agent-{self.agents}"
         self.assertEqual(agent_starts(self.paths.root, text, agent_id, agent_type), 0)
@@ -152,6 +153,35 @@ class FlowTest(SandboxTest):
         self.assertEqual(git(self.sb.root, "branch", "--list", "factory/*"), "")
         self.assertEqual(self.cli("workspace", "list")["workspaces"], [])
         self.assertEqual(self.cli("board")["jobs"], 1)
+
+    def test_the_wiki_pass_runs_before_approval_and_its_commit_keeps_the_reviews(self):
+        self.sb.push_target_change("Wiki/Page.md", "# Page\n\nThe answer is 41.\n")
+        self.sb.write("project.md", self.paths.project.read_text().replace(
+            "[reviewers]\n", "[rules]\nwiki = Wiki/*.md\n\n[reviewers]\n"), base=self.paths.factory)
+        self.cli("next", "--lease", self.lease)
+        self.cli("start", self.job)
+        self.sb.write("src/app.py", "def answer():\n    return 42\n", base=self.sb.ws)
+        self.sb.commit("Answer", cwd=self.sb.ws)
+        self.log("## Round 1")
+        self.cli("verify", self.job)
+        self.tidy()
+        self.cli("schedule", self.job)
+        self.review(1, "code")
+
+        self.expect("spawn-wiki")
+        self.assertIn(str(self.jd / "round-1" / "wiki.md"), self.brief("wiki"))
+        self.sb.write("Wiki/Page.md", "# Page\n\nThe answer is 42.\n", base=self.sb.ws)
+        self.sb.commit("Wiki: the answer", cwd=self.sb.ws)
+        self.sb.write("round-1/wiki.md", "Status: done\n\n## Changed\n- Wiki/Page.md — says 42\n", base=self.jd)
+        s = self.cli("state", self.job)
+        self.assertTrue(s["next"].get("ready"), s)
+        self.assertEqual(self.cli("approve", self.job, "--by", "Fredrik")["head"], s["head"])
+
+        self.sb.push_target_change("README.md", "Someone else's change\n")
+        self.expect("rebase")
+        self.assertEqual(self.cli("rebase", self.job)["result"], "green")
+        self.expect("pr")
+        self.assertIn("Wiki/Page.md — says 42", self.cli("pr", "body", self.job)["details"])
 
     def test_an_unreadable_review_goes_back_to_its_reviewer(self):
         self.cli("next", "--lease", self.lease)

@@ -48,26 +48,24 @@ def _tidy_facts(paths, job_id, spawns):
 WIKI_ATTEMPTS = 2
 
 
-def _wiki_facts(paths, cfg, job_id, head, human_text, spawns):
-    """The wiki agent runs once the developer has approved, before the rebase. What matters to state: how
-    many times it was started since that approval, whether its report says it finished, and whether
-    what it committed stays inside the wiki globs, in which case the approved head and the head after
-    it are the same work."""
-    facts = {"enabled": bool(cfg.wiki_globs), "attempts": 0, "status": None, "approved": None,
-             "only_wiki": None, "stray": [], "recorded": False, "after": None}
-    if not cfg.wiki_globs or not human_text:
+def _wiki_facts(paths, cfg, job_id, head, build, spawns):
+    """The wiki agent runs once every review of the builder's latest round passed, before the developer
+    approves, so its pages are part of what the developer approves. What matters to state, for that
+    round: how many times it was started, whether its report says it finished, and whether what it
+    committed since its first start stays inside the wiki globs."""
+    facts = {"enabled": bool(cfg.wiki_globs), "round": None, "attempts": 0, "status": None, "before": None,
+             "only_wiki": None, "stray": []}
+    n = max((s["round"] for s in build), default=None)
+    if not cfg.wiki_globs or n is None:
         return facts
-    jd = paths.job(job_id)
-    approved, since = jobs.field(human_text, "Head"), jobs.field(human_text, "At") or ""
-    record = jobs.read_json(jd / "wiki.json") or {}
-    if record.get("approved") == approved:
-        facts.update(recorded=True, after=record.get("after"))
-    facts.update(approved=approved, status=(jobs.field(jobs.read(jd / "wiki.md"), "Status") or "").lower() or None,
-                 attempts=sum(1 for s in spawns if s.get("agent") == "wiki" and (s.get("at") or "") >= since))
-    ws = paths.workspace(job_id)
-    if head and approved and head != approved and ws.exists() and gitutil.is_ancestor(approved, head, paths.root):
+    started = [s for s in spawns if s.get("agent") == "wiki" and s.get("round") == n]
+    report = jobs.read(paths.round_dir(job_id, n) / "wiki.md")
+    facts.update(round=n, attempts=len(started), status=(jobs.field(report, "Status") or "").lower() or None,
+                 before=started[0].get("head") if started else None)
+    before, ws = facts["before"], paths.workspace(job_id)
+    if head and before and head != before and ws.exists() and gitutil.is_ancestor(before, head, paths.root):
         allowed = {str(p.relative_to(ws)) for pattern in cfg.wiki_globs for p in ws.glob(pattern) if p.is_file()}
-        facts["stray"] = [c for c in gitutil.changed_files(approved, head, paths.root) if c not in allowed]
+        facts["stray"] = [c for c in gitutil.changed_files(before, head, paths.root) if c not in allowed]
         facts["only_wiki"] = not facts["stray"]
     return facts
 
@@ -100,6 +98,7 @@ def gather(paths, cfg, job_id):
             ws["unmerged"] = gitutil.unmerged_files(cwd) if rebasing else []
     decision_text = jobs.read(jd / "decision.md")
     human_text = jobs.read(jd / "human-approval.md")
+    build = jobs.build_sections(jobs.read(jd / "build.md"))
     rounds = {n: _round_facts(paths, job_id, n) for n in jobs.rounds_on_disk(jd)}
     spawns = _spawn_log(jd)
     if 1 in rounds:
@@ -121,7 +120,7 @@ def gather(paths, cfg, job_id):
         "workspace": ws,
         "baseline": jobs.read_json(jd / "baseline.json"),
         "verify_fingerprint": workspace.fingerprint(cfg),
-        "build": jobs.build_sections(jobs.read(jd / "build.md")),
+        "build": build,
         "rounds": rounds,
         "reworks": jobs.reworks(jd),
         "cancelled": jobs.decision(decision_text) == "CANCELLED" if decision_text else False,
@@ -129,7 +128,7 @@ def gather(paths, cfg, job_id):
         "rebase": jobs.read_json(jd / "rebase.json") or {"history": []},
         "pr": jobs.read_json(jd / "pr.json"),
         "test_note": (jobs.read(jd / "test-note.md") or "").strip(),
-        "wiki": _wiki_facts(paths, cfg, job_id, head, human_text, spawns),
+        "wiki": _wiki_facts(paths, cfg, job_id, head, build, spawns),
         "merge": merge_record,
         "merged_locally": merged_locally,
         "merge_retry": _merge_retry(merge_record),
@@ -161,12 +160,7 @@ def _jira_log(jd):
 
 def _equivalent_heads(f, head):
     heads = {head}
-    wiki = f.get("wiki") or {}
-    if wiki.get("only_wiki") and wiki.get("approved"):
-        heads.add(wiki["approved"])
-    edges = list(f["rebase"].get("history", []))
-    if wiki.get("recorded") and wiki.get("approved") and wiki.get("after"):
-        edges.append({"before": wiki["approved"], "after": wiki["after"], "result": "green"})
+    edges = f["rebase"].get("history", [])
     changed = True
     while changed:
         changed = False
@@ -259,12 +253,6 @@ def decide(f):
     if ws.get("on_branch") and ws.get("rebase"):
         return _rebase_in_progress(f)
 
-    wiki = f.get("wiki") or {}
-    if wiki.get("enabled") and wiki.get("only_wiki") is False:
-        return _out(f, "needs-human", "needs-human",
-                    f"the wiki agent committed changes outside the wiki ({', '.join(wiki['stray'][:5])}), so the "
-                    "approval no longer covers this branch; rework it, or cancel the job")
-
     start = _cycle_start(f)
     rounds_done = [s["round"] for s in f["build"]]
     human = f["human_approval"] and f["human_approval"]["head"] in _equivalent_heads(f, f["head"])
@@ -280,7 +268,12 @@ def decide(f):
             return _builder(f, "building", rebase_round["round"], 1, f"rebase left the checks {rebase_round['result']}")
         if current is None:
             return _builder(f, "building", start, 1, "first round")
-        result = _round(f, current, start)
+        wiki = f.get("wiki") or {}
+        if not (wiki.get("attempts") and wiki.get("round") == current):
+            result = _round(f, current, start)
+            if result is not None:
+                return result
+        result = _wiki_step(f)
         if result is not None:
             return result
     return _approval(f, human)
@@ -412,36 +405,36 @@ def _round(f, n, start):
 
 
 def _wiki_step(f):
-    """After approval and before the rebase: bring the project's wiki up to date, at most
-    WIKI_ATTEMPTS times; a wiki the agent could not finish never holds the job."""
+    """Once every review of the round passed, and before the developer approves: bring the project's wiki
+    up to date, at most WIKI_ATTEMPTS times, so the developer approves the pages with the change. Once
+    the pass has started, the round's build and reviews are settled; a wiki the agent could not finish
+    never holds the job."""
     wiki = f.get("wiki") or {}
     if not wiki.get("enabled"):
         return None
-    if wiki.get("recorded"):
-        return None
+    if wiki.get("only_wiki") is False:
+        return _out(f, "needs-human", "needs-human",
+                    f"the wiki agent committed changes outside the wiki ({', '.join(wiki['stray'][:5])}), which no "
+                    "reviewer has seen; rework it, or cancel the job")
     ws = f["workspace"]
     if not ws.get("on_branch"):
-        return _out(f, "rebasing", "open-workspace", "the wiki agent works in the workspace")
+        return _out(f, "reviewing", "open-workspace", "the wiki agent works in the workspace")
     settled = wiki.get("status") == "done" or wiki["attempts"] >= WIKI_ATTEMPTS
     dirty = ws.get("dirty")
     if settled and not dirty:
-        return _out(f, "rebasing", "wiki-record",
-                    "record the wiki pass, so the approval stays attached to the branch through the rebase")
+        return None
     if wiki["attempts"] >= WIKI_ATTEMPTS:
         return _out(f, "needs-human", "needs-human",
                     f"the wiki agent left uncommitted changes in the workspace: {', '.join(dirty[:5])}")
     why = "the wiki pass left uncommitted changes; try again" if dirty else \
-        "bring the wiki up to date before the branch is rebased"
-    return _out(f, "rebasing", "spawn-wiki", why, round=0, attempt=wiki["attempts"] + 1)
+        "bring the wiki up to date before the developer approves"
+    return _out(f, "reviewing", "spawn-wiki", why, round=wiki["round"], attempt=wiki["attempts"] + 1)
 
 
 def _approval(f, human):
     if not human:
         return _out(f, "needs-human", "needs-human", READY, ready=True)
 
-    step = _wiki_step(f)
-    if step:
-        return step
     pr = f["pr"]
     last = _latest_rebase(f)
     rebased = last and last.get("after") == f["head"] and last.get("result") == "green" \

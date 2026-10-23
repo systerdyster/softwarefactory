@@ -158,13 +158,13 @@ def check_write(paths, role, raw_path):
         raise Blocked(f"a reviewer writes only its own review file: factory/jobs/<job>/round-N/review-{name}.md")
     ws = paths.workspace(job).resolve()
     if role == "wiki":
-        if target == jd / "wiki.md":
+        if _inside(target, jd) and re.fullmatch(r"round-\d+/wiki\.md", str(target.relative_to(jd))):
             return job
         globs = config.load(paths).wiki_globs
         if target in {p.resolve() for pattern in globs for p in ws.glob(pattern) if p.is_file()}:
             return job
         raise Blocked("the wiki agent may edit only existing pages that match [rules] wiki in "
-                      "factory/workspaces/<job>/, and wiki.md in its job folder")
+                      "factory/workspaces/<job>/, and round-N/wiki.md in its job folder")
     if _inside(target, ws) and not _inside(target, ws / ".git"):
         return job
     if role == "tidy":

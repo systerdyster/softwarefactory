@@ -76,10 +76,11 @@ section of `factory/project.md`:
   A wiki in another repo goes in `[rules] wiki_external` by name: the wiki agent reports what a change
   makes stale there and never edits it. If the project has its own wiki conventions or a skill for
   syncing the wiki, set `[rules] wiki_guide` to that file: the agent follows it instead of guessing.
-  Explain what the agent does: after the developer approves a job and before it is rebased, it edits
-  existing pages that the change made false, commits them on the job's branch, and lists in the PR
-  comment what it changed and what pages or other wikis it thinks are missing. Nothing in the wiki is
-  reviewed by the reviewers. Leave `wiki` empty for a project without a wiki in the repo.
+  Explain what the agent does: once every review of a job passed and before the developer approves it,
+  it edits existing pages that the change made false and commits them on the job's branch, so the
+  developer approves the pages with the change. It lists in the PR comment what it changed and what
+  pages or other wikis it thinks are missing. Nothing in the wiki is reviewed by the reviewers. Leave
+  `wiki` empty for a project without a wiki in the repo.
 - **Reviewers** — every job gets the main review (`code`); security, performance and stability are
   specialists available everywhere. Enable the optional ones that fit (`platform` for a CMS or
   framework with traps, `ux` and `ui` for user-facing front ends). Leave `codex` off and say why: it

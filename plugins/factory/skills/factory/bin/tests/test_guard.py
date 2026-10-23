@@ -89,9 +89,9 @@ class GuardTest(SandboxTest):
         self.sb.write("Wiki/Page.md", "# Page\n", base=self.sb.ws)
         self.running("agent-a", role="wiki")
         self.assertEqual(self.write("wiki", self.sb.ws / "Wiki" / "Page.md"), 0)
-        self.assertEqual(self.write("wiki", self.jd / "wiki.md"), 0)
+        self.assertEqual(self.write("wiki", self.jd / "round-1" / "wiki.md"), 0)
         for path in (self.sb.ws / "Wiki" / "New.md", self.sb.ws / "src" / "app.py", self.jd / "build.md",
-                     self.jd / "spec.md"):
+                     self.jd / "spec.md", self.jd / "wiki.md", self.jd / "round-1" / "review-code.md"):
             self.assertEqual(self.write("wiki", path), 2, path)
 
     def test_the_wiki_agent_commits_but_cannot_delete_move_or_run_project_commands(self):
