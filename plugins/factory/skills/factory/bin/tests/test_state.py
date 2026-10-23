@@ -14,15 +14,14 @@ FP = "f" * 16
 
 def base_facts(**over):
     f = {
-        "id": "OPT-1", "meta": {"title": "T", "jira": "OPT-1"}, "has_spec": True, "backlog": "taken",
+        "id": "OPT-1", "meta": {"title": "T", "case": "OPT-1"}, "has_spec": True, "backlog": "taken",
         "branch_exists": True, "head": H1, "target_head": T1,
         "workspace": {"exists": True, "on_branch": True, "dirty": [], "rebase": False, "unmerged": []},
         "baseline": {"green": True}, "verify_fingerprint": FP,
         "build": [], "rounds": {}, "reworks": [], "cancelled": False, "human_approval": None,
         "rebase": {"history": []}, "pr": None, "merge": None, "merged_locally": False, "spawns": [],
-        "jira_log": [], "required": ["code"], "max_rounds": 3, "merge_mode": "pr",
-        "jira_enabled": True, "jira_map": {"building": "In Progress", "needs-human": None, "pr-open": "In Review",
-                                           "merged": "Done", "cancelled": "To Do"},
+        "events_log": [], "required": ["code"], "max_rounds": 3, "merge_mode": "pr",
+        "test_note": "", "test_note_file": "/jobs/OPT-1/test-note.md",
     }
     f.update(over)
     return f
@@ -437,24 +436,6 @@ class HumanTest(unittest.TestCase):
         spawns = [{"agent": "builder", "round": 1, "head": H1, "conflicts": []}] * 3
         f = base_facts(spawns=spawns, build=[{"round": 1, "attempt": 2, "status": None, "objection": None}])
         self.assertEqual(state.decide(f)["stage"], "needs-human")
-
-
-class JiraTest(unittest.TestCase):
-    def test_pr_open_transitions_and_asks_for_the_one_comment_with_the_test_note(self):
-        f = base_facts(jira_log=["claimed", "status:building"], test_note="Open the catalogue and switch view.")
-        todo = state.jira_todo(f, {"stage": "pr-open"})
-        self.assertEqual([t["action"] for t in todo], ["transition", "comment"])
-        self.assertEqual(todo[1]["text"], "Open the catalogue and switch view.")
-        f["jira_log"] += ["status:pr-open", "comment"]
-        self.assertEqual(state.jira_todo(f, {"stage": "merged"}), [{"action": "transition", "event": "status:merged",
-                                                                     "to": "Done"}])
-
-    def test_an_empty_test_note_means_no_comment(self):
-        f = base_facts(jira_log=["claimed", "status:building"], test_note="")
-        self.assertEqual([t["action"] for t in state.jira_todo(f, {"stage": "pr-open"})], ["transition"])
-
-    def test_unmapped_stage_needs_nothing(self):
-        self.assertEqual(state.jira_todo(base_facts(), {"stage": "needs-human"}), [])
 
 
 class GatherTest(SandboxTest):

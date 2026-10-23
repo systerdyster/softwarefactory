@@ -14,7 +14,7 @@ standard library only. It was first built from a blueprint prompt; this repo is 
 | Command | What it does |
 |---|---|
 | `/factory init` | Once per project: writes `factory/project.md` — commands, what verify runs, test conventions, worktree setup, how many jobs at once, reviewers and their path patterns, hand-off. |
-| `/factory add <JIRA-KEY or text>` | Intake: frames one case with you into `spec.md` and `plan.md`, and queues it once you approve. Any number of intake sessions can run, also while the factory builds. |
+| `/factory add <CASE-KEY or text>` | Intake: frames one case with you into `spec.md` and `plan.md`, and queues it once you approve. Any number of intake sessions can run, also while the factory builds. |
 | `/factory run` | The orchestrator: builds queued jobs until every job is finished, and starts the dashboard. |
 | `/factory approve <id>` | Approves a job that has passed review; it then goes on to rebase, checks and PR. |
 | `/factory answer <id> <text>` | Answers a question the factory stopped on; the builder continues. |
@@ -48,7 +48,7 @@ flowchart LR
         IN[inbox]
     end
     DB["dashboard<br/>server.py + dashboard.html<br/>127.0.0.1 + token"]
-    EXT[("git remote · PR tool<br/>Jira · Codex")]
+    EXT[("git remote · PR tool<br/>tracker · Codex")]
 
     Dev -->|/factory ...| SK
     SK -->|state · brief · verify · pr| CLI
@@ -252,6 +252,7 @@ plugins/factory/
     server.py, dashboard.html             dashboard + inbox, 127.0.0.1 with a token
   agents/factory-*.md                     builder, tidy, review-code (main), review-{security,performance,
                                           stability,platform,ux,ui}, codex-fallback
+  defaults/skills/                        skills a project copies into its .claude/skills/ (case-status)
 ```
 
 A personal tool: in a project the factory changes no committed file. It leaves only `factory/`
@@ -297,9 +298,15 @@ the repo root (or `-s tests` from `skills/factory/bin`).
   running agents, which only the orchestrator can, so it still waits in the inbox. The orchestrator
   watches both with Monitor (`F inbox watch`): a cancel to run, or an applied command that may give a
   job something to do.
-- **Jira is done by the orchestrator through the session's Jira tools**, not by scripts; `state`
-  lists the pending transitions and the one hand-back comment, and `jira-log` makes them idempotent
-  across restarts.
+- **The factory knows no tracker; the project's event handlers do.** The factory decides when a job
+  is claimed, started, waiting, handed off, completed or cancelled; `[events]` in project.md names
+  what each means for the project — a shell command, or a skill the session runs with its own tools
+  (Jira is reached only through them). `state` lists the handlers due (`events_todo`), and
+  `factory/jobs/<id>/events.md` logs each once it ran, so a restart never repeats one. It first had
+  Jira built in, with a status mapping and the orchestrator doing transitions itself, which fitted
+  none of the projects using Azure Boards or no tracker. The factory ships a default Jira handler,
+  `defaults/skills/case-status`, for a project to copy into its own `.claude/skills/` and adjust;
+  the factory never copies it. The case key is `case` in job.json (`jira` in jobs queued before).
 - **Simplified after the first real job** (001-icon-ui-kit-sync, 2026-10-21: 19 agent starts, 13 of
   them reviews, ~54 minutes). Gone: the separate test-writer and its objection loop (eight assertions
   contradicted the approved design and cost a hand-off and a builder rerun for no code change), the
@@ -335,7 +342,7 @@ the repo root (or `-s tests` from `skills/factory/bin`).
   builder keeps `test-note.md` true to the change in `[handoff] test_note_language` (default: the PR
   language): how someone else checks it by hand, empty when nothing needs it. The approval view shows
   it as a text field the developer may edit or empty; the text goes with the click, is written to
-  test-note.md when the command is queued, and is what the PR comment or the Jira comment carries.
+  test-note.md when the command is queued, and is what the PR comment carries and what the hand-off handler gets.
   An empty note posts nothing. The builder keeps the developer's wording on a later round.
 - **A wiki agent keeps the project's wiki true.** With `[rules] wiki` set (globs of existing pages in
   the repo), a round whose reviews all passed gets one `factory-wiki` pass before the developer
@@ -366,8 +373,8 @@ the repo root (or `-s tests` from `skills/factory/bin`).
   waiting, with the reason in merge.json, and it tries again a minute later. It never pushes, and
   never resets or reverts. The branch already contains the target's tip and was verified, so the
   merge's tree must equal the branch's tree (`tree_matches`); a different tree stops the job instead
-  of re-running the checks. The dashboard's button is *Merge*; the Jira comment is the builder's test
-  note, posted only when it is not empty. A merge undone by hand (`git reset --hard <previous>`) no
+  of re-running the checks. The dashboard's button is *Merge*; the hand-off handler gets the test
+  note, only when it is not empty. A merge undone by hand (`git reset --hard <previous>`) no
   longer reads as merged.
 - **A merged PR is noticed without being told.** While it waits, `F wait` fetches the target once a
   minute and, when the target moved, checks each open PR against it (`pr.check_merged`). With gh or
@@ -430,13 +437,14 @@ UI/UX pass never reached the approval (all three fixed since).
 - The approval view's test note field, *Publish PR with autocomplete* against a real Azure DevOps PR, and
   whether the orchestrator is allowed to run it (auto mode once blocked `az repos pr update`).
 - `local-merge` in a real checkout (`F merge` with `git merge --no-ff`, a project's commit hooks, `remote =
-  none` with a local target ahead of origin), and its Jira comment.
+  none` with a local target ahead of origin), and its hand-off event.
 - The wiki agent with a real agent: whether it follows a project's own wiki conventions, and the whole
   chain review → wiki → approve → rebase → PR.
 - `gh` PR calls and `auto-merge`; comments via `az devops invoke`.
 - A real `codex exec` review (detection is verified; the call sends code to OpenAI, so it waits for a
   project that has enabled it).
-- Jira claim, transitions and the hand-back comment.
+- Event handlers: a command and a skill run by a real orchestrator, and the default `case-status` skill
+  against a real Jira (claim, transitions, the hand-off test note).
 
 ## Gotchas
 

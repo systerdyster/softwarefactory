@@ -1640,7 +1640,7 @@ const Scene = (() => {
         + ((d.exemptions || []).length ? `<p class="lead">Not covered by an automated test — check by hand:</p><ul class="least">`
             + d.exemptions.map((e) => `<li>${markdown(e).replace(/^<p>|<\/p>$/g, "")}</li>`).join("") + `</ul>` : "")
         + wikiPart(d.wiki)
-        + `<p class="lead">Test note — posted with the PR, or to Jira when you merge. Empty posts nothing:</p>`
+        + `<p class="lead">Test note — posted with the PR, and handed to the project's hand-off handler. Empty posts nothing:</p>`
         + `<textarea id="act-note" aria-label="Test note" placeholder="No test note. Write one if someone other than you should check this.">${esc(d.test_note)}</textarea>`
         + `<textarea id="act-text" aria-label="Rework note" placeholder="Rework note — what to change"></textarea>`,
         acts: [...(d.publish === "both" ? [["approve", "Publish PR", "primary"], ["approve-auto", "Publish PR with autocomplete", ""]]

@@ -8,7 +8,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from . import gitutil, jobs, queue, runs, workspace
+from . import events, gitutil, jobs, queue, runs, workspace
 from .config import REQUIRED_REVIEWERS
 from .paths import branch_name
 
@@ -128,17 +128,16 @@ def gather(paths, cfg, job_id):
         "rebase": jobs.read_json(jd / "rebase.json") or {"history": []},
         "pr": jobs.read_json(jd / "pr.json"),
         "test_note": (jobs.read(jd / "test-note.md") or "").strip(),
+        "test_note_file": str(jd / "test-note.md"),
         "wiki": _wiki_facts(paths, cfg, job_id, head, build, spawns),
         "merge": merge_record,
         "merged_locally": merged_locally,
         "merge_retry": _merge_retry(merge_record),
         "spawns": spawns,
-        "jira_log": _jira_log(jd),
+        "events_log": events.logged(paths, job_id),
         "required": REQUIRED_REVIEWERS,
         "max_rounds": cfg.max_rounds,
         "merge_mode": cfg.merge_mode,
-        "jira_enabled": cfg.jira_enabled and bool((jobs.read_json(jd / "job.json") or {}).get("jira")),
-        "jira_map": {s: cfg.jira_status(s) for s in ("building", "needs-human", "pr-open", "merged", "cancelled")},
     }
 
 
@@ -151,11 +150,6 @@ def _spawn_log(jd):
         except json.JSONDecodeError:
             continue
     return result
-
-
-def _jira_log(jd):
-    text = jobs.read(jd / "jira.md") or ""
-    return [line.split()[2] for line in text.splitlines() if line.startswith("- ") and len(line.split()) >= 3]
 
 
 def _equivalent_heads(f, head):
@@ -193,7 +187,7 @@ def _effective_verdicts(f, up_to, start):
 def _out(f, stage, action=None, reason=None, **extra):
     nxt = {"action": action or "none"}
     nxt.update({k: v for k, v in extra.items() if v is not None})
-    result = {"id": f["id"], "title": f["meta"].get("title", ""), "jira": f["meta"].get("jira"),
+    result = {"id": f["id"], "title": f["meta"].get("title", ""), "case": jobs.case_key(f["meta"]),
               "stage": stage, "next": nxt, "reason": reason,
               "waiting": stage in WAITING_STAGES, "final": stage in FINAL_STAGES}
     return result
@@ -480,25 +474,6 @@ def checks(paths, cfg, head):
             "lockfiles": [c for c in changed if c in cfg.lockfiles or Path(c).name in cfg.lockfiles]}
 
 
-def jira_todo(f, result):
-    if not f["jira_enabled"]:
-        return []
-    todo = []
-    stage = result["stage"]
-    status_stage = {"building": "building", "reviewing": "building", "rebasing": "building", "merging": "building",
-                    "needs-human": "needs-human", "pr-open": "pr-open", "merged": "merged", "done": "merged",
-                    "cancelled": "cancelled"}.get(stage)
-    log = f["jira_log"]
-    last_status = next((e for e in reversed(log) if e.startswith("status:")), None)
-    if status_stage and f["jira_map"].get(status_stage) and last_status != f"status:{status_stage}":
-        todo.append({"action": "transition", "event": f"status:{status_stage}", "to": f["jira_map"][status_stage]})
-    if stage == "cancelled" and "unassigned" not in log:
-        todo.append({"action": "unassign", "event": "unassigned"})
-    if stage in ("pr-open", "merged", "done") and "comment" not in log and f.get("test_note"):
-        todo.append({"action": "comment", "event": "comment", "text": f["test_note"]})
-    return todo
-
-
 PASS_THROUGH = ("cancel", "finish", "needs-human", "wait-pr", "none", "take", "start")
 
 
@@ -548,7 +523,7 @@ def state(paths, cfg, job_id):
                        "since": r.get("started_at") or r["created_at"]} for r in f["live_runs"]]
     result["tidy"] = (f["rounds"].get(1) or {}).get("tidy")
     result["pr"] = f["pr"]
-    result["jira_todo"] = jira_todo(f, result)
+    result["events_todo"] = events.todo(cfg, f, result["stage"])
     result["backlog"] = f["backlog"]
     return result
 

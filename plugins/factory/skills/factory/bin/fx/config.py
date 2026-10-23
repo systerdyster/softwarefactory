@@ -11,7 +11,8 @@ SPECIALISTS = ["security", "performance", "stability"]
 OPTIONAL_REVIEWERS = ["platform", "ux", "ui", "codex"]
 MERGE_MODES = ["pr", "local-merge", "auto-merge"]
 PR_TOOLS = ["gh", "az", "other"]
-JIRA_LINKS = ["title", "body", "both", "none"]
+CASE_LINKS = ["title", "body", "both", "none"]
+EVENTS = ["claimed", "started", "waiting", "handed-off", "completed", "cancelled"]
 BRANCH_FIELDS = {"id", "key", "slug"}
 DEFAULT_COMMITS = ("Subject imperative and short, no trailing period (`Add user profile route`, not `Added …` or a "
                    "noun phrase). A body only when the why isn't obvious from subject and diff, then 2–3 lines on the "
@@ -229,15 +230,15 @@ class Config:
         return self.getlist("handoff", "required_reviewers")
 
     @property
-    def jira_link(self):
-        mode = self.get("handoff", "jira_link", "title")
-        if mode not in JIRA_LINKS:
-            raise FactoryError(f"project.md: [handoff] jira_link must be one of {JIRA_LINKS}, got {mode!r}")
+    def case_link(self):
+        mode = self.get("handoff", "case_link", "title")
+        if mode not in CASE_LINKS:
+            raise FactoryError(f"project.md: [handoff] case_link must be one of {CASE_LINKS}, got {mode!r}")
         return mode
 
     @property
-    def jira_url(self):
-        return self.get("handoff", "jira_url")
+    def case_url(self):
+        return self.get("handoff", "case_url")
 
     @property
     def link_work_items(self):
@@ -275,12 +276,21 @@ class Config:
         """How agents write commit messages: the project's convention, else DEFAULT_COMMITS."""
         return self.get("handoff", "commits") or DEFAULT_COMMITS
 
-    @property
-    def jira_enabled(self):
-        return (self.get("jira", "enabled", "false") or "").lower() in ("true", "yes", "on", "1")
-
-    def jira_status(self, stage):
-        return self.get("jira", stage)
+    def event_handler(self, event):
+        """What [events] runs when a job reaches `event`: a shell command, or `skill:<name> [args]` for
+        the session to run with its own tools (a tracker reached only through them); None when the
+        project does nothing then. The factory knows no tracker: what an event means is the project's."""
+        if event not in EVENTS:
+            raise FactoryError(f"unknown event {event!r}; one of {EVENTS}")
+        value = self.get("events", event)
+        if not value:
+            return None
+        if value.startswith("skill:"):
+            name, _, args = value[len("skill:"):].strip().partition(" ")
+            if not name:
+                raise FactoryError(f"project.md: [events] {event} names no skill")
+            return {"kind": "skill", "skill": name, "args": args.strip()}
+        return {"kind": "command", "command": value}
 
 
 def parse_text(text):

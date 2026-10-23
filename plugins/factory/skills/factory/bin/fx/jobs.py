@@ -221,6 +221,12 @@ def reworks(job_dir):
     return result
 
 
+def case_key(meta):
+    """The tracker's key for the job's case, if it has one; `jira` in jobs queued before the key was
+    named for no tracker."""
+    return meta.get("case") or meta.get("jira")
+
+
 def meta(job_dir):
     data = read_json(Path(job_dir) / "job.json")
     if data is None:

@@ -68,7 +68,7 @@ class PrTest(SandboxTest):
     def test_agents_get_the_default_commit_convention_unless_the_project_has_one(self):
         self.assertIn("Subject imperative", self.cfg.commits)
         self.paths.project.write_text(self.paths.project.read_text().replace(
-            "[jira]", "[handoff]\ncommits = Swedish, key first\n\n[jira]"), encoding="utf-8")
+            "[events]", "[handoff]\ncommits = Swedish, key first\n\n[events]"), encoding="utf-8")
         self.assertEqual(config.load(self.paths).commits, "Swedish, key first")
 
     def test_gh_gets_a_short_description_and_one_details_comment_rewritten_on_update(self):

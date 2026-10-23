@@ -24,7 +24,7 @@ class BranchPatternTest(unittest.TestCase):
         with self.assertRaises(FactoryError):
             handoff(branch="feature/{key}-{date}").branch_pattern
 
-    def test_branch_uses_the_jira_key_and_a_short_slug(self):
+    def test_branch_uses_the_case_key_and_a_short_slug(self):
         branch = queue.branch_for("feature/{key}-{slug}", "OPT-12", "Rate limiting för API:t, del två av tre", "OPT-12")
         self.assertEqual(branch, "feature/OPT-12-rate-limiting-for-api-t")
 
@@ -41,7 +41,7 @@ class QueuedBranchTest(SandboxTest):
         jd = self.paths.job(job_id)
         self.sb.write("spec.md", "# Spec\n", base=jd)
         self.sb.write("plan.md", "# Plan\n", base=jd)
-        return queue.add(self.paths, job_id, "Title", jira=job_id, branch=branch)
+        return queue.add(self.paths, job_id, "Title", case=job_id, branch=branch)
 
     def test_the_branch_is_recorded(self):
         self.queue("OPT-1", "feature/OPT-1-title")
@@ -63,11 +63,14 @@ class QueuedBranchTest(SandboxTest):
 
 
 class PrSettingsTest(unittest.TestCase):
-    meta = {"title": "Rate limiting", "jira": "OPT-12", "work_item": "4711"}
+    meta = {"title": "Rate limiting", "case": "OPT-12", "work_item": "4711"}
 
     def test_title_carries_the_key_unless_told_otherwise(self):
         self.assertEqual(pr.title_for(handoff(), self.meta), "OPT-12: Rate limiting")
-        self.assertEqual(pr.title_for(handoff(jira_link="body"), self.meta), "Rate limiting")
+        self.assertEqual(pr.title_for(handoff(case_link="body"), self.meta), "Rate limiting")
+
+    def test_a_job_queued_with_the_old_jira_key_keeps_it(self):
+        self.assertEqual(pr.title_for(handoff(), {"title": "Rate limiting", "jira": "OPT-12"}), "OPT-12: Rate limiting")
 
     def test_az_flags_for_draft_reviewers_and_work_items(self):
         cfg = handoff(draft="true", reviewers="Team A, anna@x.se", required_reviewers="Lead", work_items="true")
@@ -82,9 +85,9 @@ class PrSettingsTest(unittest.TestCase):
     def test_no_settings_means_no_flags(self):
         self.assertEqual(pr.create_flags(handoff(), self.meta, "az"), [])
 
-    def test_jira_link_points_at_the_issue(self):
-        self.assertEqual(pr.jira_line(handoff(jira_url="https://x.atlassian.net/browse/"), "OPT-12"),
-                         "Jira: [OPT-12](https://x.atlassian.net/browse/OPT-12)")
+    def test_case_link_points_at_the_case(self):
+        self.assertEqual(pr.case_line(handoff(case_url="https://x.atlassian.net/browse/"), "OPT-12"),
+                         "Case: [OPT-12](https://x.atlassian.net/browse/OPT-12)")
 
 
 class FinalBodyTest(SandboxTest):

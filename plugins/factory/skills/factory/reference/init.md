@@ -123,8 +123,8 @@ section of `factory/project.md`:
     convention.
   - **Draft and reviewers** — open the PR as a draft or ready for review; which people or groups to
     add as reviewers, and which are required.
-  - **Linking** — where the Jira key goes (`jira_link`: title, body, both, none) and the issue URL
-    prefix (`jira_url`); for `az`, whether to link the Azure Boards work item.
+  - **Linking** — where the case key goes (`case_link`: title, body, both, none) and the URL prefix
+    the key is appended to (`case_url`); for `az`, whether to link the Azure Boards work item.
   - **Language and template** — the language the team writes PR descriptions in, and the project's
     PR template if there is one (look for `.azuredevops/pull_request_template.md`,
     `.github/pull_request_template.md`, `docs/pull_request_template.md`) — confirm it rather than
@@ -135,8 +135,15 @@ section of `factory/project.md`:
     line body only for the why, no case key in the subject when the branch carries it. Propose the
     default, or what the project writes down, and let the developer confirm. AI attribution
     (`Co-Authored-By`, "Generated with") is never allowed, whatever this says.
-- **Jira** — on or off, and the factory-stage → Jira-status mapping, including where a cancelled
-  issue goes. Read the project's workflow statuses from Jira rather than guessing names.
+- **Events** — `[events]`: what the project does when a job is claimed, started, waiting for the
+  developer, handed off, completed or cancelled. The factory knows no tracker; ask what the team does
+  at each point (move a Jira case, update a work item, nothing) and look for the project's own skills
+  or scripts that already do it — a handler names one of them (`skill:<name> [args]`, or a command).
+  For Jira without such a skill, offer the factory's default `case-status`
+  (`<plugin>/defaults/skills/case-status/`): the developer copies it into the project's
+  `.claude/skills/` and adjusts it; the factory never copies it. Then map each event, e.g.
+  `started = skill:case-status In Progress`, reading the project's workflow statuses from Jira rather
+  than guessing names. A handler must be safe to run twice.
 
 Then **show the human the whole file and ask them to review it**. Ask about anything you could not
 establish, one question at a time with a recommendation.

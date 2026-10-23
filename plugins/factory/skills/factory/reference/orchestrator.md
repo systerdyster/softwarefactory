@@ -1,6 +1,6 @@
 ---
 name: factory-orchestrator
-description: /factory run — the build loop; how the orchestrator asks state, performs each next action, spawns fresh agents, and handles cancels from the inbox, objections, cancel and Jira
+description: /factory run — the build loop; how the orchestrator asks state, performs each next action, spawns fresh agents, and handles cancels from the inbox, objections and the project's event handlers
 metadata:
   type: reference
 ---
@@ -62,7 +62,7 @@ Repeat:
    job's PR was merged; only a yes lets you `F pr confirm-merged <id>` — git can't tell a merge from
    the same change arriving another way, and finishing deletes the branch. Ask once per job.
 4. **Act** — for **each** job in `jobs`, ask `F state <id>` and perform its `next.action` from the
-   table below, then its **Jira** to-dos. Spawn agents in the background, so one job's agents run
+   table below, then its **Events**. Spawn agents in the background, so one job's agents run
    while you act on the others; when an agent returns, ask that job's state again. Never let one job
    wait on another.
 5. **Board** — `F board`.
@@ -85,7 +85,7 @@ Repeat:
 | `judge-objection` | See **Objections**. |
 | `rebase` | `F rebase <id>` — fetch, rebase on the target, then the project's checks — unless the rebase left HEAD unchanged and that head already has a green verify with the same commands, which is reused. Conflicts leave the rebase in progress; state sends the builder to resolve them. |
 | `rebase-continue` | `F rebase <id> --continue`. |
-| `pr` | First write the description: `F pr body <id>` prints `body` (the spec's summary, the Jira link), `details` and `commits`. The description becomes the merge commit's message, so write `factory/jobs/<id>/pr-body.md` as short as `commits` asks of a commit body — what changed and why, in project.md's `[handoff] language`; with a `pr_template`, fill its sections as briefly. No review facts, no AI attribution (refused). Then `F pr open <id>` — pushes the branch, opens or updates the PR with that description, the title, draft state, reviewers and links from `[handoff]`, and posts `details` (verdicts, test exemptions, least-sure list, the findings the reviewers left, tidy pass, who approved) as one PR comment, rewritten on later updates (enables auto-merge in `auto-merge` mode). If posting it fails, `pr.json` says why in `details_error`; report it. |
+| `pr` | First write the description: `F pr body <id>` prints `body` (the spec's summary, the case link), `details` and `commits`. The description becomes the merge commit's message, so write `factory/jobs/<id>/pr-body.md` as short as `commits` asks of a commit body — what changed and why, in project.md's `[handoff] language`; with a `pr_template`, fill its sections as briefly. No review facts, no AI attribution (refused). Then `F pr open <id>` — pushes the branch, opens or updates the PR with that description, the title, draft state, reviewers and links from `[handoff]`, and posts `details` (verdicts, test exemptions, least-sure list, the findings the reviewers left, tidy pass, who approved) as one PR comment, rewritten on later updates (enables auto-merge in `auto-merge` mode). If posting it fails, `pr.json` says why in `details_error`; report it. |
 | `merge-local` | `F merge <id>` — a `--no-ff` merge into the local target, never a push. In the main checkout when it holds the target and is clean; with plumbing when nothing holds it. Blocked (another worktree holds the target, the checkout is dirty or mid-operation, a hook refused the merge) it records why in merge.json and the job waits for the developer, then tries again about a minute later when the state is asked again. `tree_matches: false` stops the job: the merge's tree must equal the verified branch's. Never `git reset` or `git revert` on your own. |
 | `finish` | `F finish <id>` — removes the job's worktree and branches, marks `[x]`. Other jobs' worktrees are not touched. |
 | `cancel` | `F cancel <id> --reason "<reason>"` (a cancelled job whose branch still exists). |
@@ -198,21 +198,24 @@ is still waiting.
   next free build slot (`F next`).
 - **cancel `<id>` `[reason]`** — first stop that job's running agents (TaskStop on each background
   agent of that job, none of another job's), then `F cancel <id> --reason "<reason>"`: it closes an open
-  PR, removes the job's worktree and branches, marks `[-]` and writes the reason to decision.md. For a Jira
-  job, transition the issue per project.md's cancel mapping and unassign it — no comment — and
-  `F jira-log` each.
+  PR, removes the job's worktree and branches, marks `[-]` and writes the reason to decision.md. Then
+  ask its state once more and run its **Events** (`cancelled`).
 - **stop** — `F stop`; no new job is taken; finish the active ones, then end.
 
-## Jira
+## Events
 
-`F state` lists `jira_todo` for Jira jobs: transitions per project.md's mapping, an unassign on cancel,
-and **one** comment at hand-back (PR opened, or merged in local-merge mode), only when the job has a
-test note. Do each with the Jira tools, skip a transition the issue is already in, and record it with
-`F jira-log <id> <event>` (the event string from the to-do) so it is never repeated after a restart.
+The factory decides when a job reaches an event — claimed, started, waiting, handed-off, completed,
+cancelled — and project.md's `[events]` decides what that means; the factory knows no tracker. `F state`
+lists the handlers due now in `events_todo`, in order; run each before the next:
 
-The comment is the job's test note, **exactly as the to-do's `text` has it**: the builder wrote it for
-someone other than the developer, and the developer read it at approval. Don't rewrite it. When the
-job has no test note there is no comment. No other comments, ever.
+- **`kind: command`** — `F event run <id> <event>`. The CLI runs it and logs it once it succeeds.
+- **`kind: skill`** — run the skill `skill` with the Skill tool and `skill_args` as its arguments,
+  verbatim, then `F event log <id> <event>`. When it fails, report why and don't log it: it is due
+  again on the next state.
+
+A logged event never runs again, also after a restart. A handler that fails holds no job: report it and
+go on. After `finish` and `cancel` the job leaves the loop, so ask its state once more for its last
+events. The test note a hand-off carries is the developer's approved text; a handler posts it as it is.
 
 ## Report
 

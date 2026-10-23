@@ -75,17 +75,17 @@ def _slug(text, words=6):
     return "-".join(slug.split("-")[:words])
 
 
-def branch_for(pattern, job_id, title, jira=None):
-    """The job's branch from project.md's [handoff] branch pattern: {id} the job id, {key} the Jira
+def branch_for(pattern, job_id, title, case=None):
+    """The job's branch from project.md's [handoff] branch pattern: {id} the job id, {key} the case
     key (else the id), {slug} the title in a few lower-case words."""
-    branch = pattern.format(id=job_id, key=jira or job_id, slug=_slug(title, 5) or _slug(job_id))
+    branch = pattern.format(id=job_id, key=case or job_id, slug=_slug(title, 5) or _slug(job_id))
     check = subprocess.run(["git", "check-ref-format", "--branch", branch], capture_output=True, text=True)
     if check.returncode != 0:
         raise FactoryError(f"{branch!r} is not a valid branch name; check [handoff] branch in project.md")
     return branch
 
 
-def add(paths, job_id, title, jira=None, developer=None, branch=None, work_item=None, after=None):
+def add(paths, job_id, title, case=None, developer=None, branch=None, work_item=None, after=None):
     jobs.check_id(job_id)
     job_dir = paths.job(job_id)
     for name in ("spec.md", "plan.md"):
@@ -106,7 +106,7 @@ def add(paths, job_id, title, jira=None, developer=None, branch=None, work_item=
         unknown = [a for a in after or [] if a not in known]
         if unknown:
             raise FactoryError(f"--after names jobs that are not in backlog.md: {unknown}")
-        meta = {"id": job_id, "title": title, "jira": jira, "developer": developer, "branch": branch,
+        meta = {"id": job_id, "title": title, "case": case, "developer": developer, "branch": branch,
                 "work_item": work_item, "after": list(after or []), "queued_at": jobs.now()}
         jobs.write_json(job_dir / "job.json", meta)
         text = _read(paths).rstrip("\n") + "\n"

@@ -111,16 +111,16 @@ ux =
 platform =
 
 [handoff]
-; the job's branch: {id} job id, {key} Jira key (else the id), {slug} title in a few words
+; the job's branch: {id} job id, {key} case key (else the id), {slug} title in a few words
 branch = factory/{id}
 ; open the PR as a draft
 draft = false
 ; space- or comma-separated users or groups (az: optional reviewers; gh: handles or org/team)
 reviewers =
 required_reviewers =
-; where the Jira key goes: title | body | both | none; jira_url makes it a link
-jira_link = title
-jira_url =
+; where the case key goes: title | body | both | none; case_url (the key is appended) makes it a link
+case_link = title
+case_url =
 ; az only: link the job's Azure Boards work item (given at /factory add)
 work_items = false
 ; language of the PR description, and the project's PR template if it has one (repo-relative path)
@@ -132,13 +132,22 @@ pr_template =
 ; no case key in the subject when the branch carries it
 commits =
 
-[jira]
-enabled = false
-; factory stage → Jira status name; leave empty to skip a transition
+[events]
+; what the project does when a job reaches an event; empty = nothing. A shell command (run in the
+; project root with FACTORY_EVENT, FACTORY_JOB, FACTORY_CASE, FACTORY_BRANCH, FACTORY_DEVELOPER,
+; FACTORY_PR and, at the first hand-off, FACTORY_TEST_NOTE), or skill:<name> [args] for a skill the
+; session runs with its own tools (a tracker reached only through them), told the same as key=value.
+; Handlers must be safe to run twice. e.g. started = skill:case-status In Progress
+; once the spec is approved at /factory add
 claimed =
-building =
-needs-human =
-pr-open =
-merged =
+; each time the job is built: first, after a rework, after a rebase
+started =
+; each time the job waits for the developer: ready, a question, stopped
+waiting =
+; PR opened, or merged locally; carries the test note the first time
+handed-off =
+; merged
+completed =
+; cancelled
 cancelled =
 ```

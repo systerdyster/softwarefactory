@@ -62,7 +62,7 @@ class WorkspaceTest(SandboxTest):
 
     def configure(self, factory="", commands="", extra=""):
         text = self.paths.project.read_text().replace("[factory]\n", f"[factory]\n{factory}")
-        text = text.replace("echo = echo\n", f"echo = echo\n{commands}").replace("[jira]\n", f"{extra}[jira]\n")
+        text = text.replace("echo = echo\n", f"echo = echo\n{commands}").replace("[events]\n", f"{extra}[events]\n")
         self.sb.write("project.md", text, base=self.paths.factory)
         return config.load(self.paths)
 

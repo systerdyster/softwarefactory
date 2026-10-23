@@ -47,8 +47,7 @@ enabled = {enabled}
 ui = src/components/**, *.scss
 performance = re:SELECT
 
-[jira]
-enabled = false
+[events]
 ```
 """
 

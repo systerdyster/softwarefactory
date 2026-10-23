@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from fx import actions, board, brief, codex, config, findings, guard, jobs, pr, queue, runs, schedule, setup, workspace  # noqa: E402
+from fx import actions, board, brief, codex, config, events, findings, guard, jobs, pr, queue, runs, schedule, setup, workspace  # noqa: E402
 from fx import state as state_mod  # noqa: E402
 from fx.errors import Fallback, FactoryError  # noqa: E402
 from fx.paths import Paths  # noqa: E402
@@ -56,8 +56,8 @@ def cmd_findings(a, p):
 
 def cmd_queue(a, p):
     if a.action == "add":
-        branch = queue.branch_for(_cfg(p).branch_pattern, a.job, a.title, a.jira)
-        return queue.add(p, a.job, a.title, jira=a.jira, developer=a.developer, branch=branch,
+        branch = queue.branch_for(_cfg(p).branch_pattern, a.job, a.title, a.case)
+        return queue.add(p, a.job, a.title, case=a.case, developer=a.developer, branch=branch,
                          work_item=a.work_item, after=a.after)
     if a.action == "mark":
         return queue.mark(p, a.job, a.status)
@@ -243,8 +243,14 @@ def cmd_inbox(a, p):
     return {"pending": actions.inbox_list(p)}
 
 
-def cmd_jira_log(a, p):
-    return actions.jira_log(p, a.job, a.event, a.detail or "")
+def cmd_event(a, p):
+    cfg = _cfg(p)
+    if a.action == "run":
+        return events.run(p, cfg, a.job, a.event, state_mod.state(p, cfg, a.job))
+    current = state_mod.state(p, cfg, a.job)
+    if a.event not in [t["event"] for t in current["events_todo"]]:
+        raise FactoryError(f"{a.event} is not due for {a.job}; nothing to log")
+    return events.log(p, a.job, a.event, a.detail or "")
 
 
 def cmd_init_files(a, p):
@@ -279,7 +285,7 @@ def parser():
     q = qs.add_parser("add")
     q.add_argument("job")
     q.add_argument("--title", required=True)
-    q.add_argument("--jira")
+    q.add_argument("--case", help="the tracker's key for the case (Jira, Azure Boards), used in the branch and PR")
     q.add_argument("--developer")
     q.add_argument("--work-item", dest="work_item", help="Azure Boards work item id to link to the PR")
     q.add_argument("--after", action="append", default=[], help="a job that must be done first (repeatable)")
@@ -361,9 +367,10 @@ def parser():
     sp.add_argument("file", nargs="?")
     sp.add_argument("--outcome", default="")
     sp.add_argument("--refused", action="store_true", help="the command was refused, not applied")
-    sp = add("jira-log", cmd_jira_log, "record a Jira action taken for a job")
+    sp = add("event", cmd_event, "run a due event's command, or log a due event a skill handled")
+    sp.add_argument("action", choices=["run", "log"])
     sp.add_argument("job")
-    sp.add_argument("event")
+    sp.add_argument("event", choices=config.EVENTS)
     sp.add_argument("--detail")
     add("init-files", cmd_init_files, "create factory/, project.md template, backlog.md, local exclude entry")
     add("allowlist", cmd_allowlist, "propose (or --write) the permission allowlist").add_argument("--write", action="store_true")

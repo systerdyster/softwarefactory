@@ -84,7 +84,7 @@ class GuardTest(SandboxTest):
         self.assertEqual(self.bash("builder", f"git -C {self.ws} commit --amend -m x"), 2)
 
     def test_the_wiki_agent_edits_existing_wiki_pages_and_its_report_and_nothing_else(self):
-        self.sb.write("project.md", self.paths.project.read_text().replace("[jira]", "[rules]\nwiki = Wiki/*.md\n\n[jira]"),
+        self.sb.write("project.md", self.paths.project.read_text().replace("[events]", "[rules]\nwiki = Wiki/*.md\n\n[events]"),
                       base=self.paths.factory)
         self.sb.write("Wiki/Page.md", "# Page\n", base=self.sb.ws)
         self.running("agent-a", role="wiki")

@@ -45,8 +45,9 @@ def body(paths, cfg, job_id):
     jd = paths.job(job_id)
     meta = jobs.read_json(jd / "job.json") or {}
     lines = [_summary(jobs.read(jd / "spec.md") or "") or "_spec.md has no summary_"]
-    if meta.get("jira") and cfg.jira_link in ("body", "both"):
-        lines += ["", jira_line(cfg, meta["jira"])]
+    key = jobs.case_key(meta)
+    if key and cfg.case_link in ("body", "both"):
+        lines += ["", case_line(cfg, key)]
     return "\n".join(lines) + "\n"
 
 
@@ -162,8 +163,8 @@ def _az_url(data):
     return f"{web}/pullrequest/{data['pullRequestId']}" if web else None
 
 
-def jira_line(cfg, key):
-    return f"Jira: [{key}]({cfg.jira_url.rstrip('/')}/{key})" if cfg.jira_url else f"Jira: {key}"
+def case_line(cfg, key):
+    return f"Case: [{key}]({cfg.case_url.rstrip('/')}/{key})" if cfg.case_url else f"Case: {key}"
 
 
 def final_body(paths, cfg, job_id):
@@ -176,15 +177,16 @@ def final_body(paths, cfg, job_id):
     if jobs.attribution(written):
         raise FactoryError("pr-body.md carries AI attribution (Co-Authored-By / Generated with); remove it — the "
                            "description becomes the merge commit's message")
-    meta = jobs.meta(jd)
-    if meta.get("jira") and cfg.jira_link in ("body", "both") and meta["jira"] not in written:
-        written = written.rstrip("\n") + "\n\n" + jira_line(cfg, meta["jira"]) + "\n"
+    key = jobs.case_key(jobs.meta(jd))
+    if key and cfg.case_link in ("body", "both") and key not in written:
+        written = written.rstrip("\n") + "\n\n" + case_line(cfg, key) + "\n"
     return written
 
 
 def title_for(cfg, meta):
-    if meta.get("jira") and cfg.jira_link in ("title", "both"):
-        return f"{meta['jira']}: {meta['title']}"
+    key = jobs.case_key(meta)
+    if key and cfg.case_link in ("title", "both"):
+        return f"{key}: {meta['title']}"
     return meta["title"]
 
 

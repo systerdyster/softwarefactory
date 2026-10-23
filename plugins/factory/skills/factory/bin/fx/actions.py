@@ -288,15 +288,6 @@ def rework(paths, cfg, job_id, note, by, pr_module):
     return {"rework": number, "start_round": start, "pr_comments": bool(comments)}
 
 
-def jira_log(paths, job_id, event, detail=""):
-    jd = paths.job(job_id)
-    path = jd / "jira.md"
-    text = jobs.read(path) or f"# Jira log — {job_id}\n\n"
-    text += f"- {jobs.now()} {event} {detail}".rstrip() + "\n"
-    jobs.write_atomic(path, text)
-    return {"logged": event}
-
-
 def log_spawn(paths, job_id, agent, round_number, attempt, head, extra=None):
     record = {"at": jobs.now(), "agent": agent, "round": round_number, "attempt": attempt, "head": head}
     record.update(extra or {})

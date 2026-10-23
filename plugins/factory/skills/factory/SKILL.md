@@ -1,7 +1,7 @@
 ---
 name: factory
 description: "The software factory: frame one case with a developer into an approved spec and plan (/factory add), then build queued jobs with a fresh builder that tests the behaviour it changes and a main reviewer, plus specialist reviewers where the change calls for them (/factory run), and hand each back for the developer's approval and as a PR. Use when the user types /factory with any subcommand — init, add, run, stop, approve, answer, rework, cancel, status — or asks to queue a case for the factory, run the factory, or check the factory board."
-argument-hint: "init | add <JIRA-KEY | description> | run | stop | approve <id> | answer <id> <text> | rework <id> <note> | cancel <id> [reason] | status"
+argument-hint: "init | add <CASE-KEY | description> | run | stop | approve <id> | answer <id> <text> | rework <id> <note> | cancel <id> [reason] | status"
 metadata:
   type: reference
 ---
@@ -68,7 +68,7 @@ factory/                  project.md, backlog.md, board.json, orchestrator.json 
                           workspaces/<id>/, logs/<id>/, out/<id>/, runs/ (agent runs), binding.json (a failed
                           agent binding), locks/, jobs/<id>/
 factory/jobs/<id>/        job.json spec.md plan.md tests.md build.md baseline.json workspace.json
-                          rebase.json pr.json jira.md spawns.jsonl rework-K.md human-approval.md
+                          rebase.json pr.json events.md spawns.jsonl rework-K.md human-approval.md
                           decision.md (only when cancelled)
                           round-N/{scheduled.md, review-<name>.md, findings.md, verify-A.json, ruling-A.md}
 ```

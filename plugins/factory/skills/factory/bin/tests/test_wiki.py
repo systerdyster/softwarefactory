@@ -17,7 +17,7 @@ class WikiTest(SandboxTest):
         self.sb.write("Wiki/Conventions.md", "Write in the present tense.\n")
         self.sb.commit("Wiki")
         git(self.sb.root, "push", "origin", "main")
-        self.paths.project.write_text(self.paths.project.read_text().replace("[jira]", WIKI_RULES + "[jira]"), encoding="utf-8")
+        self.paths.project.write_text(self.paths.project.read_text().replace("[events]", WIKI_RULES + "[events]"), encoding="utf-8")
         self.cfg = config.load(self.paths)
         self.job = self.sb.queue_job()
         self.jd = self.paths.job(self.job)
