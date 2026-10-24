@@ -4,7 +4,12 @@ restart. The factory decides when an event happens; project.md's [events] decide
 shell command the CLI runs or a skill the session runs with its own tools.
 
 `claimed`, `completed` and `cancelled` happen once. `started`, `waiting` and `handed-off` happen each
-time the job enters that phase: a job sent back from waiting is started again."""
+time the job enters that phase: a job sent back from waiting is started again. The factory's own
+steps after the developer approved — rebasing, merging, retrying a blocked merge — start nothing, so
+a case in review is not moved back and forth each time the target moves.
+
+A handler that fails is logged as failed and due again, up to MAX_FAILURES times for the same entry
+into a phase; then it is given up, and state reports it instead of running it on every step."""
 
 import os
 import subprocess
@@ -12,10 +17,11 @@ import subprocess
 from . import jobs
 from .errors import FactoryError
 
-PHASE_OF_STAGE = {"building": "started", "reviewing": "started", "rebasing": "started", "merging": "started",
-                  "needs-human": "waiting", "pr-open": "handed-off"}
+PHASE_OF_STAGE = {"building": "started", "reviewing": "started", "needs-human": "waiting", "pr-open": "handed-off"}
 PHASES = ("started", "waiting", "handed-off")
 COMMAND_TIMEOUT = 300
+MAX_FAILURES = 3
+FAILED = "failed:"
 
 
 def logged(paths, job_id):
@@ -30,9 +36,29 @@ def log(paths, job_id, event, detail=""):
     return {"logged": event}
 
 
-def due(stage, done):
-    """The events a job at `stage` has reached and the log doesn't hold yet, in the order they happened.
-    A local merge hands the job off and completes it in one step."""
+def log_failure(paths, job_id, event, why):
+    return log(paths, job_id, FAILED + event, " ".join((why or "no reason given").split())[:300])
+
+
+def _done(entries):
+    return [e for e in entries if not e.startswith(FAILED)]
+
+
+def failures(entries, event):
+    """How often `event` failed since a handler last ran for this job."""
+    count = 0
+    for entry in reversed(entries):
+        if entry == FAILED + event:
+            count += 1
+        elif not entry.startswith(FAILED):
+            break
+    return count
+
+
+def due(stage, entries):
+    """The events a job at `stage` has reached and the log doesn't hold as run yet, in the order they
+    happened. A local merge hands the job off and completes it in one step."""
+    done = _done(entries)
     events = []
     if stage != "cancelled" and "claimed" not in done:
         events.append("claimed")
@@ -61,17 +87,29 @@ def context(f, event):
     return {k: v for k, v in facts.items() if v}
 
 
+def _pair(key, value):
+    value = str(value)
+    return f'{key}="{value}"' if any(c.isspace() for c in value) else f"{key}={value}"
+
+
+def given_up(cfg, f, stage):
+    """The due events whose handler failed MAX_FAILURES times: reported, no longer run."""
+    return [e for e in due(stage, f["events_log"])
+            if cfg.event_handler(e) and failures(f["events_log"], e) >= MAX_FAILURES]
+
+
 def todo(cfg, f, stage):
-    """The handlers to run now, in order. An event the project has no handler for is skipped."""
+    """The handlers to run now, in order. An event the project has no handler for is skipped, and so is
+    one given up; a later event still runs, since each handler stands alone."""
     result = []
     for event in due(stage, f["events_log"]):
         handler = cfg.event_handler(event)
-        if not handler:
+        if not handler or failures(f["events_log"], event) >= MAX_FAILURES:
             continue
         facts = context(f, event)
         item = {"event": event, **handler, "context": facts}
         if handler["kind"] == "skill":
-            item["skill_args"] = " ".join([handler["args"]] + [f"{k}={v}" for k, v in facts.items()]).strip()
+            item["skill_args"] = " ".join([handler["args"]] + [_pair(k, v) for k, v in facts.items()]).strip()
         result.append(item)
     return result
 
@@ -91,9 +129,12 @@ def run(paths, cfg, job_id, event, current):
         done = subprocess.run(item["command"], shell=True, cwd=paths.root, env=env, capture_output=True,
                               text=True, timeout=COMMAND_TIMEOUT)
     except subprocess.TimeoutExpired:
-        raise FactoryError(f"[events] {event} ran longer than {COMMAND_TIMEOUT} s; not logged, so it is due again")
+        why = f"ran longer than {COMMAND_TIMEOUT} s"
+        log_failure(paths, job_id, event, why)
+        raise FactoryError(f"[events] {event} {why}; logged as failed")
     output = (done.stdout + done.stderr).strip()[-2000:]
     if done.returncode != 0:
-        raise FactoryError(f"[events] {event} exited {done.returncode}; not logged, so it is due again", output=output)
+        log_failure(paths, job_id, event, f"exited {done.returncode}: {output[-200:]}")
+        raise FactoryError(f"[events] {event} exited {done.returncode}; logged as failed", output=output)
     log(paths, job_id, event)
     return {"ran": event, "output": output}

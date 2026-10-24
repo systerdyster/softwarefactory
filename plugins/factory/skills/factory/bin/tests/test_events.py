@@ -30,6 +30,20 @@ class DueTest(unittest.TestCase):
         self.assertEqual(events.due("merged", ["claimed", "started", "handed-off"]), ["completed"])
         self.assertEqual(events.due("done", ["claimed", "started", "handed-off", "completed"]), [])
 
+    def test_the_factorys_own_steps_after_approval_start_nothing(self):
+        self.assertEqual(events.due("rebasing", ["claimed", "started", "handed-off"]), [])
+        self.assertEqual(events.due("merging", ["claimed", "started", "waiting"]), [])
+        self.assertEqual(events.due("needs-human", ["claimed", "started", "waiting"]), [])
+
+    def test_a_failed_handler_is_due_again_until_it_is_given_up(self):
+        cfg = handlers(started="skill:case-status In Progress")
+        f = base_facts(events_log=["claimed", "failed:started", "failed:started"])
+        self.assertEqual([t["event"] for t in events.todo(cfg, f, "building")], ["started"])
+        f["events_log"].append("failed:started")
+        self.assertEqual((events.todo(cfg, f, "building"), events.given_up(cfg, f, "building")), ([], ["started"]))
+        f["events_log"] += ["waiting", "failed:started"]
+        self.assertEqual([t["event"] for t in events.todo(cfg, f, "building")], ["started"])
+
     def test_a_local_merge_hands_off_and_completes_in_one_step(self):
         self.assertEqual(events.due("merged", ["claimed", "started", "waiting", "started"]), ["handed-off", "completed"])
 
@@ -45,10 +59,12 @@ class TodoTest(unittest.TestCase):
 
     def test_a_skill_is_told_the_job_case_and_branch_in_its_arguments(self):
         cfg = handlers(started="skill:case-status In Progress")
-        f = base_facts(meta={"title": "T", "case": "OPT-1", "branch": "feature/OPT-1-t"}, events_log=["claimed"])
+        f = base_facts(meta={"title": "T", "case": "OPT-1", "branch": "feature/OPT-1-t", "developer": "Ann Berg"},
+                       events_log=["claimed"])
         item = events.todo(cfg, f, "building")[0]
         self.assertEqual((item["kind"], item["skill"]), ("skill", "case-status"))
-        self.assertEqual(item["skill_args"], "In Progress job=OPT-1 case=OPT-1 branch=feature/OPT-1-t")
+        self.assertEqual(item["skill_args"],
+                         'In Progress job=OPT-1 case=OPT-1 branch=feature/OPT-1-t developer="Ann Berg"')
 
     def test_the_first_hand_off_carries_the_test_note_when_there_is_one(self):
         cfg = handlers(handed_off="skill:case-status In Review")
@@ -92,11 +108,15 @@ class RunTest(SandboxTest):
         with self.assertRaises(FactoryError):
             events.run(self.paths, self.cfg, self.job, "claimed", self.current())
 
-    def test_a_failed_command_is_not_logged_so_it_is_due_again(self):
-        self.project("exit 4")
-        with self.assertRaises(FactoryError):
-            events.run(self.paths, self.cfg, self.job, "claimed", self.current())
-        self.assertEqual([t["event"] for t in self.current()["events_todo"]], ["claimed"])
+    def test_a_failed_command_is_logged_as_failed_and_given_up_after_three(self):
+        self.project("echo no such status; exit 4")
+        for _ in range(events.MAX_FAILURES):
+            self.assertEqual([t["event"] for t in self.current()["events_todo"]], ["claimed"])
+            with self.assertRaises(FactoryError):
+                events.run(self.paths, self.cfg, self.job, "claimed", self.current())
+        current = self.current()
+        self.assertEqual((current["events_todo"], current["events_given_up"]), ([], ["claimed"]))
+        self.assertIn("failed:claimed exited 4: no such status", (self.paths.job(self.job) / "events.md").read_text())
 
     def test_a_skill_is_the_sessions_to_run(self):
         self.project("skill:case-status claim")

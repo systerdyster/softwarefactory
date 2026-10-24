@@ -1356,7 +1356,7 @@ const Scene = (() => {
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const T = Font.text;
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  let board = { jobs: [] }, openJob = null, openStage = null, openFiles = "", sending = false, pending = false, drawn = "";
+  let board = { jobs: [] }, openJob = null, openStage = null, openFiles = "", sending = false, pending = false, given = null, drawn = "";
   let hits = [], layer = null, first = true;
 
   async function api(path, opts = {}) {
@@ -1672,7 +1672,8 @@ const Scene = (() => {
   }
 
   function lockButtons() {
-    document.querySelectorAll("#dlg-acts button[data-cmd]").forEach((b) => { b.disabled = sending || pending; });
+    // A command already given for this decision keeps its buttons off until the board shows the job moved.
+    document.querySelectorAll("#dlg-acts button[data-cmd]").forEach((b) => { b.disabled = sending || pending || given === openStage; });
   }
 
   const STATE_TEXT = { queued: "Queued", applied: "Applied", refused: "Refused" };
@@ -1712,7 +1713,7 @@ const Scene = (() => {
                               body: JSON.stringify({ command, job: job.id, text, by: "dashboard", auto,
                                                      test_note: command === "approve" && $("act-note") ? $("act-note").value : undefined }) });
       $("act-status").textContent = "";
-      pending = true;
+      given = openStage;
     } catch (e) { $("act-status").textContent = e.message; }
     sending = false;
     await loadCommands(job.id);
@@ -1747,7 +1748,7 @@ const Scene = (() => {
 
   function open(id) {
     const job = (board.jobs || []).find((j) => j.id === id); if (!job) return;
-    openJob = id; pending = false; sending = false;
+    openJob = id; pending = false; sending = false; given = null;
     fillHeader(job);
     $("dlg-doc").innerHTML = "";
     $("dlg-cmds").innerHTML = "";

@@ -276,7 +276,8 @@ the repo root (or `-s tests` from `skills/factory/bin`).
 - **Every reviewer is one agent, `factory-mage`, reviewing by a rulebook.** There was an agent per
   reviewer, with its rubric in the agent file, so a project's own review skill could only be read as
   a rule beside the factory's rubric. Now `[mages]` names each Mage and its rulebook: a skill of the
-  project's (read from the job's worktree, so the branch's version applies) or one of the factory's
+  project's (read from the target branch and copied into the job folder: the builder writes anywhere
+  in the worktree, and the change under review must not rewrite the rules it is reviewed by) or one of the factory's
   defaults, `defaults/skills/review-<name>`, used in place. The rulebook says what to look for; the
   review contract says how to report, and gives the main Mage its acceptance criteria, least-sure list
   and confidence line whatever its rulebook. The rulebook's `model:` front matter picks the model
@@ -333,7 +334,11 @@ the repo root (or `-s tests` from `skills/factory/bin`).
   is claimed, started, waiting, handed off, completed or cancelled; `[events]` in project.md names
   what each means for the project — a shell command, or a skill the session runs with its own tools
   (Jira is reached only through them). `state` lists the handlers due (`events_todo`), and
-  `factory/jobs/<id>/events.md` logs each once it ran, so a restart never repeats one. It first had
+  `factory/jobs/<id>/events.md` logs each once it ran, so a restart never repeats one. A handler
+  that fails is logged as failed and tried again, three times, then reported in `events_given_up`
+  instead of running on every step. The factory's own steps after approval — rebasing, merging,
+  retrying a blocked merge — start nothing, so a case in review isn't moved back and forth whenever
+  the target moves. It first had
   Jira built in, with a status mapping and the orchestrator doing transitions itself, which fitted
   none of the projects using Azure Boards or no tracker. The factory ships a default Jira handler,
   `defaults/skills/case-status`, for a project to copy into its own `.claude/skills/` and adjust;

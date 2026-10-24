@@ -176,7 +176,7 @@ session — and recorded in `factory/inbox/done/`. You don't run them: the job's
 follows. A cancel waits in `factory/inbox/` for you. Watch both with the Monitor tool: command
 `F inbox watch`, description "factory inbox commands", `timeout_ms` 1800000, re-armed on every expiry
 for as long as the run lasts. An `inbox: <file>` line is a cancel to run; `F inbox list` shows all
-waiting ones. An `applied: <file>` line names a job that may have something to do now: go round the
+waiting ones. A `done: <file>` line names a job that may have something to do now: go round the
 loop.
 
 Run a cancel as below, then `F inbox done <file> --outcome "<one line>"`. One that is refused (unknown
@@ -209,13 +209,14 @@ The factory decides when a job reaches an event — claimed, started, waiting, h
 cancelled — and project.md's `[events]` decides what that means; the factory knows no tracker. `F state`
 lists the handlers due now in `events_todo`, in order; run each before the next:
 
-- **`kind: command`** — `F event run <id> <event>`. The CLI runs it and logs it once it succeeds.
+- **`kind: command`** — `F event run <id> <event>`. The CLI runs it and logs it as run or failed.
 - **`kind: skill`** — run the skill `skill` with the Skill tool and `skill_args` as its arguments,
-  verbatim, then `F event log <id> <event>`. When it fails, report why and don't log it: it is due
-  again on the next state.
+  verbatim, then `F event log <id> <event>`; when it fails, `F event fail <id> <event> --detail
+  "<why>"`.
 
-A logged event never runs again, also after a restart. A handler that fails holds no job: report it and
-go on. After `finish` and `cancel` the job leaves the loop, so ask its state once more for its last
+A logged event never runs again, also after a restart. A handler that fails holds no job: it is due
+again, and after three failures state stops listing it and names it in `events_given_up` — report
+that once, with the reason from events.md, and go on. After `finish` and `cancel` the job leaves the loop, so ask its state once more for its last
 events. The test note a hand-off carries is the developer's approved text; a handler posts it as it is.
 
 ## Report

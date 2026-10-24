@@ -43,6 +43,12 @@ def blob(ref, path, cwd):
     return result.stdout.strip() if result.returncode == 0 else None
 
 
+def show(ref, path, cwd):
+    """A file's content at a ref, or None where the ref has no such file."""
+    result = run(["show", f"{ref}:{path}"], cwd, check=False)
+    return result.stdout if result.returncode == 0 else None
+
+
 def hash_file(path, cwd):
     if not Path(cwd, path).exists():
         return None

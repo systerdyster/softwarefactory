@@ -92,6 +92,16 @@ class RunsTest(SandboxTest):
         actions.cancel(self.paths, self.cfg, self.job, "not needed", pr)
         self.assertEqual(runs.for_agent(self.paths, "agent-1")["status"], "aborted")
 
+    def test_runs_that_ended_long_ago_are_pruned_and_live_or_fresh_ones_kept(self):
+        old = runs.reserve(self.paths, self.cfg, self.job, "review-code", 1, None, None)["run"]
+        runs.end(self.paths, old, status="done")
+        self.age(old, "ended_at")
+        fresh = runs.reserve(self.paths, self.cfg, self.job, "review-security", 1, None, None)["run"]
+        runs.end(self.paths, fresh, status="done")
+        live = runs.reserve(self.paths, self.cfg, self.job, "builder", 1, 1, None)["run"]
+        self.assertEqual(runs.prune(self.paths), [old])
+        self.assertEqual(sorted(r["run"] for r in runs.all_runs(self.paths)), sorted([fresh, live]))
+
     def test_a_recorded_binding_failure_stops_the_factory_with_its_reason(self):
         runs.record_binding_failure(self.paths, "agent_id x matches no factory run")
         result = actions.next_job(self.paths, self.cfg, self.lease)

@@ -21,6 +21,7 @@ from . import jobs, queue
 from .errors import FactoryError
 
 RESERVE_TTL_MINUTES = 3
+PRUNE_DAYS = 7
 MARKER = "Factory run:"
 _MARKER = re.compile(rf"^{re.escape(MARKER)}\s*(\S+)\s*$", re.M)
 
@@ -130,6 +131,19 @@ def abort_job(paths, job_id, why):
         if r["job"] == job_id and r["status"] in ("reserved", "running"):
             ended.append(end(paths, r["run"], status="aborted", why=why)["run"])
     return ended
+
+
+def prune(paths):
+    """Removes the records of runs that ended more than PRUNE_DAYS ago. Every guard call reads all
+    records, and they otherwise pile up for good; an ended run's agent is long gone by then, while a
+    fresh one is kept so its agent still reads as aborted rather than as unbound."""
+    removed = []
+    for r in all_runs(paths):
+        ended = r.get("ended_at")
+        if r["status"] not in ("reserved", "running") and ended and _minutes_since(ended) > PRUNE_DAYS * 24 * 60:
+            _file(paths, r["run"]).unlink(missing_ok=True)
+            removed.append(r["run"])
+    return removed
 
 
 def record_binding_failure(paths, why):

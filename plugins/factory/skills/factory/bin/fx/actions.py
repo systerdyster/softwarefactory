@@ -203,6 +203,7 @@ def cleanup(paths, cfg, job_id, discard=False):
     else:
         result["remote_branch_found"] = False
     result["runs_aborted"] = runs.abort_job(paths, job_id, "the job was finished or cancelled")
+    result["runs_pruned"] = len(runs.prune(paths))
     jobs.write_json(paths.job(job_id) / "cleanup.json", {**result, "at": jobs.now(), "discard": discard})
     return result
 
@@ -528,15 +529,14 @@ def inbox_list(paths):
 
 
 def _applied(paths):
-    """The commands applied so far, by file name: what the orchestrator learns of without being told."""
-    if not paths.inbox_done.exists():
-        return set()
-    return {f.name for f in paths.inbox_done.glob("*.json") if (jobs.read_json(f) or {}).get("status") == "applied"}
+    """The commands given so far, by file name: what the orchestrator learns of without being told. A
+    refused one wakes it too, which costs one look and saves reading every record every two seconds."""
+    return {f.name for f in paths.inbox_done.glob("*.json")} if paths.inbox_done.exists() else set()
 
 
 def inbox_watch(paths, interval=2.0, out=None):
     """Prints one line per new inbox file (`inbox:`, a cancel to run) and per command applied elsewhere
-    (`applied:`, a job that may have something to do now), and runs until killed: the orchestrator's
+    (`done:`, a job that may have something to do now), and runs until killed: the orchestrator's
     Monitor command."""
     import sys
     import time
@@ -552,7 +552,7 @@ def inbox_watch(paths, interval=2.0, out=None):
             print(f"inbox: {name}", file=out, flush=True)
         now_applied = _applied(paths)
         for name in sorted(now_applied - applied):
-            print(f"applied: {name}", file=out, flush=True)
+            print(f"done: {name}", file=out, flush=True)
         seen, applied = current, now_applied
 
 

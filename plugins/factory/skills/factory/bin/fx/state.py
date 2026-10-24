@@ -534,6 +534,7 @@ def state(paths, cfg, job_id):
     result["tidy"] = (f["rounds"].get(1) or {}).get("tidy")
     result["pr"] = f["pr"]
     result["events_todo"] = events.todo(cfg, f, result["stage"])
+    result["events_given_up"] = events.given_up(cfg, f, result["stage"])
     result["backlog"] = f["backlog"]
     return result
 

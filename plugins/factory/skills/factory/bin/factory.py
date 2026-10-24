@@ -250,6 +250,8 @@ def cmd_event(a, p):
     current = state_mod.state(p, cfg, a.job)
     if a.event not in [t["event"] for t in current["events_todo"]]:
         raise FactoryError(f"{a.event} is not due for {a.job}; nothing to log")
+    if a.action == "fail":
+        return events.log_failure(p, a.job, a.event, a.detail)
     return events.log(p, a.job, a.event, a.detail or "")
 
 
@@ -371,8 +373,8 @@ def parser():
     sp.add_argument("file", nargs="?")
     sp.add_argument("--outcome", default="")
     sp.add_argument("--refused", action="store_true", help="the command was refused, not applied")
-    sp = add("event", cmd_event, "run a due event's command, or log a due event a skill handled")
-    sp.add_argument("action", choices=["run", "log"])
+    sp = add("event", cmd_event, "run a due event's command, or log a due event a skill handled or failed")
+    sp.add_argument("action", choices=["run", "log", "fail"])
     sp.add_argument("job")
     sp.add_argument("event", choices=config.EVENTS)
     sp.add_argument("--detail")
