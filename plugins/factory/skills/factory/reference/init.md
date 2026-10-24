@@ -31,6 +31,14 @@ Then go through **Heroes** below for `[heroes]`, which an older project.md lacks
 read all of the project's skills as rules; now only the ones named there and in `[mages]` reach an
 agent.
 
+**Jobs in progress** (`[~]` in backlog.md) have no event log yet, so the first time the orchestrator
+asks their state, every event they have reached is due from the start — `claimed`, the current phase
+and, with an open PR, `handed-off` — and a handler would claim or move a case that is already there.
+List each such job with its stage and the events state lists in `events_todo`, ask the developer
+which of them already happened (with `[jira] enabled = true` the old factory did the claim and the
+transitions itself), and record those with `F event log <id> <event> --detail "before events"` so
+they never run. Finished and cancelled jobs need nothing: without a log they are left alone.
+
 ## 1. Create the runtime folder
 
 `F init-files` creates `factory/` (jobs, inbox, logs), a `project.md` from the template, `backlog.md`,
