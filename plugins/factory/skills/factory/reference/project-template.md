@@ -160,9 +160,11 @@ commits =
 ; Handlers must be safe to run twice. e.g. started = skill:case-status In Progress
 ; once the spec is approved at /factory add
 claimed =
-; each time the job is built: first, after a rework, after a rebase
+; the phases run when the job's phase differs from the last one a handler ran for, so a phase
+; with no handler, or a failed one, does not make the next return to the earlier phase run again
+; the job is being built: first, and after waiting when waiting ran
 started =
-; each time the job waits for the developer: ready, a question, stopped
+; the job waits for the developer: ready, a question, stopped
 waiting =
 ; PR opened, or merged locally; carries the test note the first time
 handed-off =

@@ -25,6 +25,9 @@ class DueTest(unittest.TestCase):
         self.assertEqual(events.due("needs-human", ["claimed", "started"]), ["waiting"])
         self.assertEqual(events.due("building", ["claimed", "started", "waiting"]), ["started"])
 
+    def test_a_phase_no_handler_ran_for_leaves_the_last_phase_as_it_was(self):
+        self.assertEqual(events.due("building", ["claimed", "started", "failed:waiting"]), [])
+
     def test_a_pr_hands_the_job_off_and_its_merge_completes_it(self):
         self.assertEqual(events.due("pr-open", ["claimed", "started"]), ["handed-off"])
         self.assertEqual(events.due("merged", ["claimed", "started", "handed-off"]), ["completed"])
