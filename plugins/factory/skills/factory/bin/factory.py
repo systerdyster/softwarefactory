@@ -247,9 +247,7 @@ def cmd_event(a, p):
     cfg = _cfg(p)
     if a.action == "run":
         return events.run(p, cfg, a.job, a.event, state_mod.state(p, cfg, a.job))
-    current = state_mod.state(p, cfg, a.job)
-    if a.event not in [t["event"] for t in current["events_todo"]]:
-        raise FactoryError(f"{a.event} is not due for {a.job}; nothing to log")
+    events.first_due(a.job, a.event, state_mod.state(p, cfg, a.job))
     if a.action == "fail":
         return events.log_failure(p, a.job, a.event, a.detail)
     return events.log(p, a.job, a.event, a.detail or "")

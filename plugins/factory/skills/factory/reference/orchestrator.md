@@ -208,7 +208,9 @@ is still waiting.
 
 The factory decides when a job reaches an event — claimed, started, waiting, handed-off, completed,
 cancelled — and project.md's `[events]` decides what that means; the factory knows no tracker. `F state`
-lists the handlers due now in `events_todo`, in order; run each before the next:
+lists the handlers due now in `events_todo`, in order; run each before the next, and when one fails,
+stop there for that job — the later ones wait until it has run or been given up, and the CLI refuses
+any but the first:
 
 - **`kind: command`** — `F event run <id> <event>`. The CLI runs it and logs it as run or failed.
 - **`kind: skill`** — run the skill `skill` with the Skill tool and `skill_args` as its arguments,

@@ -118,8 +118,8 @@ def given_up(cfg, f, stage):
 
 
 def todo(cfg, f, stage):
-    """The handlers to run now, in order. An event the project has no handler for is skipped, and so is
-    one given up; a later event still runs, since each handler stands alone."""
+    """The handlers to run, in order. An event the project has no handler for is skipped, and so is one
+    given up; one that failed stays first, and the later ones wait behind it (see `first_due`)."""
     result = []
     for event in due(stage, f["events_log"]):
         handler = cfg.event_handler(event)
@@ -147,13 +147,20 @@ def unfinished(paths, cfg, entries):
     return result
 
 
+def first_due(job_id, event, current):
+    """The handler for `event`, only when it is the first one due: handlers run in the order their events
+    happened, so a hand-off retried after a failure can never move a case back from completed."""
+    due_now = [t["event"] for t in current["events_todo"]]
+    if not due_now or due_now[0] != event:
+        raise FactoryError(f"{event} is not the next event due for {job_id}; due, in order: {due_now}")
+    return current["events_todo"][0]
+
+
 def run(paths, cfg, job_id, event, current):
-    """Runs the command [events] names for `event`, when the job's state lists it as due, in the project
-    root with the context as FACTORY_* variables, and logs it once it exits 0. A failed command is not
-    logged, so it is due again."""
-    item = next((t for t in current["events_todo"] if t["event"] == event), None)
-    if not item:
-        raise FactoryError(f"{event} is not due for {job_id}; due: {[t['event'] for t in current['events_todo']]}")
+    """Runs the command [events] names for `event`, when it is the first one due, in the project root
+    with the context as FACTORY_* variables, and logs it once it exits 0. A failed command is logged as
+    failed, so it is due again before any later event."""
+    item = first_due(job_id, event, current)
     if item["kind"] != "command":
         raise FactoryError(f"{event} runs the skill {item['skill']}; the session runs it, then `event log`")
     env = {**os.environ, "FACTORY_EVENT": event,

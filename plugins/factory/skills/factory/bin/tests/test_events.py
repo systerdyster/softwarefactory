@@ -88,6 +88,17 @@ class TodoTest(unittest.TestCase):
         f.update(events_log=["claimed", "started"], test_note="")
         self.assertNotIn("test_note", events.todo(cfg, f, "pr-open")[0]["context"])
 
+    def test_a_later_event_waits_behind_a_failed_one_until_it_ran_or_was_given_up(self):
+        cfg = handlers(handed_off="./status.sh review", completed="./status.sh done")
+        f = base_facts(events_log=["claimed", "started", "failed:handed-off"])
+        current = {"events_todo": events.todo(cfg, f, "merged")}
+        with self.assertRaises(FactoryError):
+            events.first_due("OPT-1", "completed", current)
+        self.assertEqual(events.first_due("OPT-1", "handed-off", current)["event"], "handed-off")
+        f["events_log"] += ["failed:handed-off"] * (events.MAX_FAILURES - 1)
+        current = {"events_todo": events.todo(cfg, f, "merged")}
+        self.assertEqual(events.first_due("OPT-1", "completed", current)["event"], "completed")
+
     def test_a_handler_is_a_command_or_a_named_skill(self):
         self.assertEqual(handlers(completed="./notify.sh done").event_handler("completed"),
                          {"kind": "command", "command": "./notify.sh done"})

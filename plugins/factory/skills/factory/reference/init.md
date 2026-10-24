@@ -36,8 +36,8 @@ asks their state, every event they have reached is due from the start — `claim
 and, with an open PR, `handed-off` — and a handler would claim or move a case that is already there.
 List each such job with its stage and the events state lists in `events_todo`, ask the developer
 which of them already happened (with `[jira] enabled = true` the old factory did the claim and the
-transitions itself), and record those with `F event log <id> <event> --detail "before events"` so
-they never run. Finished and cancelled jobs need nothing: without a log they are left alone.
+transitions itself), and record those, in the order state lists them, with `F event log <id> <event>
+--detail "before events"` so they never run. Finished and cancelled jobs need nothing: without a log they are left alone.
 
 ## 1. Create the runtime folder
 
