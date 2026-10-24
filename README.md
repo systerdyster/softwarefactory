@@ -294,8 +294,9 @@ the repo root (or `-s tests` from `skills/factory/bin`).
   and brief win over a skill's branch, push, PR, tracker and commit steps. `writer` replaces
   `[rules] wiki_guide`. A named skill that is missing stops the job for the developer.
 - **Intake reads the case and checks readiness the project's way.** `[intake] read` names the
-  project's skill for reading a case from its tracker (only its reading part: intake does the claim
-  and the plan), and `[intake] ready` its definition of ready, which intake checks the spec and plan
+  project's skill for reading a case from its tracker (only its reading part: intake does the plan,
+  and the orchestrator claims the case when it takes the job, so intake and a running orchestrator
+  can't both claim it), and `[intake] ready` its definition of ready, which intake checks the spec and plan
   against before the developer approves: each requirement met, settled, or recorded in `## Decided`
   as their choice to go ahead without it. The factory still owns the grill and the format of
   spec.md and plan.md, which every agent reads. `F intake` resolves both from the main checkout,

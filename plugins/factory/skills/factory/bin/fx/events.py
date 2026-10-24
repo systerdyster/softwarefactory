@@ -3,7 +3,8 @@ it in a tracker, post the test note — and the log that keeps each from running
 restart. The factory decides when an event happens; project.md's [events] decides what it means, as a
 shell command the CLI runs or a skill the session runs with its own tools.
 
-`claimed`, `completed` and `cancelled` happen once. `started`, `waiting` and `handed-off` happen when
+`claimed`, `completed` and `cancelled` happen once; `claimed` when the orchestrator takes the job, not
+at intake, so the two never both run it. `started`, `waiting` and `handed-off` happen when
 the job's phase differs from the last phase a handler ran for: a job sent back from waiting is started
 again once its `waiting` ran. A phase with no handler, or one that failed, leaves the last phase as it
 was, so the job returning to it runs nothing; a handler keeps a tracker in step, and the tracker
@@ -23,6 +24,7 @@ from .errors import FactoryError
 
 PHASE_OF_STAGE = {"building": "started", "reviewing": "started", "needs-human": "waiting", "pr-open": "handed-off"}
 PHASES = ("started", "waiting", "handed-off")
+UNCLAIMED = ("queued", "unknown", "cancelled")
 COMMAND_TIMEOUT = 300
 MAX_FAILURES = 3
 FAILED = "failed:"
@@ -77,7 +79,7 @@ def due(stage, entries):
     happened. A local merge hands the job off and completes it in one step."""
     done = _done(entries)
     events = []
-    if stage != "cancelled" and "claimed" not in done:
+    if stage not in UNCLAIMED and "claimed" not in done:
         events.append("claimed")
     last = next((e for e in reversed(done) if e in PHASES), None)
     phase = PHASE_OF_STAGE.get(stage)

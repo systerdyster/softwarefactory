@@ -15,9 +15,10 @@ def handlers(**over):
 
 
 class DueTest(unittest.TestCase):
-    def test_a_queued_job_is_claimed_once(self):
-        self.assertEqual(events.due("queued", []), ["claimed"])
-        self.assertEqual(events.due("queued", ["claimed"]), [])
+    def test_a_job_is_claimed_once_when_the_orchestrator_takes_it(self):
+        self.assertEqual(events.due("queued", []), [])
+        self.assertEqual(events.due("starting", []), ["claimed"])
+        self.assertEqual(events.due("starting", ["claimed"]), [])
 
     def test_a_phase_happens_each_time_the_job_enters_it(self):
         self.assertEqual(events.due("building", ["claimed"]), ["started"])
@@ -101,6 +102,7 @@ class RunTest(SandboxTest):
     def setUp(self):
         super().setUp()
         self.job = self.sb.queue_job()
+        queue.take(self.paths)
 
     def project(self, handler):
         self.paths.project.write_text(self.paths.project.read_text().replace(

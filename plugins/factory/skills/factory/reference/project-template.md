@@ -158,7 +158,7 @@ commits =
 ; FACTORY_PR and, at the first hand-off, FACTORY_TEST_NOTE), or skill:<name> [args] for a skill the
 ; session runs with its own tools (a tracker reached only through them), told the same as key=value.
 ; Handlers must be safe to run twice. e.g. started = skill:case-status In Progress
-; once the spec is approved at /factory add
+; once, when /factory run takes the job
 claimed =
 ; the phases run when the job's phase differs from the last one a handler ran for, so a phase
 ; with no handler, or a failed one, does not make the next return to the earlier phase run again
