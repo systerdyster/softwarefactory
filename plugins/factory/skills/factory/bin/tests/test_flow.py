@@ -326,7 +326,7 @@ class FlowTest(SandboxTest):
         self.assertIn("defaults/skills/review-code/SKILL.md", main)
         self.assertIn("You are the main Mage", main)
         own = "\n".join(brief.reviewer(self.paths, cfg, self.job, {}, {"round": 1}, "rules"))
-        self.assertIn(str(self.jd / "rulebook-rules.md"), own)
+        self.assertIn(str(self.jd / "rulebook-rules" / "SKILL.md"), own)
         self.assertNotIn("You are the main Mage", own)
         self.assertEqual(mages.models(self.paths, cfg, self.job, ["code", "rules"]), {"code": "opus", "rules": "opus"})
 
@@ -339,7 +339,17 @@ class FlowTest(SandboxTest):
         self.sb.commit("Soften the rules", cwd=self.sb.ws)
         cfg = self.schedule_round_one("rules", "rules = skill:review-rules")
         brief.reviewer(self.paths, cfg, self.job, {}, {"round": 1}, "rules")
-        self.assertIn("Be strict.", (self.jd / "rulebook-rules.md").read_text())
+        self.assertIn("Be strict.", (self.jd / "rulebook-rules" / "SKILL.md").read_text())
+
+    def test_a_mages_rulebook_brings_the_files_it_links_to(self):
+        self.sb.push_target_change(".claude/skills/review-rules/SKILL.md",
+                                   "---\nname: review-rules\n---\nCheck [the list](reference/checks.md).\n")
+        self.sb.push_target_change(".claude/skills/review-rules/reference/checks.md", "- No inline styles.\n")
+        self.cli("next", "--lease", self.lease)
+        self.cli("start", self.job)
+        cfg = self.schedule_round_one("rules", "rules = skill:review-rules")
+        brief.reviewer(self.paths, cfg, self.job, {}, {"round": 1}, "rules")
+        self.assertEqual((self.jd / "rulebook-rules" / "reference" / "checks.md").read_text(), "- No inline styles.\n")
 
     def test_a_mage_whose_skill_is_missing_stops_the_job_for_the_developer(self):
         self.cli("next", "--lease", self.lease)

@@ -4,9 +4,10 @@ project's or one of the factory's default review-<name> rulebooks (see skills.py
 
 A project's rulebook is read from the target branch, never from the job's branch: the builder writes
 anywhere in the worktree, and the change under review must not be able to rewrite the rules it is
-reviewed by. It is copied into the job folder, where only the factory writes, for the Mage to read."""
+reviewed by. Its folder is copied into the job folder, where only the factory writes, for the Mage to read."""
 
 import re
+import shutil
 
 from . import gitutil, jobs, skills
 from .config import REQUIRED_REVIEWERS
@@ -43,13 +44,14 @@ def _text(paths, cfg, job_id, name):
 
 def rulebook(paths, cfg, job_id, name):
     """The file the Mage reads: the factory's default in place, or the project's skill as the target has
-    it, copied into the job folder."""
-    text, default = _text(paths, cfg, job_id, name)
+    it — its whole folder, so the checklists SKILL.md links to come along — copied into the job folder."""
+    _, default = _text(paths, cfg, job_id, name)
     if default:
         return default
-    out = paths.job(job_id) / f"rulebook-{name}.md"
-    jobs.write_atomic(out, text)
-    return out
+    out = paths.job(job_id) / f"rulebook-{name}"
+    shutil.rmtree(out, ignore_errors=True)
+    gitutil.export(cfg.base_ref, f".claude/skills/{cfg.mages[name]['name']}", out, paths.root)
+    return out / "SKILL.md"
 
 
 def model(text):

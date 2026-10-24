@@ -276,7 +276,8 @@ the repo root (or `-s tests` from `skills/factory/bin`).
 - **Every reviewer is one agent, `factory-mage`, reviewing by a rulebook.** There was an agent per
   reviewer, with its rubric in the agent file, so a project's own review skill could only be read as
   a rule beside the factory's rubric. Now `[mages]` names each Mage and its rulebook: a skill of the
-  project's (read from the target branch and copied into the job folder: the builder writes anywhere
+  project's (its whole folder read from the target branch and copied into the job folder, so the
+  files SKILL.md links to come along: the builder writes anywhere
   in the worktree, and the change under review must not rewrite the rules it is reviewed by) or one of the factory's
   defaults, `defaults/skills/review-<name>`, used in place. The rulebook says what to look for; the
   review contract says how to report, and gives the main Mage its acceptance criteria, least-sure list

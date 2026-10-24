@@ -3,8 +3,10 @@
 GIT_OPTIONAL_LOCKS=0: reads such as `git status` would otherwise take index.lock to refresh the
 index, and a state read by the orchestrator or the dashboard would then fail an agent's commit."""
 
+import io
 import os
 import subprocess
+import tarfile
 from pathlib import Path
 
 from .errors import FactoryError
@@ -47,6 +49,18 @@ def show(ref, path, cwd):
     """A file's content at a ref, or None where the ref has no such file."""
     result = run(["show", f"{ref}:{path}"], cwd, check=False)
     return result.stdout if result.returncode == 0 else None
+
+
+def export(ref, path, dest, cwd):
+    """Writes the directory `path` as `ref` has it into `dest`, binary files too; False where the ref
+    has no such directory. Links that would leave `dest` are refused by tar's data filter."""
+    result = subprocess.run(["git", "archive", "--format=tar", f"{ref}:{path}"], cwd=str(cwd),
+                            capture_output=True, env=dict(os.environ, GIT_OPTIONAL_LOCKS="0"))
+    if result.returncode != 0:
+        return False
+    with tarfile.open(fileobj=io.BytesIO(result.stdout)) as archive:
+        archive.extractall(dest, filter="data")
+    return True
 
 
 def hash_file(path, cwd):
