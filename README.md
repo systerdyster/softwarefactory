@@ -444,44 +444,6 @@ the repo root (or `-s tests` from `skills/factory/bin`).
   it reads the queue and jobs without an orchestrator, and its header says so: what you decide there
   is kept, but nothing is built and a cancel waits until the next run.
 
-## Proven, and not yet
-
-Proven by the tests and by a scratch install: every script, the state machine, one job end to end
-through the CLI (queue → builder → verify red on lint → builder → verify green → tidy → verify green →
-numbered BLOCKING review → merged findings → fix round → review →
-human approval → rebase onto a moved target → PR → merged → cleaned up), the guard against a real hook invocation, the dashboard's
-token/host/origin/path checks, `init-files`, `allowlist`, and Codex detection against
-the installed CLI (0.153.4).
-
-**Run for real** on a production web project (jobs 001–003, 2026-10-21/22, Azure DevOps, three PRs
-merged): `/factory run` spawning the agents, the plugin hook with real `agent_type` values,
-agents bound to their runs through the Agent call's `agentId` (it is the hooks' `agent_id`),
-parallel reviewers, the tidy pass, an objection going to the developer, rework, `az` PR create and
-status, and a merge moving the target.
-
-Jobs 005–007 (2026-10-22/23, same project): two builders working at the same moment from separate
-worktrees, the question/answer flow, verify and the developer's approval, all with real agents.
-Jobs 006 and 007 were then merged by the developer; Codex's review of the run is what found the
-first merge detection finishing a PR on the content match alone, and that findings and an unrendered
-UI/UX pass never reached the approval (all three fixed since).
-
-**Not yet run for real** — each is proven on a real job before it is relied on:
-
-- More than two jobs at once; two `pnpm install`s in parallel; the project's dev server and browser
-  tests honouring `$FACTORY_PORT` / `$FACTORY_OUTPUT`.
-- The live dashboard pipeline, `F wait` keeping a run alive, and the merge detection in `F wait`.
-- The approval view's test note field, *Publish PR with autocomplete* against a real Azure DevOps PR, and
-  whether the orchestrator is allowed to run it (auto mode once blocked `az repos pr update`).
-- `local-merge` in a real checkout (`F merge` with `git merge --no-ff`, a project's commit hooks, `remote =
-  none` with a local target ahead of origin), and its hand-off event.
-- The wiki agent with a real agent: whether it follows a project's own wiki conventions, and the whole
-  chain review → wiki → approve → rebase → PR.
-- `gh` PR calls and `auto-merge`; comments via `az devops invoke`.
-- A real `codex exec` review (detection is verified; the call sends code to OpenAI, so it waits for a
-  project that has enabled it).
-- Event handlers: a command and a skill run by a real orchestrator, and the default `case-status` skill
-  against a real Jira (claim, transitions, the hand-off test note).
-
 ## Gotchas
 
 - Each job's worktree is a full repo copy at `factory/workspaces/<id>/` inside the checkout. Tools that read
