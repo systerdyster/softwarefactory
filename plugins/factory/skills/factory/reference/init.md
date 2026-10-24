@@ -15,6 +15,22 @@ Re-running init on a configured repo is safe: show what exists, and change only 
 When project.md lacks a section the template has (an older init), go through that section's questions
 and add it.
 
+**A project.md from an older factory** is refused by every `F` command, naming the old settings. Then
+propose the new form below — keeping every value the developer chose — show the whole changed
+configuration block, and write it only once they approve it:
+
+| Old | New |
+|---|---|
+| `[jira]`, `enabled = true` | `[events]`, with the factory's default `case-status` skill: `claimed = skill:case-status --assign <claimed>`, `started = skill:case-status <building>`, `waiting = skill:case-status <needs-human>`, `handed-off = skill:case-status <pr-open>`, `completed = skill:case-status <merged>`, `cancelled = skill:case-status --unassign <cancelled>`. A status left empty leaves the event empty, except `--assign` and `--unassign`, which stand alone. The developer copies `<plugin>/defaults/skills/case-status/` into `.claude/skills/` (or names a skill of their own); without it the handler stops the job. |
+| `[jira]`, `enabled = false` | `[events]` with every event empty. |
+| `[reviewers] enabled = <names>` | `[mages]`: `code`, `security`, `performance` and `stability` as `default:<name>`, plus `default:<name>` for each listed one, `codex = codex` for codex. Then offer the project's own review skills (**Mages** below). `[reviewers] commands` stays. |
+| `[rules] wiki_guide = <path>` | `[heroes] writer = skill:<name>` when the path is `.claude/skills/<name>/SKILL.md`; otherwise ask which skill the wiki pass should follow. |
+| `[handoff] jira_link`, `jira_url` | `case_link`, `case_url`, same values. |
+
+Then go through **Heroes** below for `[heroes]`, which an older project.md lacks: before, every agent
+read all of the project's skills as rules; now only the ones named there and in `[mages]` reach an
+agent.
+
 ## 1. Create the runtime folder
 
 `F init-files` creates `factory/` (jobs, inbox, logs), a `project.md` from the template, `backlog.md`,

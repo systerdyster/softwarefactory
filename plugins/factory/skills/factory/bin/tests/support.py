@@ -40,8 +40,14 @@ echo = echo
 setup = echo setup >> setup.log
 lockfiles = deps.lock
 
+[mages]
+code = default:code
+security = default:security
+performance = default:performance
+stability = default:stability
+{mages}
+
 [reviewers]
-enabled = {enabled}
 
 [paths]
 ui = src/components/**, *.scss
@@ -72,7 +78,7 @@ def git(cwd, *args, check=True):
 
 
 class Sandbox:
-    def __init__(self, merge_mode="pr", enabled=""):
+    def __init__(self, merge_mode="pr", mages=""):
         self.tmp = Path(tempfile.mkdtemp(prefix="factory-test-")).resolve()
         self.origin = self.tmp / "origin.git"
         self.root = self.tmp / "repo"
@@ -89,7 +95,7 @@ class Sandbox:
         git(self.root, "push", "-u", "origin", "main")
         self.paths = Paths(self.root)
         self.paths.factory.mkdir()
-        self.paths.project.write_text(PROJECT.format(merge_mode=merge_mode, enabled=enabled), encoding="utf-8")
+        self.paths.project.write_text(PROJECT.format(merge_mode=merge_mode, mages=mages), encoding="utf-8")
         self.cfg = config.load(self.paths)
 
     def cleanup(self):
@@ -139,10 +145,10 @@ class Sandbox:
 
 class SandboxTest(unittest.TestCase):
     merge_mode = "pr"
-    enabled = ""
+    mages = ""
 
     def setUp(self):
-        self.sb = Sandbox(self.merge_mode, self.enabled)
+        self.sb = Sandbox(self.merge_mode, self.mages)
         self.paths, self.cfg = self.sb.paths, self.sb.cfg
 
     def tearDown(self):

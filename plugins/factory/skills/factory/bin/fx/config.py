@@ -7,12 +7,14 @@ import re
 from .errors import FactoryError
 
 REQUIRED_REVIEWERS = ["code"]
-SPECIALISTS = ["security", "performance", "stability"]
-OPTIONAL_REVIEWERS = ["platform", "ux", "ui", "codex"]
 MERGE_MODES = ["pr", "local-merge", "auto-merge"]
 PR_TOOLS = ["gh", "az", "other"]
 CASE_LINKS = ["title", "body", "both", "none"]
 HEROES = ["coder", "scout", "writer"]
+# Settings an older factory read; refused rather than ignored, so a project is never half configured.
+# reference/init.md has what each became.
+LEGACY = {("jira", None): "[events]", ("reviewers", "enabled"): "[mages]", ("rules", "wiki_guide"): "[heroes] writer",
+          ("handoff", "jira_link"): "case_link", ("handoff", "jira_url"): "case_url"}
 EVENTS = ["claimed", "started", "waiting", "handed-off", "completed", "cancelled"]
 BRANCH_FIELDS = {"id", "key", "slug"}
 DEFAULT_COMMITS = ("Subject imperative and short, no trailing period (`Add user profile route`, not `Added …` or a "
@@ -174,17 +176,10 @@ class Config:
         """Every Mage that may review, name → the rulebook it reviews by: `skill:<name>` (a skill of the
         project's), `default:<name>` (the factory's defaults/skills/review-<name>) or `codex` (the Codex
         CLI). `code` is the main Mage and reviews every job; which others a round runs is schedule's
-        call. Without [mages]: the factory's defaults for code, security, performance and stability,
-        and for the optional ones [reviewers] enabled lists."""
-        if self._p.has_section("mages") and self._p.items("mages"):
-            result = {name: _rulebook(name, value.strip()) for name, value in self._p.items("mages")}
-        else:
-            listed = self.getlist("reviewers", "enabled")
-            unknown = [r for r in listed if r not in REQUIRED_REVIEWERS + SPECIALISTS + OPTIONAL_REVIEWERS]
-            if unknown:
-                raise FactoryError(f"project.md: unknown reviewers in [reviewers] enabled: {unknown}")
-            names = REQUIRED_REVIEWERS + SPECIALISTS + [r for r in OPTIONAL_REVIEWERS if r in listed]
-            result = {name: _rulebook(name, "codex" if name == "codex" else f"default:{name}") for name in names}
+        call."""
+        if not self._p.has_section("mages"):
+            raise FactoryError("project.md has no [mages]; run /factory init to add it")
+        result = {name: _rulebook(name, value.strip()) for name, value in self._p.items("mages")}
         missing = [r for r in REQUIRED_REVIEWERS if r not in result]
         if missing:
             raise FactoryError(f"project.md: [mages] needs {missing[0]}, the main Mage that reviews every job")
@@ -220,11 +215,6 @@ class Config:
     def wiki_external(self):
         """Wikis that live in other repos: named in the wiki agent's report, never edited."""
         return self.getlist("rules", "wiki_external")
-
-    @property
-    def wiki_guide(self):
-        """The project's own wiki conventions (a file in the repo) that the wiki agent follows, if any."""
-        return self.get("rules", "wiki_guide")
 
     def path_patterns(self, reviewer):
         return self.getlist("paths", reviewer)
@@ -342,6 +332,11 @@ def parse_text(text):
         parser.read_string(match.group(1))
     except configparser.Error as e:
         raise FactoryError(f"project.md configuration block does not parse: {e}")
+    old = [(f"[{s}] {k}" if k else f"[{s}]") + f" → {new}" for (s, k), new in LEGACY.items()
+           if (parser.has_option(s, k) if k else parser.has_section(s))]
+    if old:
+        raise FactoryError(f"project.md is from an older factory ({', '.join(old)}); run /factory init, which "
+                           "proposes the new form for you to approve")
     return Config(parser)
 
 

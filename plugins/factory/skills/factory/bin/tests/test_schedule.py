@@ -38,7 +38,7 @@ class DecideTest(unittest.TestCase):
 
 
 class ScheduleFileTest(SandboxTest):
-    enabled = "ui"
+    mages = "ui = default:ui"
 
     def test_writes_scheduled_md_with_head_base_and_the_plans_specialists(self):
         job = self.sb.queue_job()

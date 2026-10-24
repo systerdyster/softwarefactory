@@ -17,14 +17,20 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(cfg.merge_mode, "pr")
         self.assertEqual(cfg.max_rounds, 3)
         self.assertEqual(cfg.base_ref, "origin/main")
-        self.assertEqual(list(cfg.mages), ["code", "security", "performance", "stability"])
-        self.assertEqual(cfg.mages["security"], {"kind": "default", "name": "security"})
         self.assertEqual((cfg.reviewer_commands, cfg.docs), ([], []))
 
-    def test_without_mages_the_optional_reviewers_keep_a_fixed_order_and_codex_is_off_unless_listed(self):
-        cfg = parse("[reviewers]\nenabled = codex, ui")
-        self.assertEqual(list(cfg.mages), ["code", "security", "performance", "stability", "ui", "codex"])
-        self.assertEqual(cfg.mages["codex"], {"kind": "codex"})
+    def test_a_project_without_mages_is_sent_to_init(self):
+        with self.assertRaisesRegex(FactoryError, "no \\[mages\\]; run /factory init"):
+            parse("[factory]\n").mages
+
+    def test_settings_of_an_older_factory_are_refused_with_what_they_became(self):
+        for body, became in (("[jira]\nenabled = true", "[jira] → [events]"),
+                             ("[reviewers]\nenabled = ui", "[reviewers] enabled → [mages]"),
+                             ("[rules]\nwiki_guide = Wiki/Rules.md", "[rules] wiki_guide → [heroes] writer"),
+                             ("[handoff]\njira_link = body", "[handoff] jira_link → case_link")):
+            with self.assertRaisesRegex(FactoryError, "/factory init", msg=body) as caught:
+                parse(body)
+            self.assertIn(became, str(caught.exception))
 
     def test_mages_name_their_rulebook_and_the_project_picks_them(self):
         cfg = parse("[mages]\ncode = skill:code-review\na11y = default:ux\ncodex = codex")
@@ -73,10 +79,9 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual((cfg.docs, cfg.reviewer_commands), (["Wiki/*.md", "docs/adr/**"], ["test-components"]))
 
     def test_the_wiki_settings_are_read_and_empty_means_no_wiki_agent(self):
-        cfg = parse("[rules]\nwiki = Wiki/*.md, docs/**/*.md\nwiki_external = Project.wiki\nwiki_guide = Wiki/Rules.md")
-        self.assertEqual((cfg.wiki_globs, cfg.wiki_external, cfg.wiki_guide),
-                         (["Wiki/*.md", "docs/**/*.md"], ["Project.wiki"], "Wiki/Rules.md"))
-        self.assertEqual((parse("[rules]\n").wiki_globs, parse("[rules]\n").wiki_guide), ([], None))
+        cfg = parse("[rules]\nwiki = Wiki/*.md, docs/**/*.md\nwiki_external = Project.wiki")
+        self.assertEqual((cfg.wiki_globs, cfg.wiki_external), (["Wiki/*.md", "docs/**/*.md"], ["Project.wiki"]))
+        self.assertEqual(parse("[rules]\n").wiki_globs, [])
 
     def test_the_test_note_follows_the_pr_language_unless_it_has_its_own(self):
         self.assertEqual(parse("[handoff]\nlanguage = sv").test_note_language, "sv")
@@ -88,10 +93,6 @@ class ConfigTest(unittest.TestCase):
                                ("[factory]\npr_tool = other", "approve"),
                                ("[factory]\npr_tool = az\nmerge_mode = local-merge", "merge")):
             self.assertEqual(story.publish_choice(parse(body)), expected, body)
-
-    def test_unknown_reviewer_is_refused(self):
-        with self.assertRaises(FactoryError):
-            parse("[reviewers]\nenabled = vibes").mages
 
     def test_unknown_merge_mode_is_refused(self):
         with self.assertRaises(FactoryError):

@@ -282,8 +282,7 @@ the repo root (or `-s tests` from `skills/factory/bin`).
   and confidence line whatever its rulebook. The rulebook's `model:` front matter picks the model
   (`next.models`). Since the agent no longer says which reviewer it is, the guard takes a Mage's role
   from the run its brief reserved; before the run is attached it may read, and write nothing. A
-  rulebook that is missing stops the job for the developer. Without `[mages]`, `[reviewers] enabled`
-  still picks the defaults, until init rewrites project.md.
+  rulebook that is missing stops the job for the developer.
 - **An agent gets the skills it is given, not all of them.** Every brief used to list every skill in
   the project as a rule, so a builder read release and hotfix procedures beside the craft skills it
   needed. Now `[heroes]` names the skills the builder (`coder`), the tidy pass (`scout`) and the wiki
@@ -291,8 +290,12 @@ the repo root (or `-s tests` from `skills/factory/bin`).
   `[rules] docs`) still reach everyone. A skill was written for a person working on a case, so the
   brief scopes it to the job — its diff stands in for a git range or a release — and the agent file
   and brief win over a skill's branch, push, PR, tracker and commit steps. `writer` replaces
-  `[rules] wiki_guide`, which is read only when `writer` is empty. A named skill that is missing stops
-  the job for the developer.
+  `[rules] wiki_guide`. A named skill that is missing stops the job for the developer.
+- **An older project.md is refused, not half read.** `[jira]`, `[reviewers] enabled`, `[rules]
+  wiki_guide` and `[handoff] jira_link`/`jira_url` stop every command with what each became, and
+  `/factory init` proposes the new form for the developer to approve (init.md has the table). No code
+  translates them: it is a one-off for a handful of projects, and a fallback that read the old keys
+  would have to live as long as the oldest unmigrated project.
 - **Agents run project commands through `factory-cli ws run <job> <name>`**, named in project.md's
   `[commands]`, so one allowlist rule (`Bash(factory-cli:*)`) covers every project's build, lint and
   test without listing free-form shell, and it does not change between plugin versions.

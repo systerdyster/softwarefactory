@@ -7,7 +7,7 @@ from support import SandboxTest, git
 
 from fx import actions, brief, config, pr, queue, state, workspace
 
-WIKI_RULES = "[rules]\nwiki = Wiki/*.md\nwiki_external = Project.wiki\nwiki_guide = Wiki/Conventions.md\n\n"
+WIKI_RULES = "[rules]\nwiki = Wiki/*.md\nwiki_external = Project.wiki\n\n"
 
 
 class WikiTest(SandboxTest):
@@ -57,20 +57,19 @@ class WikiTest(SandboxTest):
         facts = self.facts()
         self.assertEqual((facts["round"], facts["status"], facts["attempts"]), (2, None, 0))
 
-    def test_the_brief_lists_the_pages_the_guide_the_other_wikis_and_the_rounds_report(self):
+    def test_the_brief_lists_the_pages_the_other_wikis_and_the_rounds_report(self):
         text = "\n".join(brief.wiki(self.paths, self.cfg, self.job, {"head": self.reviewed}, {"round": 1}))
         for expected in ("Wiki/Page.md", "Wiki/Conventions.md", "Project.wiki", "may not create, rename or delete",
                          str(self.jd / "round-1" / "wiki.md")):
             self.assertIn(expected, text)
 
-    def test_the_writers_skills_replace_the_wiki_guide(self):
+    def test_the_writer_follows_the_projects_wiki_skills(self):
         self.sb.write(".claude/skills/wiki-sync/SKILL.md", "---\nname: wiki-sync\n---\n# Sync\n", base=self.sb.ws)
         self.paths.project.write_text(self.paths.project.read_text().replace(
             "[events]", "[heroes]\nwriter = skill:wiki-sync\n\n[events]"), encoding="utf-8")
         cfg = config.load(self.paths)
         text = "\n".join(brief.wiki(self.paths, cfg, self.job, {"head": self.reviewed}, {"round": 1}))
         self.assertIn(str(self.sb.ws / ".claude/skills/wiki-sync/SKILL.md"), text)
-        self.assertNotIn("The project's own wiki conventions", text)
 
     def test_the_comment_carries_the_wiki_report_or_says_it_was_not_updated(self):
         self.assertIn("The wiki was not updated", pr.details(self.paths, self.cfg, self.job))

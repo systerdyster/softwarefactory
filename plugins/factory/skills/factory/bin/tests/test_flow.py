@@ -295,7 +295,7 @@ class FlowTest(SandboxTest):
 
     def with_mages(self, mages="", commands=""):
         self.paths.project.write_text(self.paths.project.read_text().replace(
-            "[reviewers]\n", f"[mages]\ncode = default:code\n{mages}\n\n[reviewers]\ncommands = {commands}\n"),
+            "[mages]\n", f"[mages]\n{mages}\n").replace("[reviewers]\n", f"[reviewers]\ncommands = {commands}\n"),
             encoding="utf-8")
         return config.load(self.paths)
 

@@ -189,11 +189,7 @@ def wiki(paths, cfg, job_id, s, nxt):
     if len(pages) > 200:
         lines += [f"- … and {len(pages) - 200} more"]
     lines += [""]
-    writer = _hero_skills(paths, cfg, job_id, "writer", base, head)
-    lines += writer
-    if cfg.wiki_guide and not writer:
-        lines += [f"The project's own wiki conventions are the rules for how you write: {ws / cfg.wiki_guide}. "
-                  "Where they are a procedure for a person, follow the parts that apply to editing existing pages.", ""]
+    lines += _hero_skills(paths, cfg, job_id, "writer", base, head)
     if cfg.wiki_external:
         lines += [f"Wikis in other repos that you may not edit: {', '.join(cfg.wiki_external)}. If the change affects "
                   "what one of them describes, say which and what, in your report.", ""]
