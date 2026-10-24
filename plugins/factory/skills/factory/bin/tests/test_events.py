@@ -44,6 +44,13 @@ class DueTest(unittest.TestCase):
         f["events_log"] += ["waiting", "failed:started"]
         self.assertEqual([t["event"] for t in events.todo(cfg, f, "building")], ["started"])
 
+    def test_another_handler_running_never_revives_one_given_up(self):
+        cfg = handlers(claimed="skill:case-status claim", started="skill:case-status In Progress")
+        f = base_facts(events_log=["failed:claimed"] * events.MAX_FAILURES + ["started"])
+        self.assertEqual((events.todo(cfg, f, "building"), events.given_up(cfg, f, "building")), ([], ["claimed"]))
+        f["events_log"] = ["claimed", "failed:started", "failed:started", "failed:started", "handed-off"]
+        self.assertEqual(events.given_up(cfg, f, "building"), [])
+
     def test_a_local_merge_hands_off_and_completes_in_one_step(self):
         self.assertEqual(events.due("merged", ["claimed", "started", "waiting", "started"]), ["handed-off", "completed"])
 

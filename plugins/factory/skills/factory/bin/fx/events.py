@@ -8,8 +8,9 @@ time the job enters that phase: a job sent back from waiting is started again. T
 steps after the developer approved — rebasing, merging, retrying a blocked merge — start nothing, so
 a case in review is not moved back and forth each time the target moves.
 
-A handler that fails is logged as failed and due again, up to MAX_FAILURES times for the same entry
-into a phase; then it is given up, and state reports it instead of running it on every step."""
+A handler that fails is logged as failed and due again, up to MAX_FAILURES times in all, or for a phase
+for the same entry into it; then it is given up, and state reports it instead of running it on every
+step."""
 
 import os
 import subprocess
@@ -45,12 +46,13 @@ def _done(entries):
 
 
 def failures(entries, event):
-    """How often `event` failed since a handler last ran for this job."""
+    """How often `event` failed: a once-only event over the job's whole log, a phase since the job last
+    entered a phase, so another event's handler running never revives one given up."""
     count = 0
     for entry in reversed(entries):
         if entry == FAILED + event:
             count += 1
-        elif not entry.startswith(FAILED):
+        elif event in PHASES and entry in PHASES:
             break
     return count
 
