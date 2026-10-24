@@ -291,6 +291,13 @@ the repo root (or `-s tests` from `skills/factory/bin`).
   brief scopes it to the job — its diff stands in for a git range or a release — and the agent file
   and brief win over a skill's branch, push, PR, tracker and commit steps. `writer` replaces
   `[rules] wiki_guide`. A named skill that is missing stops the job for the developer.
+- **Intake reads the case and checks readiness the project's way.** `[intake] read` names the
+  project's skill for reading a case from its tracker (only its reading part: intake does the claim
+  and the plan), and `[intake] ready` its definition of ready, which intake checks the spec and plan
+  against before the developer approves: each requirement met, settled, or recorded in `## Decided`
+  as their choice to go ahead without it. The factory still owns the grill and the format of
+  spec.md and plan.md, which every agent reads. `F intake` resolves both from the main checkout,
+  since no worktree exists yet.
 - **An older project.md is refused, not half read.** `[jira]`, `[reviewers] enabled`, `[rules]
   wiki_guide` and `[handoff] jira_link`/`jira_url` stop every command with what each became, and
   `/factory init` proposes the new form for the developer to approve (init.md has the table). No code

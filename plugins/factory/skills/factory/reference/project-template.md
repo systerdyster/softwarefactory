@@ -91,6 +91,13 @@ wiki =
 ; wikis in other repos that a change may affect: named in the agent's report, never edited
 wiki_external =
 
+[intake]
+; the project's part of /factory add, each skill:<a skill in .claude/skills> or default:<name>; empty = none.
+; read: the skill that reads a case from the tracker by its key (the session's own tools without it).
+read =
+; ready: the project's definition of ready — what a case must settle before it is queued.
+ready =
+
 [heroes]
 ; the skills each hero follows beside its own method, comma-separated: skill:<a skill in .claude/skills>
 ; or default:<the factory's defaults/skills/<name>>. Only these reach the agent; the project's other

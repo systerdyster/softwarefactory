@@ -97,6 +97,13 @@ section of `factory/project.md`:
   developer approves the pages with the change. It lists in the PR comment what it changed and what
   pages or other wikis it thinks are missing. Nothing in the wiki is reviewed by the reviewers. Leave
   `wiki` empty for a project without a wiki in the repo.
+- **Intake** — `[intake]`: `read`, a skill of the project's that reads a case from its tracker by key
+  (a `jira-review` or `analyze-case`), and `ready`, a skill holding the definition of ready — what
+  the team requires a case to settle before work starts. Look for both in `.claude/skills/` and the
+  rule files. A definition written elsewhere (a wiki page) needs a small skill that points to it;
+  offer to write one with the developer. When nothing is written down, ask what makes a case ready
+  here, and offer to leave `ready` empty (the factory's own intake still asks for a problem, acceptance criteria, a
+  design and a plan).
 - **Heroes** — `[heroes]`: which of the project's skills the builder (`coder`), the tidy pass
   (`scout`) and the wiki pass (`writer`) follow — craft skills such as `tdd`, `add-component`,
   `commit`, `wiki-sync`. Only the skills named here or in `[mages]` reach an agent; a procedure for

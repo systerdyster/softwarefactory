@@ -196,6 +196,14 @@ class Config:
         return {h: [_skill_ref(f"[heroes] {h}", v) for v in self.getlist("heroes", h)] for h in HEROES}
 
     @property
+    def intake(self):
+        """The project's part of /factory add, from [intake]: `read`, the skill that reads a case from its
+        tracker by key, and `ready`, the skill holding the project's definition of ready. Each a
+        skill:<name> or default:<name>, or None."""
+        return {key: _skill_ref(f"[intake] {key}", self.get("intake", key)) if self.get("intake", key) else None
+                for key in ("read", "ready")}
+
+    @property
     def reviewer_commands(self):
         """Project commands reviewers may run, e.g. the browser tests that render components."""
         return self.getlist("reviewers", "commands")

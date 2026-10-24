@@ -44,6 +44,12 @@ class ConfigTest(unittest.TestCase):
                                       "scout": [], "writer": [{"kind": "default", "name": "wiki-style"}]})
         self.assertEqual(parse("[factory]\n").heroes, {"coder": [], "scout": [], "writer": []})
 
+    def test_intake_names_a_case_reader_and_a_definition_of_ready_or_nothing(self):
+        cfg = parse("[intake]\nread = skill:jira-review\nready =")
+        self.assertEqual(cfg.intake, {"read": {"kind": "skill", "name": "jira-review"}, "ready": None})
+        with self.assertRaises(FactoryError):
+            parse("[intake]\nready = definition-of-ready.md").intake
+
     def test_heroes_are_the_three_and_name_their_skills(self):
         for body in ("[heroes]\nmage = skill:code-review", "[heroes]\ncoder = tdd"):
             with self.assertRaises(FactoryError, msg=body):

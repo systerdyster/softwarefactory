@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from fx import actions, board, brief, codex, config, events, findings, guard, jobs, pr, queue, runs, schedule, setup, workspace  # noqa: E402
+from fx import actions, board, brief, codex, config, events, findings, guard, jobs, pr, queue, runs, schedule, setup, skills, workspace  # noqa: E402
 from fx import state as state_mod  # noqa: E402
 from fx.errors import Fallback, FactoryError  # noqa: E402
 from fx.paths import Paths  # noqa: E402
@@ -257,6 +257,10 @@ def cmd_init_files(a, p):
     return setup.init_files(p)
 
 
+def cmd_intake(a, p):
+    return skills.intake(p, _cfg(p))
+
+
 def cmd_allowlist(a, p):
     return setup.allowlist(p, None, write=a.write)
 
@@ -373,6 +377,7 @@ def parser():
     sp.add_argument("event", choices=config.EVENTS)
     sp.add_argument("--detail")
     add("init-files", cmd_init_files, "create factory/, project.md template, backlog.md, local exclude entry")
+    add("intake", cmd_intake, "the project's skills for /factory add: the case reader and the definition of ready")
     add("allowlist", cmd_allowlist, "propose (or --write) the permission allowlist").add_argument("--write", action="store_true")
     add("guard", cmd_guard, "PreToolUse hook for factory agents").add_argument("role")
     return ap
