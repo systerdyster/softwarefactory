@@ -64,7 +64,8 @@ Repeat:
 4. **Act** — for **each** job in `jobs`, ask `F state <id>` and perform its `next.action` from the
    table below, then its **Events**. Spawn agents in the background, so one job's agents run
    while you act on the others; when an agent returns, ask that job's state again. Never let one job
-   wait on another.
+   wait on another. For each job in `events` — finished or cancelled, with a handler still due — ask
+   `F state <id>` and run its **Events**.
 5. **Board** — `F board`.
 
 ### Actions
@@ -216,8 +217,9 @@ lists the handlers due now in `events_todo`, in order; run each before the next:
 
 A logged event never runs again, also after a restart. A handler that fails holds no job: it is due
 again, and after three failures state stops listing it and names it in `events_given_up` — report
-that once, with the reason from events.md, and go on. After `finish` and `cancel` the job leaves the loop, so ask its state once more for its last
-events. The test note a hand-off carries is the developer's approved text; a handler posts it as it is.
+that once, with the reason from events.md, and go on. After `finish` and `cancel` the job leaves the
+loop, so ask its state once more for its last events; one that fails or is cut off by a restart comes
+back in `F next`'s `events` until it has run or been given up. The test note a hand-off carries is the developer's approved text; a handler posts it as it is.
 
 ## Report
 

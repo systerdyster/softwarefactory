@@ -7,7 +7,7 @@ import secrets
 import subprocess
 from datetime import datetime
 
-from . import gitutil, jobs, pr as pr_mod, queue, runs, state as state_mod, workspace
+from . import events, gitutil, jobs, pr as pr_mod, queue, runs, state as state_mod, workspace
 from .errors import Conflict, FactoryError
 from .paths import branch_name
 
@@ -205,6 +205,7 @@ def cleanup(paths, cfg, job_id, discard=False):
     result["runs_aborted"] = runs.abort_job(paths, job_id, "the job was finished or cancelled")
     result["runs_pruned"] = len(runs.prune(paths))
     jobs.write_json(paths.job(job_id) / "cleanup.json", {**result, "at": jobs.now(), "discard": discard})
+    events.open_log(paths, job_id)
     return result
 
 
@@ -344,8 +345,9 @@ def next_job(paths, cfg, lease):
     blocked = [{"id": e["id"], "after": queue.blocked_by(paths, e["id"], statuses)} for e in queue.entries(paths)
                if e["status"] == "queued" and queue.blocked_by(paths, e["id"], statuses)]
     result = {"jobs": active + new, "taken": new, "waiting_for_slot": [j for j in running if j not in active],
-              "waiting": waiting, "blocked": blocked, "slots": cfg.parallel}
-    if result["jobs"]:
+              "waiting": waiting, "blocked": blocked, "slots": cfg.parallel,
+              "events": events.unfinished(paths, cfg, queue.entries(paths))}
+    if result["jobs"] or result["events"]:
         return {**result, "action": "work"}
     if paths.stop_flag.exists():
         return {**result, "action": "stop", "reason": "/factory stop was requested"}

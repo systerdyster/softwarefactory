@@ -33,11 +33,23 @@ def logged(paths, job_id):
     return [line.split()[2] for line in text.splitlines() if line.startswith("- ") and len(line.split()) >= 3]
 
 
+def _header(job_id):
+    return f"# Events — {job_id}\n\n"
+
+
 def log(paths, job_id, event, detail=""):
     path = paths.job(job_id) / "events.md"
-    text = jobs.read(path) or f"# Events — {job_id}\n\n"
+    text = jobs.read(path) or _header(job_id)
     jobs.write_atomic(path, text + f"- {jobs.now()} {event} {detail}".rstrip() + "\n")
     return {"logged": event}
+
+
+def open_log(paths, job_id):
+    """Marks a job finished or cancelled by this factory as one whose last events `next` still runs; a
+    job finished before events existed has no log and is left alone."""
+    path = paths.job(job_id) / "events.md"
+    if not path.exists():
+        jobs.write_atomic(path, _header(job_id))
 
 
 def log_failure(paths, job_id, event, why):
@@ -116,6 +128,20 @@ def todo(cfg, f, stage):
         if handler["kind"] == "skill":
             item["skill_args"] = " ".join([handler["args"]] + [_pair(k, v) for k, v in facts.items()]).strip()
         result.append(item)
+    return result
+
+
+def unfinished(paths, cfg, entries):
+    """The finished and cancelled jobs with a handler still due. They have left the loop, so `next`
+    lists them until each has run or been given up — also after a failure or a restart."""
+    result = []
+    for e in entries:
+        if e["status"] not in ("done", "cancelled") or not (paths.job(e["id"]) / "events.md").exists():
+            continue
+        entries_logged = logged(paths, e["id"])
+        if any(cfg.event_handler(event) and failures(entries_logged, event) < MAX_FAILURES
+               for event in due(e["status"], entries_logged)):
+            result.append(e["id"])
     return result
 
 

@@ -5,7 +5,7 @@ import unittest
 from support import SandboxTest
 from test_state import base_facts
 
-from fx import config, events, state
+from fx import actions, config, events, pr, queue, state
 from fx.errors import FactoryError
 
 
@@ -127,6 +127,21 @@ class RunTest(SandboxTest):
         current = self.current()
         self.assertEqual((current["events_todo"], current["events_given_up"]), ([], ["claimed"]))
         self.assertIn("failed:claimed exited 4: no such status", (self.paths.job(self.job) / "events.md").read_text())
+
+    def test_a_cancelled_jobs_failed_handler_keeps_the_run_going_until_given_up(self):
+        self.paths.project.write_text(self.paths.project.read_text().replace(
+            "[events]\n", "[events]\ncancelled = exit 3\n"), encoding="utf-8")
+        self.cfg = config.load(self.paths)
+        self.sb.queue_job("002-before-events", "Finished before events existed")
+        queue.mark(self.paths, "002-before-events", "cancelled")
+        lease = actions.acquire_lease(self.paths)["lease"]
+        actions.cancel(self.paths, self.cfg, self.job, "not needed", pr)
+        for _ in range(events.MAX_FAILURES):
+            result = actions.next_job(self.paths, self.cfg, lease)
+            self.assertEqual((result["action"], result["events"]), ("work", [self.job]))
+            with self.assertRaises(FactoryError):
+                events.run(self.paths, self.cfg, self.job, "cancelled", self.current())
+        self.assertEqual(actions.next_job(self.paths, self.cfg, lease)["action"], "idle")
 
     def test_a_skill_is_the_sessions_to_run(self):
         self.project("skill:case-status claim")
