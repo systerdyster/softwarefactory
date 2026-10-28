@@ -156,7 +156,7 @@ architecture and component pages) are rules every brief lists.
 
 ### The dashboard
 
-![The dashboard: the village above, job cards in three columns, the queue and finished jobs to the right](docs/images/dashboard.png)
+![The dashboard: the tavern's sign and window, the board with five columns in process order, and the hall of fame's monthly piles below](docs/images/dashboard.png)
 
 Opening a job shows what happened round by round, what you decide, and only the buttons that fit:
 
@@ -165,19 +165,22 @@ Opening a job shows what happened round by round, what you decide, and only the 
 *Screenshots show invented demo jobs, not a real project.*
 
 `/factory run` starts it and gives its URL (127.0.0.1, with a token); one runs per project, and a
-second start links to it. Each job is a card in one of three columns — needs you, in progress,
-waiting for merge — with its status, the running agent's time, and the agents working on it drawn as
-pixel-art figures with their state: hammering, reading, cheering a pass, stamping at a blocking
-finding, or a herald holding up what waits for you. The queue and the finished jobs sit in a column
-of their own. Opening a job shows a few lines of what has happened, round by round, then what to
-decide and only the buttons that answer it. The header says when no orchestrator is running, since
-your commands then wait for the next run.
+second start links to it. It is a tavern: quests are notes pinned to its board, in five columns in
+the order a job runs — the quest board (queued), the forge (build, verify, tidy), the mages (review,
+wiki), back at the tavern (waiting for your approval) and the approved pile (PR, rebase, merge). A
+question or a stop keeps the note in the column where it came up, marked for you. Each note has its
+status, the running agent's time, and whoever works on the job now as a figure — the builder, the
+tidy pass, each mage reviewing, the wiki writer — beside the status, or on a row of their own when
+three or more work at once. The whole party comes back muddy when the job is turned in. Finished
+jobs lie in a pile per month on the table below the board, stamped merged or cancelled; a pile
+spreads out when clicked. Opening a job shows a few lines of what has happened, round by round, then
+what to decide and only the buttons that answer it. The header says when no orchestrator is running,
+since your commands then wait for the next run.
 
-Above the cards is a village, as a backdrop: the same figures walk to the smithy, the yard, the
-chapel, the village hall and the stable as their jobs move, under a sky that follows the local
-clock and the season. A wider screen shows more countryside, not a bigger village. Everything is
-drawn in code in `dashboard.html`; there are no image files. The main reviewer ends its review with
-`Confidence: n/10`, and the herald's face shows it: happy from 8, worried below 5.
+The window beside the sign shows the sky by the local clock — day, dusk or night — and the season by
+the month. The figures are one sprite sheet embedded in `dashboard.html`, traced from Final Fantasy
+VI; the rest is drawn in code. The builder alternates by job number, a mage without a figure of its
+own takes the next one from the bench, and Mog brings what waits for you.
 
 ## Several jobs at once
 
