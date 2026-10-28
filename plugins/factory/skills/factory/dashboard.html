@@ -77,7 +77,8 @@
   .job .title { background: none; border: 0; padding: 0; text-align: left; cursor: pointer; font-weight: 700; font-size: 12.5px;
                 line-height: 1.35; overflow-wrap: break-word; min-width: 0; }
   .job:hover .title, .job:focus-within .title { text-decoration: underline; }
-  .job .line { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+  .job .line { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; min-width: 0; }
+  .job .line img.ptxt { max-width: 100%; height: auto; }
   .job .time { color: var(--muted); font-size: 11.5px; }
   .job .crew { display: flex; flex-wrap: wrap; gap: 0 8px; font-size: 11px; color: var(--muted); }
   .job .crew .PASS { color: var(--good); } .job .crew .CHANGES { color: var(--bad); } .job .crew .running { color: var(--ink); font-weight: 700; }
