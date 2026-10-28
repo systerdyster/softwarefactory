@@ -119,6 +119,7 @@ def build(paths, cfg, write=True):
         jd = paths.job(job_id)
         s["files"] = sorted(str(p.relative_to(jd)) for p in jd.rglob("*.md")) if jd.exists() else []
         s["queued_at"] = (jobs.read_json(jd / "job.json") or {}).get("queued_at") if jd.exists() else None
+        s["finished_at"] = (jobs.read_json(jd / "cleanup.json") or {}).get("at") if jd.exists() else None
         cards.append(s)
     board = {
         "updated_at": jobs.now(),

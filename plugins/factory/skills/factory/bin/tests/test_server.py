@@ -56,6 +56,12 @@ class ServerTest(SandboxTest):
         self.sb.write("round-2/review-code.md", "VERDICT: PASS\n\nConfidence: 8/10 — only the date format\n", base=jd)
         self.assertEqual(card()["confidence"], 8)
 
+    def test_a_job_carries_when_it_was_finished_or_cancelled(self):
+        card = lambda: board.build(self.paths, self.cfg, write=False)["jobs"][0]
+        self.assertIsNone(card()["finished_at"])
+        self.sb.write("cleanup.json", json.dumps({"at": "2026-10-26T09:12:00+02:00"}), base=self.paths.job(self.job))
+        self.assertEqual(card()["finished_at"], "2026-10-26T09:12:00+02:00")
+
     def test_factory_cli_dashboard_serves_and_prints_its_url_first(self):
         import os
         import subprocess
