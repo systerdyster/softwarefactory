@@ -3,7 +3,7 @@ state of its own, so it is safe to run at any time; the dashboard reads it."""
 
 from datetime import datetime
 
-from . import actions, jobs, queue, runs, state as state_mod, story
+from . import actions, jobs, mages, queue, runs, state as state_mod, story
 from .errors import FactoryError
 
 STAGE_ORDER = ["queued", "starting", "building", "reviewing", "rebasing", "merging", "needs-human", "pr-open",
@@ -127,6 +127,7 @@ def build(paths, cfg, write=True):
         "merge_mode": cfg.merge_mode,
         "target": cfg.base_ref,
         "reviewers": list(cfg.mages),
+        "mage_notes": {name: mages.description(paths, cfg, name) for name in cfg.mages},
         "stopping": paths.stop_flag.exists(),
         "orchestrator": orchestrator(paths),
         "jobs": cards,

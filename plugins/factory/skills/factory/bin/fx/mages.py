@@ -54,6 +54,17 @@ def rulebook(paths, cfg, job_id, name):
     return out / "SKILL.md"
 
 
+def description(paths, cfg, name):
+    """What a Mage reviews for, in one line: its rulebook's `description:` up to the "Use when" part.
+    Empty where there is no rulebook to read (codex, or a skill the target branch lacks)."""
+    try:
+        text, _ = _text(paths, cfg, None, name)
+    except FactoryError:
+        return ""
+    found = re.search(r'^description:\s*"?(.+?)"?\s*$', text.split("\n---", 1)[0], re.M)
+    return found.group(1).split(" Use when")[0].strip() if found else ""
+
+
 def model(text):
     head = (text or "").split("\n---", 1)[0]
     found = re.search(r"^model:\s*(\w+)\s*$", head, re.M)

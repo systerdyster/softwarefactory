@@ -109,6 +109,15 @@
   .fig .bubble { position: absolute; top: -21px; left: 50%; transform: translateX(-50%); z-index: 1; padding: 3px 4px 2px;
                  font: 700 12px/1 var(--font); background: #fff; color: var(--ink); border: 2px solid var(--ink); border-radius: 3px; }
 
+  /* The whole party the project can field stands at the right end of the board's foot. */
+  .idle { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: flex-end; justify-content: flex-end; margin: 14px 18px 0; }
+  .idle:empty { display: none; }
+  .idle .label { flex: 1 1 auto; align-self: center; }
+  .idle button.fig { padding: 0; border: 0; background: none; cursor: pointer; }
+  .idle button.fig:hover img, .idle button.fig[aria-expanded="true"] img { transform: translateY(-3px); }
+  .idle .role-note { flex: 0 1 380px; margin: 4px 0 0; padding: 10px 12px; font-size: 12px; }
+  .idle .party { margin: 0; padding: 22px 12px 3px; border-bottom: 6px solid var(--wood); gap: 0 10px; justify-content: flex-end; }
+
   /* The hall of fame: finished quests in a pile per month on the table below the board. */
   .hall { margin-top: 22px; padding: 14px 18px 22px; background: linear-gradient(#6e3c1c, #552c13);
           border-top: 6px solid #8a4e26; box-shadow: 0 8px 0 rgb(0 0 0 / .35), inset 0 6px 0 rgb(0 0 0 / .15); }
@@ -195,7 +204,8 @@
   <section class="board" aria-label="Jobs in the order a quest runs">
     <div class="lanes" id="cards"></div>
   </section>
-  <section class="hall" id="hall" aria-label="Finished jobs by month"></section>
+  <section class="idle" id="idle" aria-label="The party"></section>
+  <section class="hall" id="hall"aria-label="Finished jobs by month"></section>
 </main>
 
 <dialog id="dlg" aria-labelledby="dlg-title">
@@ -427,7 +437,7 @@ const Font = (() => {
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const T = Font.text;
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  let board = { jobs: [] }, openJob = null, openStage = null, openFiles = "", sending = false, pending = false, given = null, drawn = "";
+  let board = { jobs: [] }, openJob = null, openStage = null, openFiles = "", sending = false, pending = false, given = null, drawn = "", chosen = null;
   const spread = new Set();
 
   async function api(path, opts = {}) {
@@ -584,6 +594,31 @@ const Font = (() => {
       + (piles ? `<div class="stacks">${piles}</div>` : `<p class="empty">Nothing finished yet.</p>`);
   }
 
+  // The party standing by: the builders, tidy, wiki and herald, and one mage for each the project defines.
+  const ROLES = {
+    builder: "Builds the change to the approved plan, with tests for the behaviour it changes, until the checks pass; fixes what the Mages block.",
+    tidy: "Makes the change smaller and simpler without changing what it does: needless comments, dead code, tests that add nothing.",
+    wiki: "Keeps the project's wiki pages true to what the change now does, when it is worth documenting.",
+    herald: "Brings the job back to you for approval, with what the party did and what is left to decide.",
+    codex: "Gives a second opinion through the Codex CLI.",
+  };
+  function idle() {
+    const mage = (name) => ({ fig: figureOf(name), title: `${name} mage`, text: ROLES[name] || (board.mage_notes || {})[name] || "A Mage of this project; it reviews by its own rulebook." });
+    const roster = [{ fig: "edgar", title: "builder", text: ROLES.builder }, { fig: "sabin", title: "builder", text: ROLES.builder },
+      { fig: "locke", title: "tidy", text: ROLES.tidy }, { fig: "strago", title: "wiki", text: ROLES.wiki },
+      ...(board.reviewers || []).map(mage), { fig: "mog", title: "herald", text: ROLES.herald }];
+    const seen = new Set(), who = roster.filter((r) => Party.picture(r.fig) && !seen.has(r.fig) && seen.add(r.fig));
+    if (!who.length) return "";
+    const picked = who.find((r) => r.fig === chosen);
+    const party = who.map((r) => {
+      const p = Party.picture(r.fig);
+      return `<button class="fig" data-role="${r.fig}" aria-expanded="${r === picked}" aria-label="${esc(r.title)}" title="${esc(r.title)}">`
+        + `<img class="px" src="${p.url}" width="${p.w * 2}" height="${p.h * 2}" alt=""></button>`;
+    }).join("");
+    return `<span class="label">${T("THE PARTY", "#f0c98a", 2, "#3a1a08")}</span><div class="party">${party}</div>`
+      + (picked ? `<p class="paper role-note" role="status"><strong>${esc(picked.title)}</strong> ${esc(picked.text)}</p>` : "");
+  }
+
   function renderPanel() {
     const jobs = board.jobs || [];
     const lanes = LANES.map((lane, i) => {
@@ -596,9 +631,15 @@ const Font = (() => {
         + (lane.key === "pile" ? `<div class="pile">${body}</div>` : body) + `</section>`;
     }).join("");
     const done = hall(jobs.filter((j) => FINISHED.includes(j.stage)));
-    if (lanes + done === drawn) return;
-    drawn = lanes + done;
+    const standing = idle();
+    if (lanes + standing + done === drawn) return;
+    drawn = lanes + standing + done;
     $("cards").innerHTML = lanes;
+    $("idle").innerHTML = standing;
+    document.querySelectorAll("#idle [data-role]").forEach((el) => el.addEventListener("click", () => {
+      chosen = chosen === el.dataset.role ? null : el.dataset.role;
+      renderPanel();
+    }));
     $("hall").innerHTML = done;
     document.querySelectorAll("#cards [data-id], #hall .spread [data-id]").forEach((el) => el.addEventListener("click", (e) => { e.stopPropagation(); open(el.dataset.id); }));
     document.querySelectorAll("#hall [data-month]").forEach((el) => el.addEventListener("click", () => {
