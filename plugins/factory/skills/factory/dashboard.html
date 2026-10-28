@@ -58,8 +58,11 @@
   .lane { display: grid; gap: 14px; align-content: start; min-width: 0; padding: 0 10px; }
   .lane + .lane { border-left: 2px dashed rgb(59 30 12 / .45); }
   .lane.side { background: rgb(0 0 0 / .1); }
-  .lane h2 { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; margin: 0 0 2px; padding: 8px 10px 7px;
-             background: var(--wood-dark); border: 2px solid #3a1a08; box-shadow: inset 0 0 0 2px #7a3e1a; }
+  .lane h2 { position: relative; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; margin: 0 0 2px;
+             padding: 8px 30px 7px 10px; background: var(--wood-dark); border: 2px solid #3a1a08; box-shadow: inset 0 0 0 2px #7a3e1a; }
+  .lane h2 img.ptxt { max-width: 100%; height: auto; }
+  .lane h2 .count { position: absolute; top: -9px; right: -7px; padding: 3px 5px; background: var(--focus);
+                    border: 2px solid #3a1a08; border-radius: 3px; box-shadow: 2px 2px 0 rgb(0 0 0 / .35); }
   .lane h2 .sub { flex-basis: 100%; font: 400 10.5px var(--font); color: #f0c98a; }
   .lane-empty { margin: 0; padding: 8px; font-size: 12px; color: #e9c896; opacity: .7; text-align: center; }
 
@@ -588,7 +591,8 @@ const Font = (() => {
       const body = here.length ? here.map(lane.side ? slip : note).join("")
         : `<p class="lane-empty">${lane.key === "queue" && !jobs.length ? "No jobs yet. Queue one with /factory add." : "Nobody here."}</p>`;
       return `<section class="lane${lane.side ? " side" : ""}" aria-label="${lane.title.toLowerCase()}">`
-        + `<h2>${T(`${i + 1} ${lane.title}`, "#fbe2b0", 2, "#3a1a08")}${T(here.length, "#ffd75e", 2, "#3a1a08")}<span class="sub">${lane.sub}</span></h2>`
+        + `<h2>${T(`${i + 1} ${lane.title}`, "#fbe2b0", 2, "#3a1a08")}<span class="count">${T(here.length, "#5b2a12", 2, "#f0b84a")}</span>`
+        + `<span class="sub">${lane.sub}</span></h2>`
         + (lane.key === "pile" ? `<div class="pile">${body}</div>` : body) + `</section>`;
     }).join("");
     const done = hall(jobs.filter((j) => FINISHED.includes(j.stage)));
